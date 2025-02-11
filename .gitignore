@@ -1,0 +1,25 @@
+# Logs
+truth-network-frontend/logs
+truth-network-frontend/*.log
+truth-network-frontend/npm-debug.log*
+truth-network-frontend/yarn-debug.log*
+truth-network-frontend/yarn-error.log*
+truth-network-frontend/pnpm-debug.log*
+truth-network-frontend/lerna-debug.log*
+
+truth-network-frontend/node_modules
+truth-network-frontend/dist
+truth-network-frontend/dist-ssr
+truth-network-frontend/*.local
+
+# Editor directories and files
+truth-network-frontend/.vscode/*
+truth-network-frontend/!.vscode/extensions.json
+truth-network-frontend/.idea
+truth-network-frontend/.DS_Store
+truth-network-frontend/*.suo
+truth-network-frontend/*.ntvs*
+truth-network-frontend/*.njsproj
+truth-network-frontend/*.sln
+truth-network-frontend/*.sw?
+

@@ -1,0 +1,485 @@
+{
+  "address": "HgSmSrv53KqXTNmM1MtLKAQLbbyr9sVSc5KG23YK1jzE",
+  "metadata": {
+    "name": "truth_network",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Created with Anchor"
+  },
+  "instructions": [
+    {
+      "name": "create_question",
+      "discriminator": [
+        222,
+        74,
+        49,
+        30,
+        160,
+        220,
+        179,
+        27
+      ],
+      "accounts": [
+        {
+          "name": "question_counter",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  113,
+                  117,
+                  101,
+                  115,
+                  116,
+                  105,
+                  111,
+                  110,
+                  95,
+                  99,
+                  111,
+                  117,
+                  110,
+                  116,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "asker"
+              }
+            ]
+          }
+        },
+        {
+          "name": "question",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  113,
+                  117,
+                  101,
+                  115,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "asker"
+              },
+              {
+                "kind": "account",
+                "path": "question_counter.count",
+                "account": "QuestionCounter"
+              }
+            ]
+          }
+        },
+        {
+          "name": "asker",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "question_counter"
+          ]
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "question_text",
+          "type": "string"
+        },
+        {
+          "name": "option_1",
+          "type": "string"
+        },
+        {
+          "name": "option_2",
+          "type": "string"
+        },
+        {
+          "name": "reward",
+          "type": "u64"
+        },
+        {
+          "name": "end_time",
+          "type": "i64"
+        }
+      ]
+    },
+    {
+      "name": "create_voter_record",
+      "discriminator": [
+        3,
+        12,
+        113,
+        222,
+        177,
+        4,
+        152,
+        165
+      ],
+      "accounts": [
+        {
+          "name": "question",
+          "writable": true
+        },
+        {
+          "name": "voter_record",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  111,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "voter"
+              },
+              {
+                "kind": "account",
+                "path": "question"
+              }
+            ]
+          }
+        },
+        {
+          "name": "voter",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "finalize_voting",
+      "discriminator": [
+        195,
+        61,
+        27,
+        72,
+        252,
+        138,
+        175,
+        13
+      ],
+      "accounts": [
+        {
+          "name": "question",
+          "writable": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "hello_world",
+      "discriminator": [
+        11,
+        235,
+        52,
+        244,
+        76,
+        66,
+        25,
+        71
+      ],
+      "accounts": [
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "initialize_counter",
+      "discriminator": [
+        67,
+        89,
+        100,
+        87,
+        231,
+        172,
+        35,
+        124
+      ],
+      "accounts": [
+        {
+          "name": "question_counter",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  113,
+                  117,
+                  101,
+                  115,
+                  116,
+                  105,
+                  111,
+                  110,
+                  95,
+                  99,
+                  111,
+                  117,
+                  110,
+                  116,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "asker"
+              }
+            ]
+          }
+        },
+        {
+          "name": "asker",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "submit_vote",
+      "discriminator": [
+        115,
+        242,
+        100,
+        0,
+        49,
+        178,
+        242,
+        133
+      ],
+      "accounts": [
+        {
+          "name": "question",
+          "writable": true
+        },
+        {
+          "name": "voter_record",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  111,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "voter"
+              },
+              {
+                "kind": "account",
+                "path": "question"
+              }
+            ]
+          }
+        },
+        {
+          "name": "voter",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "selected_option",
+          "type": "u8"
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "Question",
+      "discriminator": [
+        111,
+        22,
+        150,
+        220,
+        181,
+        122,
+        118,
+        127
+      ]
+    },
+    {
+      "name": "QuestionCounter",
+      "discriminator": [
+        91,
+        17,
+        149,
+        190,
+        211,
+        154,
+        240,
+        18
+      ]
+    },
+    {
+      "name": "VoterRecord",
+      "discriminator": [
+        178,
+        96,
+        138,
+        116,
+        143,
+        202,
+        115,
+        33
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "VotingEnded",
+      "msg": "Voting period has ended."
+    },
+    {
+      "code": 6001,
+      "name": "VotingStillActive",
+      "msg": "Voting is still active."
+    },
+    {
+      "code": 6002,
+      "name": "AlreadyFinalized",
+      "msg": "Voting has already been finalized."
+    },
+    {
+      "code": 6003,
+      "name": "AlreadyInitialized",
+      "msg": "Question counter already exists."
+    },
+    {
+      "code": 6004,
+      "name": "AlreadyVoted",
+      "msg": "You have already voted on this question."
+    }
+  ],
+  "types": [
+    {
+      "name": "Question",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "id",
+            "type": "u64"
+          },
+          {
+            "name": "asker",
+            "type": "pubkey"
+          },
+          {
+            "name": "question_text",
+            "type": "string"
+          },
+          {
+            "name": "option_1",
+            "type": "string"
+          },
+          {
+            "name": "option_2",
+            "type": "string"
+          },
+          {
+            "name": "reward",
+            "type": "u64"
+          },
+          {
+            "name": "end_time",
+            "type": "i64"
+          },
+          {
+            "name": "votes_option_1",
+            "type": "u64"
+          },
+          {
+            "name": "votes_option_2",
+            "type": "u64"
+          },
+          {
+            "name": "finalized",
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "QuestionCounter",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "asker",
+            "type": "pubkey"
+          },
+          {
+            "name": "count",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "VoterRecord",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "question",
+            "type": "pubkey"
+          },
+          {
+            "name": "voter",
+            "type": "pubkey"
+          }
+        ]
+      }
+    }
+  ]
+}
