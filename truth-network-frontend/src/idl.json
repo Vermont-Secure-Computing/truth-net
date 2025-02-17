@@ -84,6 +84,10 @@
           }
         },
         {
+          "name": "voter_list",
+          "writable": true
+        },
+        {
           "name": "asker",
           "writable": true,
           "signer": true,
@@ -118,60 +122,6 @@
           "type": "i64"
         }
       ]
-    },
-    {
-      "name": "create_voter_record",
-      "discriminator": [
-        3,
-        12,
-        113,
-        222,
-        177,
-        4,
-        152,
-        165
-      ],
-      "accounts": [
-        {
-          "name": "question",
-          "writable": true
-        },
-        {
-          "name": "voter_record",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  118,
-                  111,
-                  116,
-                  101
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "voter"
-              },
-              {
-                "kind": "account",
-                "path": "question"
-              }
-            ]
-          }
-        },
-        {
-          "name": "voter",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "system_program",
-          "address": "11111111111111111111111111111111"
-        }
-      ],
-      "args": []
     },
     {
       "name": "finalize_voting",
@@ -273,6 +223,57 @@
       "args": []
     },
     {
+      "name": "join_network",
+      "docs": [
+        "Users join the network by depositing 0.5 SOL"
+      ],
+      "discriminator": [
+        246,
+        184,
+        107,
+        68,
+        39,
+        172,
+        8,
+        30
+      ],
+      "accounts": [
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "voter_list",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  111,
+                  116,
+                  101,
+                  114,
+                  95,
+                  108,
+                  105,
+                  115,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "submit_vote",
       "discriminator": [
         115,
@@ -288,6 +289,11 @@
         {
           "name": "question",
           "writable": true
+        },
+        {
+          "name": "voter",
+          "writable": true,
+          "signer": true
         },
         {
           "name": "voter_record",
@@ -313,11 +319,6 @@
               }
             ]
           }
-        },
-        {
-          "name": "voter",
-          "writable": true,
-          "signer": true
         },
         {
           "name": "system_program",
@@ -360,6 +361,19 @@
       ]
     },
     {
+      "name": "VoterList",
+      "discriminator": [
+        27,
+        237,
+        57,
+        2,
+        134,
+        241,
+        248,
+        106
+      ]
+    },
+    {
       "name": "VoterRecord",
       "discriminator": [
         178,
@@ -398,6 +412,16 @@
       "code": 6004,
       "name": "AlreadyVoted",
       "msg": "You have already voted on this question."
+    },
+    {
+      "code": 6005,
+      "name": "NotEligibleToVote",
+      "msg": "You are not eligible to vote on this question."
+    },
+    {
+      "code": 6006,
+      "name": "AlreadyJoined",
+      "msg": "You are already a member of the Truth Network."
     }
   ],
   "types": [
@@ -445,6 +469,12 @@
           {
             "name": "finalized",
             "type": "bool"
+          },
+          {
+            "name": "selected_voters",
+            "type": {
+              "vec": "pubkey"
+            }
           }
         ]
       }
@@ -466,17 +496,55 @@
       }
     },
     {
+      "name": "Voter",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "address",
+            "type": "pubkey"
+          },
+          {
+            "name": "reputation",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "VoterList",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "voters",
+            "type": {
+              "vec": {
+                "defined": {
+                  "name": "Voter"
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
       "name": "VoterRecord",
       "type": {
         "kind": "struct",
         "fields": [
           {
+            "name": "voter",
+            "type": "pubkey"
+          },
+          {
             "name": "question",
             "type": "pubkey"
           },
           {
-            "name": "voter",
-            "type": "pubkey"
+            "name": "selected_option",
+            "type": "u8"
           }
         ]
       }

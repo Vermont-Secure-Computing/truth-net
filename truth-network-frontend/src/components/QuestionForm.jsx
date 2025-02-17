@@ -75,7 +75,45 @@ const QuestionForm = () => {
     
         try {
             //Check if counter exists first
-            await initializeCounter();
+            //await initializeCounter();
+
+            const [voterListPDA] = await PublicKey.findProgramAddress(
+                [Buffer.from("voter_list")],
+                PROGRAM_ID
+            );
+
+            const [questionCounterPDA] = await PublicKey.findProgramAddress(
+                [Buffer.from("question_counter"), publicKey.toBuffer()],
+                PROGRAM_ID
+            );
+
+            // Check if the question_counter exists
+            let questionCounterAccount = await program.account.questionCounter.fetch(questionCounterPDA).catch(() => null);
+
+            if (!questionCounterAccount) {
+                console.log("Initializing question counter...");
+                const tx = await program.methods
+                    .initializeCounter()
+                    .accounts({
+                        questionCounter: questionCounterPDA,
+                        asker: publicKey,
+                        systemProgram: web3.SystemProgram.programId,
+                    })
+                    .rpc();
+
+                console.log("Question counter initialized: ", tx);
+
+                // Fetch the newly created question counter
+                questionCounterAccount = await program.account.questionCounter.fetch(questionCounterPDA);
+            }
+
+            // Use count from question_counter to create a new question
+            const questionCount = questionCounterAccount.count;
+
+            const [questionPDA] = await PublicKey.findProgramAddress(
+                [Buffer.from("question"), publicKey.toBuffer(), new BN(questionCount).toArrayLike(Buffer, "le", 8)],
+                PROGRAM_ID
+            );
     
             //Now create the question
             const tx = await program.methods
@@ -88,6 +126,9 @@ const QuestionForm = () => {
                 )
                 .accounts({
                     asker: publicKey,
+                    questionCounter: questionCounterPDA,
+                    question: questionPDA,
+                    voterList: voterListPDA,
                     systemProgram: web3.SystemProgram.programId,
                 })
                 .rpc();
