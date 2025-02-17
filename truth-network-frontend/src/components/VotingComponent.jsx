@@ -1,96 +1,173 @@
-import React, { useState } from "react";
-import { PublicKey, Transaction } from "@solana/web3.js";
+import React, { useState, useEffect } from "react";
+import { PublicKey } from "@solana/web3.js";
 import { useWallet } from "@solana/wallet-adapter-react";
-import { Program, AnchorProvider, web3, BN } from "@coral-xyz/anchor";
+import { Program, AnchorProvider, web3 } from "@coral-xyz/anchor";
 import idl from "../idl.json";
 
 const PROGRAM_ID = new PublicKey("HgSmSrv53KqXTNmM1MtLKAQLbbyr9sVSc5KG23YK1jzE");
 const connection = new web3.Connection(web3.clusterApiUrl("devnet"), "confirmed");
 
 const VotingComponent = ({ question, onClose }) => {
-    console.log("question: ", question)
-    const questionId = question.id
+    if (!question) {
+        return <p>Error: Question data is missing.</p>;
+    }
+
+    const questionId = question.id;
     const { publicKey, signTransaction, signAllTransactions } = useWallet();
     const [selectedOption, setSelectedOption] = useState(1);
     const [loading, setLoading] = useState(false);
+    const [votes, setVotes] = useState([]);
+    const [isEligible, setIsEligible] = useState(false);
+    const [hasVoted, setHasVoted] = useState(false);
 
-    const walletAdapter = {
-        publicKey,
-        signTransaction,
-        signAllTransactions,
+    const walletAdapter = publicKey && signTransaction ? { publicKey, signTransaction, signAllTransactions } : null;
+
+    // Ensure a valid provider before creating a program instance
+    const provider = walletAdapter ? new AnchorProvider(connection, walletAdapter, { preflightCommitment: "processed" }) : null;
+    const program = provider ? new Program(idl, provider) : null;
+
+    useEffect(() => {
+        if (publicKey && program) {
+            checkEligibility();
+            checkIfVoted();
+        }
+    }, []);
+
+    // **Check if the user is in the question's voter list**
+    const checkEligibility = async () => {
+        if (!publicKey || !program) {
+            console.log("No publicKey or program")   
+            return;
+        }
+
+        try {
+            console.log("Checking voter eligibility...");
+
+            // Ensure `questionId` is a valid PublicKey
+            const questionPubKey = new PublicKey(questionId);
+
+            // Fetch the question account
+            const questionAccount = await program.account.question.fetch(questionPubKey);
+            if (!questionAccount) {
+                console.error("Question account not found.");
+                return;
+            }
+
+            // Check if the user's wallet is in the `selected_voters` list
+            const isMember = questionAccount.selectedVoters.some((voter) => voter.toString() === publicKey.toString());
+
+            console.log("User eligibility:", isMember);
+            setIsEligible(isMember);
+        } catch (error) {
+            console.error("Error checking eligibility:", error);
+        }
     };
 
-    const provider = new AnchorProvider(connection, walletAdapter, { preflightCommitment: "processed" });
-    const program = new Program(idl, provider);
+    const checkIfVoted = async () => {
+        if (!publicKey || ! program) return;
 
-    const createVoterRecord = async (questionPubKey) => {
         try {
-            const [voterRecordAddress] = await PublicKey.findProgramAddress(
+            console.log("Checking if user has already voted...");
+    
+            const questionPubKey = new PublicKey(questionId);
+            const [voterRecordPDA] = await PublicKey.findProgramAddress(
                 [Buffer.from("vote"), publicKey.toBuffer(), questionPubKey.toBuffer()],
                 PROGRAM_ID
             );
     
-            console.log("Checking if voter record exists...");
-    
-            const accountInfo = await connection.getAccountInfo(voterRecordAddress);
-            if (!accountInfo) {
-                console.log("Voter record does not exist. Creating...");
-    
-                await program.methods
-                    .createVoterRecord()
-                    .accounts({
-                        voter: publicKey,
-                        question: questionPubKey,
-                        voterRecord: voterRecordAddress,
-                        systemProgram: web3.SystemProgram.programId,
-                    })
-                    .rpc();
-    
-                console.log("Voter record created!");
+            const voterRecordAccount = await program.account.voterRecord.fetch(voterRecordPDA).catch(() => null);
+            if (voterRecordAccount) {
+                console.log("User has already voted.");
+                setHasVoted(true);
             } else {
-                console.log("Voter record already exists.");
+                console.log("User has not voted yet.");
+                setHasVoted(false);
             }
     
-            return voterRecordAddress;
         } catch (error) {
-            console.error("Error creating voter record:", error);
-            throw error;
+            console.error("Error checking vote status:", error);
+        }
+    }
+
+    
+
+    // **Fetch all votes for the question**
+    const fetchVotes = async () => {
+        if (!program) return;
+    
+        try {
+            console.log("Fetching selected voters for question:", questionId);
+    
+            // Ensure `questionId` is a valid PublicKey
+            const questionPubKey = new PublicKey(questionId);
+    
+            // Fetch the `Question` account to get `selected_voters`
+            const questionAccount = await program.account.question.fetch(questionPubKey);
+            if (!questionAccount) {
+                console.error("Question account not found.");
+                return;
+            }
+    
+            console.log("Question data:", questionAccount);
+    
+            // Extract selected voters
+            const selectedVoters = questionAccount.selectedVoters.map((voter) => ({
+                voter: voter.toString(),
+            }));
+
+            // ✅ Check if the user has already voted (logic: if the user exists in votes)
+            const userHasVoted = selectedVoters.includes(publicKey.toString()) && 
+            (questionAccount.votes_option_1 > 0 || questionAccount.votes_option_2 > 0);
+            console.log("user has voted: ", userHasVoted)
+            setHasVoted(userHasVoted)
+    
+            console.log("Selected voters:", selectedVoters);
+            setVotes(selectedVoters);
+        } catch (error) {
+            console.error("Error fetching votes:", error);
         }
     };
     
 
+    // **Submit Vote**
     const submitVote = async () => {
-        if (!publicKey) return alert("Please connect your wallet");
-    
+        if (!publicKey || !program) return alert("Please connect your wallet");
+
         try {
             console.log("Submitting vote for question:", questionId);
-    
+
             const questionPubKey = new PublicKey(questionId);
-    
-            // Ensure voter record exists before voting
-            const voterRecordAddress = await createVoterRecord(questionPubKey);
-    
-            // submit the vote
+            const [voterRecordPDA] = await PublicKey.findProgramAddress(
+                [Buffer.from("vote"), publicKey.toBuffer(), questionPubKey.toBuffer()],
+                PROGRAM_ID
+            );
+
+            setLoading(true);
+
+            // Submit the vote
             const tx = await program.methods
                 .submitVote(selectedOption)
                 .accounts({
                     voter: publicKey,
                     question: questionPubKey,
-                    voterRecord: voterRecordAddress,
+                    voterRecord: voterRecordPDA,
                     systemProgram: web3.SystemProgram.programId,
                 })
                 .rpc();
-    
+
             console.log("Vote Submitted! Transaction:", tx);
             alert("Vote Submitted Successfully!");
+
+            // Refresh votes after submitting
+            //fetchVotes();
+            checkIfVoted();
         } catch (error) {
             console.error("Failed to submit vote:", error);
             alert(`Failed to submit vote. Error: ${error.message}`);
+        } finally {
+            setLoading(false);
         }
     };
-    
-    
-    
 
     return (
         <div className="modal">
@@ -101,10 +178,30 @@ const VotingComponent = ({ question, onClose }) => {
                 <option value={2}>{question.option2}</option>
             </select>
             <br />
-            <button onClick={submitVote} disabled={loading}>
-                {loading ? "Submitting..." : "Submit Vote"}
+            <button onClick={submitVote} disabled={!isEligible || hasVoted || loading}>
+                {loading ? "Submitting..." : hasVoted ? "Already Voted" : isEligible ? "Submit Vote" : "Not Eligible to Vote"}
             </button>
             <button onClick={onClose}>Close</button>
+
+            <hr />
+            <h3>Selected Voters</h3>
+            {votes.length > 0 && (
+                <ul>
+                    {votes.map((vote, index) => (
+                        <li key={index}>
+                            <strong>Voter:</strong>{" "}
+                            <a
+                                href={`https://explorer.solana.com/address/${vote.voter}?cluster=devnet`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{ color: "#007bff", textDecoration: "underline" }}
+                            >
+                                {vote.voter}
+                            </a>
+                        </li>
+                    ))}
+                </ul>
+            )}
         </div>
     );
 };
