@@ -1,5 +1,5 @@
 {
-  "address": "HgSmSrv53KqXTNmM1MtLKAQLbbyr9sVSc5KG23YK1jzE",
+  "address": "ENCscDg3Cq5JN9ManW5RBGXdh4wgATN1HebF2ojWRKjn",
   "metadata": {
     "name": "truth_network",
     "version": "0.1.0",
@@ -7,6 +7,70 @@
     "description": "Created with Anchor"
   },
   "instructions": [
+    {
+      "name": "commit_vote",
+      "discriminator": [
+        134,
+        97,
+        90,
+        126,
+        91,
+        66,
+        16,
+        26
+      ],
+      "accounts": [
+        {
+          "name": "question",
+          "writable": true
+        },
+        {
+          "name": "voter_record",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  111,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "voter"
+              },
+              {
+                "kind": "account",
+                "path": "question"
+              }
+            ]
+          }
+        },
+        {
+          "name": "voter",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "commitment",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
     {
       "name": "create_question",
       "discriminator": [
@@ -84,10 +148,6 @@
           }
         },
         {
-          "name": "voter_list",
-          "writable": true
-        },
-        {
           "name": "asker",
           "writable": true,
           "signer": true,
@@ -122,6 +182,60 @@
           "type": "i64"
         }
       ]
+    },
+    {
+      "name": "create_voter_record",
+      "discriminator": [
+        3,
+        12,
+        113,
+        222,
+        177,
+        4,
+        152,
+        165
+      ],
+      "accounts": [
+        {
+          "name": "question",
+          "writable": true
+        },
+        {
+          "name": "voter_record",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  111,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "voter"
+              },
+              {
+                "kind": "account",
+                "path": "question"
+              }
+            ]
+          }
+        },
+        {
+          "name": "voter",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
     },
     {
       "name": "finalize_voting",
@@ -224,9 +338,6 @@
     },
     {
       "name": "join_network",
-      "docs": [
-        "Users join the network by depositing 0.5 SOL"
-      ],
       "discriminator": [
         246,
         184,
@@ -238,11 +349,6 @@
         30
       ],
       "accounts": [
-        {
-          "name": "user",
-          "writable": true,
-          "signer": true
-        },
         {
           "name": "voter_list",
           "writable": true,
@@ -267,6 +373,11 @@
           }
         },
         {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        },
+        {
           "name": "system_program",
           "address": "11111111111111111111111111111111"
         }
@@ -274,26 +385,21 @@
       "args": []
     },
     {
-      "name": "submit_vote",
+      "name": "reveal_vote",
       "discriminator": [
-        115,
-        242,
         100,
-        0,
-        49,
-        178,
-        242,
-        133
+        157,
+        139,
+        17,
+        186,
+        75,
+        185,
+        149
       ],
       "accounts": [
         {
           "name": "question",
           "writable": true
-        },
-        {
-          "name": "voter",
-          "writable": true,
-          "signer": true
         },
         {
           "name": "voter_record",
@@ -321,13 +427,14 @@
           }
         },
         {
-          "name": "system_program",
-          "address": "11111111111111111111111111111111"
+          "name": "voter",
+          "writable": true,
+          "signer": true
         }
       ],
       "args": [
         {
-          "name": "selected_option",
+          "name": "vote",
           "type": "u8"
         }
       ]
@@ -405,23 +512,28 @@
     },
     {
       "code": 6003,
+      "name": "AlreadyJoined",
+      "msg": "You have already joined the network."
+    },
+    {
+      "code": 6004,
       "name": "AlreadyInitialized",
       "msg": "Question counter already exists."
     },
     {
-      "code": 6004,
+      "code": 6005,
       "name": "AlreadyVoted",
       "msg": "You have already voted on this question."
     },
     {
-      "code": 6005,
-      "name": "NotEligibleToVote",
-      "msg": "You are not eligible to vote on this question."
+      "code": 6006,
+      "name": "AlreadyRevealed",
+      "msg": "You have already revealed your vote."
     },
     {
-      "code": 6006,
-      "name": "AlreadyJoined",
-      "msg": "You are already a member of the Truth Network."
+      "code": 6007,
+      "name": "InvalidReveal",
+      "msg": "Invalid voting reveal."
     }
   ],
   "types": [
@@ -469,12 +581,6 @@
           {
             "name": "finalized",
             "type": "bool"
-          },
-          {
-            "name": "selected_voters",
-            "type": {
-              "vec": "pubkey"
-            }
           }
         ]
       }
@@ -535,16 +641,25 @@
         "kind": "struct",
         "fields": [
           {
-            "name": "voter",
-            "type": "pubkey"
-          },
-          {
             "name": "question",
             "type": "pubkey"
           },
           {
-            "name": "selected_option",
-            "type": "u8"
+            "name": "voter",
+            "type": "pubkey"
+          },
+          {
+            "name": "commitment",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "revealed",
+            "type": "bool"
           }
         ]
       }

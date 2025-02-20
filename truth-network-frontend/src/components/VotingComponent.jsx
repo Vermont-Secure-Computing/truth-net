@@ -4,7 +4,7 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { Program, AnchorProvider, web3 } from "@coral-xyz/anchor";
 import idl from "../idl.json";
 
-const PROGRAM_ID = new PublicKey("HgSmSrv53KqXTNmM1MtLKAQLbbyr9sVSc5KG23YK1jzE");
+const PROGRAM_ID = new PublicKey("ENCscDg3Cq5JN9ManW5RBGXdh4wgATN1HebF2ojWRKjn");
 const connection = new web3.Connection(web3.clusterApiUrl("devnet"), "confirmed");
 
 const VotingComponent = ({ question, onClose }) => {
@@ -17,7 +17,7 @@ const VotingComponent = ({ question, onClose }) => {
     const [selectedOption, setSelectedOption] = useState(1);
     const [loading, setLoading] = useState(false);
     const [votes, setVotes] = useState([]);
-    const [isEligible, setIsEligible] = useState(false);
+    // const [isEligible, setIsEligible] = useState(false);
     const [hasVoted, setHasVoted] = useState(false);
 
     const walletAdapter = publicKey && signTransaction ? { publicKey, signTransaction, signAllTransactions } : null;
@@ -28,10 +28,10 @@ const VotingComponent = ({ question, onClose }) => {
 
     useEffect(() => {
         if (publicKey && program) {
-            checkEligibility();
+            // checkEligibility();
             checkIfVoted();
         }
-    }, []);
+    }, [question]);
 
     // **Check if the user is in the question's voter list**
     const checkEligibility = async () => {
@@ -57,7 +57,7 @@ const VotingComponent = ({ question, onClose }) => {
             const isMember = questionAccount.selectedVoters.some((voter) => voter.toString() === publicKey.toString());
 
             console.log("User eligibility:", isMember);
-            setIsEligible(isMember);
+            // setIsEligible(isMember);
         } catch (error) {
             console.error("Error checking eligibility:", error);
         }
@@ -70,12 +70,13 @@ const VotingComponent = ({ question, onClose }) => {
             console.log("Checking if user has already voted...");
     
             const questionPubKey = new PublicKey(questionId);
-            const [voterRecordPDA] = await PublicKey.findProgramAddress(
+            const [voterRecordPDA] = await PublicKey.findProgramAddressSync(
                 [Buffer.from("vote"), publicKey.toBuffer(), questionPubKey.toBuffer()],
                 PROGRAM_ID
             );
     
             const voterRecordAccount = await program.account.voterRecord.fetch(voterRecordPDA).catch(() => null);
+            console.log("voter record account ", voterRecordAccount)
             if (voterRecordAccount) {
                 console.log("User has already voted.");
                 setHasVoted(true);
@@ -178,8 +179,8 @@ const VotingComponent = ({ question, onClose }) => {
                 <option value={2}>{question.option2}</option>
             </select>
             <br />
-            <button onClick={submitVote} disabled={!isEligible || hasVoted || loading}>
-                {loading ? "Submitting..." : hasVoted ? "Already Voted" : isEligible ? "Submit Vote" : "Not Eligible to Vote"}
+            <button onClick={submitVote} disabled={hasVoted || loading}>
+                {loading ? "Submitting..." : hasVoted ? "Already Voted" : "Submit Vote"}
             </button>
             <button onClick={onClose}>Close</button>
 
