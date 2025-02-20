@@ -5,7 +5,7 @@
 // import idl from "../idl.json";
 // import VotingComponent from "./VotingComponent"; 
 
-// const PROGRAM_ID = new PublicKey("HgSmSrv53KqXTNmM1MtLKAQLbbyr9sVSc5KG23YK1jzE");
+// const PROGRAM_ID = new PublicKey("DptmJmiZNi4wC6TbumzvkkoAyURYXwBTs5ehb9CkMJ3F");
 // const connection = new web3.Connection(web3.clusterApiUrl("devnet"), "confirmed");
 
 // const QuestionsList = () => {
@@ -107,8 +107,9 @@ import { useConnection } from "@solana/wallet-adapter-react";
 import { Program, AnchorProvider, web3 } from "@coral-xyz/anchor";
 import idl from "../idl.json";
 import VotingComponent from "./VotingComponent";
+import CommitReveal from "./CommitReveal";
 
-const PROGRAM_ID = new PublicKey("HgSmSrv53KqXTNmM1MtLKAQLbbyr9sVSc5KG23YK1jzE");
+const PROGRAM_ID = new PublicKey("ENCscDg3Cq5JN9ManW5RBGXdh4wgATN1HebF2ojWRKjn");
 const connection = new web3.Connection(web3.clusterApiUrl("devnet"), "confirmed");
 
 const QuestionsList = () => {
@@ -216,16 +217,17 @@ const QuestionsList = () => {
                             <br />
                             Voting Ends: {new Date(q.endTime * 1000).toLocaleString()}
                             <br />
-                            {!q.finalized && (
+                            {/* Check if the voting is still open */}
+                            {q.endTime > Date.now() / 1000 ? (
                                 <button onClick={() => setSelectedQuestion(q)}>Vote</button>
-                            )}
+                            ): <p className="text-green-600">Voting Period Ends</p>} 
                         </li>
                     ))}
                 </ul>
             )}
 
             {selectedQuestion && (
-                <VotingComponent
+                <CommitReveal
                     question={selectedQuestion}
                     onClose={() => {
                         setSelectedQuestion(null);
