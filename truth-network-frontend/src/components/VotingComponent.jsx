@@ -4,7 +4,7 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { Program, AnchorProvider, web3 } from "@coral-xyz/anchor";
 import idl from "../idl.json";
 
-const PROGRAM_ID = new PublicKey("ENCscDg3Cq5JN9ManW5RBGXdh4wgATN1HebF2ojWRKjn");
+const PROGRAM_ID = new PublicKey("BpXZ9RDbqdRjpLNeG8SQTbD2MjyyNMNgKEngEZG9Fvdw");
 const connection = new web3.Connection(web3.clusterApiUrl("devnet"), "confirmed");
 
 const VotingComponent = ({ question, onClose }) => {
@@ -116,7 +116,7 @@ const VotingComponent = ({ question, onClose }) => {
                 voter: voter.toString(),
             }));
 
-            // ✅ Check if the user has already voted (logic: if the user exists in votes)
+            // Check if the user has already voted (logic: if the user exists in votes)
             const userHasVoted = selectedVoters.includes(publicKey.toString()) && 
             (questionAccount.votes_option_1 > 0 || questionAccount.votes_option_2 > 0);
             console.log("user has voted: ", userHasVoted)
