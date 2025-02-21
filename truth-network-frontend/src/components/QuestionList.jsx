@@ -109,7 +109,7 @@ import idl from "../idl.json";
 import VotingComponent from "./VotingComponent";
 import CommitReveal from "./CommitReveal";
 
-const PROGRAM_ID = new PublicKey("ENCscDg3Cq5JN9ManW5RBGXdh4wgATN1HebF2ojWRKjn");
+const PROGRAM_ID = new PublicKey("BpXZ9RDbqdRjpLNeG8SQTbD2MjyyNMNgKEngEZG9Fvdw");
 const connection = new web3.Connection(web3.clusterApiUrl("devnet"), "confirmed");
 
 const QuestionsList = () => {
@@ -130,7 +130,7 @@ const QuestionsList = () => {
     // **Fetch the Voter List PDA**
     const fetchVoterListPDA = async () => {
         try {
-            const [voterListAddress] = await PublicKey.findProgramAddress(
+            const [voterListAddress] = await PublicKey.findProgramAddressSync(
                 [Buffer.from("voter_list")],
                 PROGRAM_ID
             );
@@ -156,6 +156,7 @@ const QuestionsList = () => {
                 option2: account.option2,
                 votesOption1: account.votesOption1.toNumber(),
                 votesOption2: account.votesOption2.toNumber(),
+                committedVoters: account.committedVoters.toNumber(),
                 endTime: account.endTime.toNumber(),
                 finalized: account.finalized,
                 asker: account.asker.toString(),
@@ -211,9 +212,7 @@ const QuestionsList = () => {
                             <br />
 
                             <br />
-                            Option 1: {q.option1} ({q.votesOption1} votes)
-                            <br />
-                            Option 2: {q.option2} ({q.votesOption2} votes)
+                            <strong>Number of Committed Voters:</strong> {q.committedVoters}
                             <br />
                             Voting Ends: {new Date(q.endTime * 1000).toLocaleString()}
                             <br />
@@ -233,6 +232,7 @@ const QuestionsList = () => {
                         setSelectedQuestion(null);
                         fetchQuestions();
                     }}
+                    refreshQuestions={fetchQuestions}
                 />
             )}
         </div>

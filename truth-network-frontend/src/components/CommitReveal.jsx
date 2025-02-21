@@ -5,10 +5,10 @@ import { Program, AnchorProvider, web3 } from "@coral-xyz/anchor";
 import idl from "../idl.json";
 import { keccak256 } from "js-sha3"; // Import hashing library
 
-const PROGRAM_ID = new PublicKey("ENCscDg3Cq5JN9ManW5RBGXdh4wgATN1HebF2ojWRKjn");
+const PROGRAM_ID = new PublicKey("BpXZ9RDbqdRjpLNeG8SQTbD2MjyyNMNgKEngEZG9Fvdw");
 const connection = new web3.Connection(web3.clusterApiUrl("devnet"), "confirmed");
 
-const CommitReveal = ({ question, onClose }) => {
+const CommitReveal = ({ question, onClose, refreshQuestions }) => {
     if (!question) {
         return <p>Error: Question data is missing.</p>;
     }
@@ -95,6 +95,10 @@ const CommitReveal = ({ question, onClose }) => {
 
             setHasCommitted(true);
             setCanReveal(true);
+
+            if (refreshQuestions) {
+                refreshQuestions();
+            }
         } catch (error) {
             console.error("Failed to commit vote:", error);
             alert(`Failed to commit vote. Error: ${error.message}`);
@@ -108,52 +112,31 @@ const CommitReveal = ({ question, onClose }) => {
     const revealVote = async () => {
         if (!publicKey || !program) return alert("Please connect your wallet");
         if (!password) return alert("Enter your password to reveal your vote");
-
+    
         try {
-            console.log("Fetching commitment hash for validation...");
-
+            console.log("Revealing vote...");
+    
             const questionPubKey = new PublicKey(questionId);
             const [voterRecordPDA] = await PublicKey.findProgramAddressSync(
                 [Buffer.from("vote"), publicKey.toBuffer(), questionPubKey.toBuffer()],
                 PROGRAM_ID
             );
-
+    
             setLoading(true);
-
-            // ✅ Fetch stored commitment hash from contract
-            const voterRecord = await program.account.voterRecord.fetch(voterRecordPDA);
-            const storedCommitmentHex = Buffer.from(voterRecord.commitment).toString("hex");
-
-            // ✅ Try both vote options (1 and 2) to find the match
-            let decryptedVote = null;
-            for (let i = 1; i <= 2; i++) {
-                const computedHashHex = keccak256(i.toString() + password);
-                if (computedHashHex === storedCommitmentHex) {
-                    decryptedVote = i;
-                    break;
-                }
-            }
-
-            if (decryptedVote === null) {
-                alert("Invalid password! Vote reveal failed.");
-                return;
-            }
-
-            console.log("Vote decrypted:", decryptedVote);
-
-            // ✅ Send the decrypted vote option to the smart contract
+    
+            // Send only the password
             const tx = await program.methods
-                .revealVote(decryptedVote) // Send vote option only
+                .revealVote(password) // Send only the password
                 .accounts({
                     voter: publicKey,
                     question: questionPubKey,
                     voterRecord: voterRecordPDA,
                 })
                 .rpc();
-
+    
             console.log("Vote Revealed! Transaction:", tx);
-            alert(`Vote Revealed Successfully! Option ${decryptedVote}`);
-
+            alert("Vote Revealed Successfully!");
+    
             setCanReveal(false);
         } catch (error) {
             console.error("Failed to reveal vote:", error);

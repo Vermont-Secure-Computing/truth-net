@@ -4,7 +4,7 @@ import { useConnection } from "@solana/wallet-adapter-react";
 import { Program, AnchorProvider, web3 } from "@coral-xyz/anchor";
 import idl from "../idl.json";
 
-const PROGRAM_ID = new PublicKey("DptmJmiZNi4wC6TbumzvkkoAyURYXwBTs5ehb9CkMJ3F");
+const PROGRAM_ID = new PublicKey("BpXZ9RDbqdRjpLNeG8SQTbD2MjyyNMNgKEngEZG9Fvdw");
 const connection = new web3.Connection(web3.clusterApiUrl("devnet"), "confirmed");
 
 const VotersList = () => {
@@ -24,7 +24,7 @@ const VotersList = () => {
             console.log("Fetching registered voters...");
 
             // Fetch the Voter List account
-            const [voterListPDA] = await PublicKey.findProgramAddress(
+            const [voterListPDA] = await PublicKey.findProgramAddressSync(
                 [Buffer.from("voter_list")],
                 PROGRAM_ID
             );

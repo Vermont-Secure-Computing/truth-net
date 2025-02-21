@@ -4,7 +4,7 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import idl from "../idl.json"; // Import the IDL file
 import { Program, AnchorProvider, web3, BN } from "@coral-xyz/anchor";
 
-const PROGRAM_ID = new web3.PublicKey("ENCscDg3Cq5JN9ManW5RBGXdh4wgATN1HebF2ojWRKjn");
+const PROGRAM_ID = new web3.PublicKey("BpXZ9RDbqdRjpLNeG8SQTbD2MjyyNMNgKEngEZG9Fvdw");
 const connection = new web3.Connection(clusterApiUrl("devnet"), "confirmed");
 
 const QuestionForm = () => {
@@ -33,7 +33,7 @@ const QuestionForm = () => {
     const initializeCounter = async () => {
         try {
             // Derive counter address
-            const [counterAddress] = await PublicKey.findProgramAddress(
+            const [counterAddress] = await PublicKey.findProgramAddressSync(
                 [Buffer.from("question_counter"), publicKey.toBuffer()],
                 PROGRAM_ID
             );
@@ -65,7 +65,7 @@ const QuestionForm = () => {
 
     const createQuestion = async () => {
         if (!publicKey) return alert("Please connect your wallet");
-        if (!questionText || !option1 || !option2 || !reward || !endTime) return alert("All fields are required");
+        if (!questionText || !reward || !endTime) return alert("All fields are required");
     
         console.log("Creating question...");
         console.log("Public Key:", publicKey.toString());
@@ -74,22 +74,18 @@ const QuestionForm = () => {
         const endTimeTimestamp = new BN(Math.floor(new Date(endTime).getTime() / 1000));
     
         try {
-            //Check if counter exists first
-            //await initializeCounter();
-
             const [voterListPDA] = await PublicKey.findProgramAddress(
                 [Buffer.from("voter_list")],
                 PROGRAM_ID
             );
-
+    
             const [questionCounterPDA] = await PublicKey.findProgramAddress(
                 [Buffer.from("question_counter"), publicKey.toBuffer()],
                 PROGRAM_ID
             );
-
-            // Check if the question_counter exists
+    
             let questionCounterAccount = await program.account.questionCounter.fetch(questionCounterPDA).catch(() => null);
-
+    
             if (!questionCounterAccount) {
                 console.log("Initializing question counter...");
                 const tx = await program.methods
@@ -100,30 +96,22 @@ const QuestionForm = () => {
                         systemProgram: web3.SystemProgram.programId,
                     })
                     .rpc();
-
+    
                 console.log("Question counter initialized: ", tx);
-
-                // Fetch the newly created question counter
+    
                 questionCounterAccount = await program.account.questionCounter.fetch(questionCounterPDA);
             }
-
-            // Use count from question_counter to create a new question
+    
             const questionCount = questionCounterAccount.count;
-
+    
             const [questionPDA] = await PublicKey.findProgramAddress(
                 [Buffer.from("question"), publicKey.toBuffer(), new BN(questionCount).toArrayLike(Buffer, "le", 8)],
                 PROGRAM_ID
             );
     
-            //Now create the question
+            // Call `createQuestion` without `option1` and `option2`
             const tx = await program.methods
-                .createQuestion(
-                    questionText,
-                    option1,
-                    option2,
-                    rewardLamports,
-                    endTimeTimestamp
-                )
+                .createQuestion(questionText, rewardLamports, endTimeTimestamp)
                 .accounts({
                     asker: publicKey,
                     questionCounter: questionCounterPDA,
@@ -141,13 +129,12 @@ const QuestionForm = () => {
         }
     };
     
+    
 
     return (
         <div>
             <h2>Create a Question</h2>
             <input type="text" placeholder="Enter your question" value={questionText} onChange={(e) => setQuestionText(e.target.value)} />
-            <input type="text" placeholder="Option 1" value={option1} onChange={(e) => setOption1(e.target.value)} />
-            <input type="text" placeholder="Option 2" value={option2} onChange={(e) => setOption2(e.target.value)} />
             <input type="number" placeholder="Reward (SOL)" value={reward} onChange={(e) => setReward(e.target.value)} />
             <input type="datetime-local" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
             <button onClick={createQuestion}>Submit Question</button>

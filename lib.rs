@@ -1,6 +1,7 @@
-use anchor_lang::prelude::*;
+use anchor_lang::{prelude::*, solana_program::clock::Clock};
+use anchor_lang::solana_program::keccak::hash;
 
-declare_id!("HgSmSrv53KqXTNmM1MtLKAQLbbyr9sVSc5KG23YK1jzE");
+declare_id!("BpXZ9RDbqdRjpLNeG8SQTbD2MjyyNMNgKEngEZG9Fvdw");
 
 #[program]
 pub mod truth_network {
@@ -11,11 +12,25 @@ pub mod truth_network {
         Ok(())
     }
 
+    pub fn join_network(ctx: Context<JoinNetwork>) -> Result<()> {
+        let voter_list = &mut ctx.accounts.voter_list;
+        let new_voter = Voter {
+            address: ctx.accounts.user.key(),
+            reputation: 0, // Default reputation
+        };
+
+        require!(
+            !voter_list.voters.contains(&new_voter),
+            VotingError::AlreadyJoined
+        );
+
+        voter_list.voters.push(new_voter);
+        Ok(())
+    }
+
     pub fn create_question(
         ctx: Context<CreateQuestion>,
         question_text: String,
-        option_1: String,
-        option_2: String,
         reward: u64,
         end_time: i64,
     ) -> Result<()> {
@@ -33,8 +48,8 @@ pub mod truth_network {
         question.id = question_id;
         question.asker = *ctx.accounts.asker.key;
         question.question_text = question_text;
-        question.option_1 = option_1;
-        question.option_2 = option_2;
+        question.option_1 = "True".to_string();
+        question.option_2 = "False".to_string();
         question.reward = reward;
         question.end_time = end_time;
         question.votes_option_1 = 0;
@@ -42,42 +57,6 @@ pub mod truth_network {
         question.finalized = false;
     
         msg!("Question Created: {}", question.id);
-        Ok(())
-    }
-
-    pub fn submit_vote(ctx: Context<SubmitVote>, selected_option: u8) -> Result<()> {
-        let question = &mut ctx.accounts.question;
-        let voter_record = &mut ctx.accounts.voter_record;
-    
-        // Ensure voting is still open
-        require!(Clock::get()?.unix_timestamp < question.end_time, VotingError::VotingEnded);
-        require!(!question.finalized, VotingError::AlreadyFinalized);
-    
-        // Ensure voter record is correctly initialized before checking
-        if voter_record.voter == Pubkey::default() {
-            voter_record.question = question.key();
-            voter_record.voter = *ctx.accounts.voter.key;
-            msg!("New voter record created.");
-        } else {
-            // Prevent double voting
-            require!(voter_record.voter != ctx.accounts.voter.key(), VotingError::AlreadyVoted);
-        }
-    
-        // Register the vote
-        if selected_option == 1 {
-            question.votes_option_1 += 1;
-        } else if selected_option == 2 {
-            question.votes_option_2 += 1;
-        } else {
-            return Err(ProgramError::InvalidArgument.into());
-        }
-    
-        msg!(
-            "Vote Recorded. Option 1: {}, Option 2: {}",
-            question.votes_option_1,
-            question.votes_option_2
-        );
-    
         Ok(())
     }
     
@@ -125,6 +104,70 @@ pub mod truth_network {
     
         Ok(())
     }
+
+    pub fn commit_vote(ctx: Context<CommitVote>, commitment: [u8; 32]) -> Result<()> {
+        let question_key = ctx.accounts.question.key(); // Clone the key before borrowing
+    
+        let voter_record = &mut ctx.accounts.voter_record;
+        let question = &mut ctx.accounts.question; // Mutably borrow after storing key
+    
+        require!(!voter_record.revealed, VotingError::AlreadyRevealed);
+    
+        // Store precomputed hash from frontend
+        voter_record.commitment = commitment;
+        voter_record.voter = *ctx.accounts.voter.key;
+        voter_record.question = question_key; // Use the stored key
+    
+        // Increment the committed voters count
+        question.committed_voters += 1;
+    
+        msg!(
+            "Vote committed with hash: {:?}. Total committed voters: {}",
+            commitment,
+            question.committed_voters
+        );
+    
+        Ok(())
+    }
+    
+    
+
+    pub fn reveal_vote(ctx: Context<RevealVote>, password: String) -> Result<()> {
+        let voter_record = &mut ctx.accounts.voter_record;
+        let question = &mut ctx.accounts.question;
+    
+        require!(!voter_record.revealed, VotingError::AlreadyRevealed);
+    
+        // Try both vote options (1 and 2) to reconstruct the hash
+        let mut valid_vote: Option<u8> = None;
+    
+        for vote in 1..=2 {
+            let vote_string = vote.to_string();
+            let input_data = format!("{}{}", vote_string, password);
+            let computed_hash = hash(input_data.as_bytes());
+    
+            if computed_hash.0 == voter_record.commitment {
+                valid_vote = Some(vote);
+                break;
+            }
+        }
+    
+        // If no valid vote is found, return an error
+        let vote = valid_vote.ok_or(VotingError::InvalidReveal)?;
+    
+        // Count the vote
+        if vote == 1 {
+            question.votes_option_1 += 1;
+        } else {
+            question.votes_option_2 += 1;
+        }
+    
+        // Mark vote as revealed
+        voter_record.revealed = true;
+    
+        msg!("Vote Revealed Successfully! Option {}", vote);
+        Ok(())
+    }
 }
 
 
@@ -140,6 +183,7 @@ pub struct Question {
     pub votes_option_1: u64,
     pub votes_option_2: u64,
     pub finalized: bool,
+    pub committed_voters: u64,
 }
 
 #[derive(Accounts)]
@@ -156,7 +200,7 @@ pub struct CreateQuestion<'info> {
     #[account(
         init,
         payer = asker,
-        space = 1024,
+        space = 600,
         seeds = [b"question", asker.key().as_ref(), &question_counter.count.to_le_bytes()], 
         bump
     )]
@@ -164,6 +208,23 @@ pub struct CreateQuestion<'info> {
 
     #[account(mut)]
     pub asker: Signer<'info>,
+
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct JoinNetwork<'info> {
+    #[account(
+        init_if_needed,
+        payer = user,
+        space = 8 + 1000,
+        seeds = [b"voter_list"],
+        bump
+    )]
+    pub voter_list: Account<'info, VoterList>,
+
+    #[account(mut, signer)]
+    pub user: Signer<'info>,
 
     pub system_program: Program<'info, System>,
 }
@@ -202,7 +263,7 @@ pub struct CreateVoterRecord<'info> {
     #[account(
         init_if_needed,
         payer = voter, 
-        space = 8 + 32 + 32,
+        space = 8 + 32 + 32 + 32 + 1,
         seeds = [b"vote", voter.key().as_ref(), question.key().as_ref()], 
         bump
     )]
@@ -214,34 +275,60 @@ pub struct CreateVoterRecord<'info> {
     pub system_program: Program<'info, System>,
 }
 
-
-#[derive(Accounts)]
-pub struct SubmitVote<'info> {
-    #[account(mut)]
-    pub question: Account<'info, Question>,
-
-    #[account(
-        init_if_needed,
-        payer = voter, 
-        space = 64, 
-        seeds = [b"vote", voter.key().as_ref(), question.key().as_ref()], 
-        bump
-    )]
-    pub voter_record: Account<'info, VoterRecord>, 
-
-    #[account(mut)]
-    pub voter: Signer<'info>,
-
-    pub system_program: Program<'info, System>,
+#[account]
+pub struct VoterList {
+    pub voters: Vec<Voter>,
 }
 
-
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq, Debug)]
+pub struct Voter {
+    pub address: Pubkey,
+    pub reputation: u8,
+}
 
 
 #[account]
 pub struct VoterRecord {
     pub question: Pubkey,
     pub voter: Pubkey,
+    pub commitment: [u8; 32],
+    pub revealed: bool,
+}
+
+#[derive(Accounts)]
+pub struct CommitVote<'info> {
+    #[account(mut)]
+    pub question: Account<'info, Question>,
+
+    #[account(
+        init_if_needed,
+        payer = voter,
+        space = 8 + 32 + 32 + 32 + 1,
+        seeds = [b"vote", voter.key().as_ref(), question.key().as_ref()],
+        bump
+    )]
+    pub voter_record: Account<'info, VoterRecord>, 
+
+    #[account(mut)]
+    pub voter: Signer<'info>,
+
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct RevealVote<'info> {
+    #[account(mut)]
+    pub question: Account<'info, Question>,
+
+    #[account(
+        mut,
+        seeds = [b"vote", voter.key().as_ref(), question.key().as_ref()],
+        bump
+    )]
+    pub voter_record: Account<'info, VoterRecord>, 
+
+    #[account(mut)]
+    pub voter: Signer<'info>,
 }
 
 #[derive(Accounts)]
@@ -264,8 +351,14 @@ pub enum VotingError {
     VotingStillActive,
     #[msg("Voting has already been finalized.")]
     AlreadyFinalized,
+    #[msg("You have already joined the network.")]
+    AlreadyJoined,
     #[msg("Question counter already exists.")]
     AlreadyInitialized,
     #[msg("You have already voted on this question.")]
     AlreadyVoted,
+    #[msg("You have already revealed your vote.")]
+    AlreadyRevealed,
+    #[msg("Invalid voting reveal.")]
+    InvalidReveal,
 }

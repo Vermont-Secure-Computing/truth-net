@@ -1,5 +1,5 @@
 {
-  "address": "ENCscDg3Cq5JN9ManW5RBGXdh4wgATN1HebF2ojWRKjn",
+  "address": "BpXZ9RDbqdRjpLNeG8SQTbD2MjyyNMNgKEngEZG9Fvdw",
   "metadata": {
     "name": "truth_network",
     "version": "0.1.0",
@@ -163,14 +163,6 @@
       "args": [
         {
           "name": "question_text",
-          "type": "string"
-        },
-        {
-          "name": "option_1",
-          "type": "string"
-        },
-        {
-          "name": "option_2",
           "type": "string"
         },
         {
@@ -434,8 +426,8 @@
       ],
       "args": [
         {
-          "name": "vote",
-          "type": "u8"
+          "name": "password",
+          "type": "string"
         }
       ]
     }
@@ -581,6 +573,10 @@
           {
             "name": "finalized",
             "type": "bool"
+          },
+          {
+            "name": "committed_voters",
+            "type": "u64"
           }
         ]
       }
