@@ -1,5 +1,5 @@
 {
-  "address": "BpXZ9RDbqdRjpLNeG8SQTbD2MjyyNMNgKEngEZG9Fvdw",
+  "address": "8Vr6WGK4B8ZRnGL3991QEBhWGrJ6uZ92XRf6RFM1iq1E",
   "metadata": {
     "name": "truth_network",
     "version": "0.1.0",
@@ -365,9 +365,82 @@
           }
         },
         {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
           "name": "user",
           "writable": true,
           "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "leave_network",
+      "discriminator": [
+        95,
+        180,
+        37,
+        177,
+        111,
+        193,
+        20,
+        19
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "voter_list",
+          "writable": true
         },
         {
           "name": "system_program",
@@ -460,6 +533,19 @@
       ]
     },
     {
+      "name": "Vault",
+      "discriminator": [
+        211,
+        8,
+        232,
+        43,
+        2,
+        152,
+        117,
+        119
+      ]
+    },
+    {
       "name": "VoterList",
       "discriminator": [
         27,
@@ -526,6 +612,11 @@
       "code": 6007,
       "name": "InvalidReveal",
       "msg": "Invalid voting reveal."
+    },
+    {
+      "code": 6008,
+      "name": "NotJoined",
+      "msg": "You have already leaved the network."
     }
   ],
   "types": [
@@ -595,6 +686,17 @@
             "type": "u64"
           }
         ]
+      }
+    },
+    {
+      "name": "Vault",
+      "docs": [
+        "An empty account for the vault.",
+        "This account will only hold lamports and no other data."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": []
       }
     },
     {

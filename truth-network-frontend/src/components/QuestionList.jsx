@@ -1,106 +1,3 @@
-// import React, { useState, useEffect } from "react";
-// import { PublicKey } from "@solana/web3.js";
-// import { useConnection } from "@solana/wallet-adapter-react";
-// import { Program, AnchorProvider, web3 } from "@coral-xyz/anchor";
-// import idl from "../idl.json";
-// import VotingComponent from "./VotingComponent"; 
-
-// const PROGRAM_ID = new PublicKey("DptmJmiZNi4wC6TbumzvkkoAyURYXwBTs5ehb9CkMJ3F");
-// const connection = new web3.Connection(web3.clusterApiUrl("devnet"), "confirmed");
-
-// const QuestionsList = () => {
-//     const { connection } = useConnection();
-//     const [questions, setQuestions] = useState([]);
-//     const [selectedQuestion, setSelectedQuestion] = useState(null);
-
-//     // Setup Provider & Program
-//     const provider = new AnchorProvider(connection, { publicKey: null }, { preflightCommitment: "processed" });
-//     const program = new Program(idl, provider);
-
-//     useEffect(() => {
-//         fetchQuestions();
-//     }, []);
-
-//     const fetchQuestions = async () => {
-//         try {
-//             console.log("Fetching questions...");
-//             const accounts = await program.account.question.all();
-//             console.log("Accounts: ", accounts);
-
-//             // Decode data properly
-//             const parsedQuestions = accounts.map(({ publicKey, account }) => ({
-//                 id: publicKey.toString(), // PDA of the question
-//                 questionText: account.questionText,
-//                 option1: account.option1,
-//                 option2: account.option2,
-//                 votesOption1: account.votesOption1.toNumber(),
-//                 votesOption2: account.votesOption2.toNumber(),
-//                 endTime: account.endTime.toNumber(),
-//                 finalized: account.finalized,
-//                 asker: account.asker.toString(),
-//             }));
-
-//             console.log("Fetched Questions:", parsedQuestions);
-//             setQuestions(parsedQuestions);
-//         } catch (error) {
-//             console.error("Error fetching questions:", error);
-//         }
-//     };
-
-//     return (
-//         <div>
-//             <h2>All Questions</h2>
-//             {questions.length === 0 ? (
-//                 <p>No questions found.</p>
-//             ) : (
-//                 <ul>
-//                     {questions.map((q) => (
-//                         <li key={q.id} style={{ marginBottom: "20px", borderBottom: "1px solid #ccc", paddingBottom: "10px" }}>
-//                             <strong>{q.questionText}</strong>
-//                             <br />
-//                             <span>
-//                                 <strong>Question PDA:</strong>{" "}
-//                                 <a
-//                                     href={`https://explorer.solana.com/address/${q.id}?cluster=devnet`}
-//                                     target="_blank"
-//                                     rel="noopener noreferrer"
-//                                     style={{ color: "#007bff", textDecoration: "underline" }}
-//                                 >
-//                                     {q.id}
-//                                 </a>
-//                             </span>
-//                             <br />
-//                             <br />
-//                             Option 1: {q.option1} ({q.votesOption1} votes)
-//                             <br />
-//                             Option 2: {q.option2} ({q.votesOption2} votes)
-//                             <br />
-//                             Voting Ends: {new Date(q.endTime * 1000).toLocaleString()}
-//                             <br />
-//                             {!q.finalized && (
-//                                 <button onClick={() => setSelectedQuestion(q)}>Vote</button>
-//                             )}
-//                         </li>
-//                     ))}
-//                 </ul>
-//             )}
-
-//             {selectedQuestion && (
-//                 <VotingComponent
-//                     question={selectedQuestion}
-//                     onClose={() => {
-//                         setSelectedQuestion(null);
-//                         fetchQuestions();
-//                     }}
-//                 />
-//             )}
-//         </div>
-//     );
-// };
-
-// export default QuestionsList;
-
-
 import React, { useState, useEffect } from "react";
 import { PublicKey } from "@solana/web3.js";
 import { useConnection } from "@solana/wallet-adapter-react";
@@ -109,11 +6,11 @@ import idl from "../idl.json";
 import VotingComponent from "./VotingComponent";
 import CommitReveal from "./CommitReveal";
 
-const PROGRAM_ID = new PublicKey("BpXZ9RDbqdRjpLNeG8SQTbD2MjyyNMNgKEngEZG9Fvdw");
+const PROGRAM_ID = new PublicKey("8Vr6WGK4B8ZRnGL3991QEBhWGrJ6uZ92XRf6RFM1iq1E");
 const connection = new web3.Connection(web3.clusterApiUrl("devnet"), "confirmed");
 
 const QuestionsList = () => {
-    const { connection } = useConnection();
+    const { connection: walletConnection } = useConnection();
     const [questions, setQuestions] = useState([]);
     const [selectedQuestion, setSelectedQuestion] = useState(null);
     const [voterListPDA, setVoterListPDA] = useState(null);
@@ -125,7 +22,17 @@ const QuestionsList = () => {
     useEffect(() => {
         fetchQuestions();
         fetchVoterListPDA();
-    }, []);
+
+        // Listen for the custom "questionCreated" event to refresh the list immediately
+        const handleQuestionCreated = () => {
+            fetchQuestions();
+        };
+        window.addEventListener("questionCreated", handleQuestionCreated);
+
+        return () => {
+            window.removeEventListener("questionCreated", handleQuestionCreated);
+        };
+    }, [walletConnection]);
 
     // **Fetch the Voter List PDA**
     const fetchVoterListPDA = async () => {
