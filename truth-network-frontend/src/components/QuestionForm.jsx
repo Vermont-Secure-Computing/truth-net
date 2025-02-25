@@ -4,7 +4,7 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import idl from "../idl.json"; // Import the IDL file
 import { Program, AnchorProvider, web3, BN } from "@coral-xyz/anchor";
 
-const PROGRAM_ID = new web3.PublicKey("BpXZ9RDbqdRjpLNeG8SQTbD2MjyyNMNgKEngEZG9Fvdw");
+const PROGRAM_ID = new web3.PublicKey("8Vr6WGK4B8ZRnGL3991QEBhWGrJ6uZ92XRf6RFM1iq1E");
 const connection = new web3.Connection(clusterApiUrl("devnet"), "confirmed");
 
 const QuestionForm = () => {
@@ -15,6 +15,7 @@ const QuestionForm = () => {
     const [option2, setOption2] = useState("");
     const [reward, setReward] = useState("");
     const [endTime, setEndTime] = useState("");
+    const [loading, setLoading] = useState(false);
 
     
     const walletAdapter = {
@@ -123,6 +124,15 @@ const QuestionForm = () => {
     
             console.log("Transaction Signature:", tx);
             alert("Question Created Successfully!");
+
+            // Dispatch a custom event to let QuestionList know a new question was added
+            window.dispatchEvent(new CustomEvent("questionCreated"));
+
+            // clear the form fields
+            setQuestionText("");
+            setReward("");
+            setEndTime("");
+            setLoading(false);
         } catch (error) {
             console.error("Transaction failed:", error);
             alert(`Failed to create question. Error: ${error.message}`);

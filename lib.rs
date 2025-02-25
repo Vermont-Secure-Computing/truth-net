@@ -1,7 +1,14 @@
 use anchor_lang::{prelude::*, solana_program::clock::Clock};
 use anchor_lang::solana_program::keccak::hash;
+use anchor_lang::solana_program::{system_instruction, program::invoke};
+use anchor_lang::system_program;
 
-declare_id!("BpXZ9RDbqdRjpLNeG8SQTbD2MjyyNMNgKEngEZG9Fvdw");
+declare_id!("8Vr6WGK4B8ZRnGL3991QEBhWGrJ6uZ92XRf6RFM1iq1E");
+
+/// An empty account for the vault.
+/// This account will only hold lamports and no other data.
+#[account]
+pub struct Vault {}
 
 #[program]
 pub mod truth_network {
@@ -13,18 +20,56 @@ pub mod truth_network {
     }
 
     pub fn join_network(ctx: Context<JoinNetwork>) -> Result<()> {
+        // Define deposit amount: 0.5 SOL in lamports.
+        let deposit_amount: u64 = 500_000_000;
+    
+        // Transfer 0.5 SOL from the user's account to the vault.
+        // (The user's account is system owned, so this transfer is allowed even if
+        // the vault is program-owned.)
+        invoke(
+            &system_instruction::transfer(
+                &ctx.accounts.user.key,
+                &ctx.accounts.vault.to_account_info().key,
+                deposit_amount,
+            ),
+            &[
+                ctx.accounts.user.to_account_info(),
+                ctx.accounts.vault.to_account_info(),
+                ctx.accounts.system_program.to_account_info(),
+            ],
+        )?;
+    
+        // After deposit, add the user to the voter list.
         let voter_list = &mut ctx.accounts.voter_list;
         let new_voter = Voter {
-            address: ctx.accounts.user.key(),
-            reputation: 0, // Default reputation
+            address: *ctx.accounts.user.key,
+            reputation: 0, // Default reputation.
         };
-
+    
         require!(
             !voter_list.voters.contains(&new_voter),
             VotingError::AlreadyJoined
         );
-
+    
         voter_list.voters.push(new_voter);
+        Ok(())
+    }
+    
+    pub fn leave_network(ctx: Context<LeaveNetwork>) -> Result<()> {
+        // Remove the user from the voter list.
+        {
+            let voter_list = &mut ctx.accounts.voter_list;
+            let user_pubkey = *ctx.accounts.user.key;
+            if let Some(pos) = voter_list.voters.iter().position(|v| v.address == user_pubkey) {
+                voter_list.voters.swap_remove(pos);
+            } else {
+                return Err(VotingError::NotJoined.into());
+            }
+        }
+    
+        // No manual lamport transfer is needed.
+        // The `close = user` attribute on the vault account automatically transfers all its lamports
+        // to the user and closes the account.
         Ok(())
     }
 
@@ -37,14 +82,14 @@ pub mod truth_network {
         let question_counter = &mut ctx.accounts.question_counter;
         let question = &mut ctx.accounts.question;
     
-        // Ensure the end time is in the future
+        // Ensure the end time is in the future.
         require!(Clock::get()?.unix_timestamp < end_time, VotingError::VotingEnded);
     
-        // Increment counter before using it
+        // Increment counter before using it.
         question_counter.count += 1;
-        let question_id = question_counter.count;  // Assigning ID
+        let question_id = question_counter.count;  // Assigning ID.
     
-        // Set the question details
+        // Set the question details.
         question.id = question_id;
         question.asker = *ctx.accounts.asker.key;
         question.question_text = question_text;
@@ -60,28 +105,27 @@ pub mod truth_network {
         Ok(())
     }
     
-    
     pub fn finalize_voting(ctx: Context<FinalizeVoting>) -> Result<()> {
         let question = &mut ctx.accounts.question;
-
+    
         require!(Clock::get()?.unix_timestamp >= question.end_time, VotingError::VotingStillActive);
         require!(!question.finalized, VotingError::AlreadyFinalized);
-
+    
         question.finalized = true;
-
+    
         msg!(
             "Voting Finalized. Option 1: {}, Option 2: {}",
             question.votes_option_1,
             question.votes_option_2
         );
-
+    
         Ok(())
     }
 
     pub fn initialize_counter(ctx: Context<InitializeCounter>) -> Result<()> {
         let counter = &mut ctx.accounts.question_counter;
     
-        // Ensure the counter is initialized only once
+        // Ensure the counter is initialized only once.
         require!(counter.count == 0, VotingError::AlreadyInitialized);
     
         counter.asker = *ctx.accounts.asker.key;
@@ -93,7 +137,7 @@ pub mod truth_network {
     pub fn create_voter_record(ctx: Context<CreateVoterRecord>) -> Result<()> {
         let voter_record = &mut ctx.accounts.voter_record;
     
-        // Ensure voter record is only initialized if it is empty
+        // Ensure voter record is only initialized if it is empty.
         if voter_record.voter == Pubkey::default() {
             voter_record.question = ctx.accounts.question.key();
             voter_record.voter = ctx.accounts.voter.key();
@@ -106,19 +150,19 @@ pub mod truth_network {
     }
 
     pub fn commit_vote(ctx: Context<CommitVote>, commitment: [u8; 32]) -> Result<()> {
-        let question_key = ctx.accounts.question.key(); // Clone the key before borrowing
+        let question_key = ctx.accounts.question.key(); // Clone the key before borrowing.
     
         let voter_record = &mut ctx.accounts.voter_record;
-        let question = &mut ctx.accounts.question; // Mutably borrow after storing key
+        let question = &mut ctx.accounts.question; // Mutably borrow after storing key.
     
         require!(!voter_record.revealed, VotingError::AlreadyRevealed);
     
-        // Store precomputed hash from frontend
+        // Store precomputed hash from frontend.
         voter_record.commitment = commitment;
         voter_record.voter = *ctx.accounts.voter.key;
-        voter_record.question = question_key; // Use the stored key
+        voter_record.question = question_key; // Use the stored key.
     
-        // Increment the committed voters count
+        // Increment the committed voters count.
         question.committed_voters += 1;
     
         msg!(
@@ -130,15 +174,13 @@ pub mod truth_network {
         Ok(())
     }
     
-    
-
     pub fn reveal_vote(ctx: Context<RevealVote>, password: String) -> Result<()> {
         let voter_record = &mut ctx.accounts.voter_record;
         let question = &mut ctx.accounts.question;
     
         require!(!voter_record.revealed, VotingError::AlreadyRevealed);
     
-        // Try both vote options (1 and 2) to reconstruct the hash
+        // Try both vote options (1 and 2) to reconstruct the hash.
         let mut valid_vote: Option<u8> = None;
     
         for vote in 1..=2 {
@@ -152,24 +194,23 @@ pub mod truth_network {
             }
         }
     
-        // If no valid vote is found, return an error
+        // If no valid vote is found, return an error.
         let vote = valid_vote.ok_or(VotingError::InvalidReveal)?;
     
-        // Count the vote
+        // Count the vote.
         if vote == 1 {
             question.votes_option_1 += 1;
         } else {
             question.votes_option_2 += 1;
         }
     
-        // Mark vote as revealed
+        // Mark vote as revealed.
         voter_record.revealed = true;
     
         msg!("Vote Revealed Successfully! Option {}", vote);
         Ok(())
     }
 }
-
 
 #[account]
 pub struct Question {
@@ -200,8 +241,8 @@ pub struct CreateQuestion<'info> {
     #[account(
         init,
         payer = asker,
-        space = 600,
-        seeds = [b"question", asker.key().as_ref(), &question_counter.count.to_le_bytes()], 
+        space = 800,
+        seeds = [b"question", asker.key().as_ref(), &question_counter.count.to_le_bytes()],
         bump
     )]
     pub question: Account<'info, Question>, 
@@ -217,11 +258,21 @@ pub struct JoinNetwork<'info> {
     #[account(
         init_if_needed,
         payer = user,
-        space = 8 + 1000,
+        space = 8 + 2000, // for voter_list
         seeds = [b"voter_list"],
         bump
     )]
     pub voter_list: Account<'info, VoterList>,
+
+    // The vault account is now defined as a typed account.
+    #[account(
+        init_if_needed,
+        payer = user,
+        space = 8,  // Minimal space for Vault (only the 8-byte discriminator).
+        seeds = [b"vault", user.key().as_ref()],
+        bump
+    )]
+    pub vault: Account<'info, Vault>,
 
     #[account(mut, signer)]
     pub user: Signer<'info>,
@@ -229,6 +280,24 @@ pub struct JoinNetwork<'info> {
     pub system_program: Program<'info, System>,
 }
 
+#[derive(Accounts)]
+pub struct LeaveNetwork<'info> {
+    #[account(
+        mut,
+        seeds = [b"vault", user.key().as_ref()],
+        bump,
+        close = user
+    )]
+    pub vault: Account<'info, Vault>,
+
+    #[account(mut, signer)]
+    pub user: Signer<'info>,
+
+    #[account(mut)]
+    pub voter_list: Account<'info, VoterList>,
+
+    pub system_program: Program<'info, System>,
+}
 
 #[derive(Accounts)]
 pub struct InitializeCounter<'info> {
@@ -247,8 +316,6 @@ pub struct InitializeCounter<'info> {
     pub system_program: Program<'info, System>,
 }
 
-
-
 #[account]
 pub struct QuestionCounter {
     pub asker: Pubkey,
@@ -263,8 +330,8 @@ pub struct CreateVoterRecord<'info> {
     #[account(
         init_if_needed,
         payer = voter, 
-        space = 8 + 32 + 32 + 32 + 1,
-        seeds = [b"vote", voter.key().as_ref(), question.key().as_ref()], 
+        space = 8 + 128,
+        seeds = [b"vote", voter.key().as_ref(), question.key().as_ref()],
         bump
     )]
     pub voter_record: Account<'info, VoterRecord>, 
@@ -286,7 +353,6 @@ pub struct Voter {
     pub reputation: u8,
 }
 
-
 #[account]
 pub struct VoterRecord {
     pub question: Pubkey,
@@ -303,7 +369,7 @@ pub struct CommitVote<'info> {
     #[account(
         init_if_needed,
         payer = voter,
-        space = 8 + 32 + 32 + 32 + 1,
+        space = 8 + 128,
         seeds = [b"vote", voter.key().as_ref(), question.key().as_ref()],
         bump
     )]
@@ -361,4 +427,6 @@ pub enum VotingError {
     AlreadyRevealed,
     #[msg("Invalid voting reveal.")]
     InvalidReveal,
+    #[msg("You have already leaved the network.")]
+    NotJoined,
 }
