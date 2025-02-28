@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { PublicKey } from "@solana/web3.js";
-import { useConnection } from "@solana/wallet-adapter-react";
+import { useWallet, useConnection } from "@solana/wallet-adapter-react";
 import { Program, AnchorProvider, web3 } from "@coral-xyz/anchor";
 import idl from "../idl.json";
 import VotingComponent from "./VotingComponent";
@@ -11,11 +11,18 @@ const connection = new web3.Connection(web3.clusterApiUrl("devnet"), "confirmed"
 
 const QuestionsList = () => {
     const { connection: walletConnection } = useConnection();
+    const { publicKey, signTransaction, signAllTransactions } = useWallet();
     const [questions, setQuestions] = useState([]);
     const [selectedQuestion, setSelectedQuestion] = useState(null);
     const [voterListPDA, setVoterListPDA] = useState(null);
 
-    const provider = new AnchorProvider(connection, { publicKey: null }, { preflightCommitment: "processed" });
+    const wallet = {
+        publicKey,
+        signTransaction,
+        signAllTransactions,
+    };
+
+    const provider = new AnchorProvider(connection, wallet, { preflightCommitment: "processed" });
     const program = new Program(idl, provider);
 
     useEffect(() => {
@@ -30,7 +37,7 @@ const QuestionsList = () => {
         return () => {
             window.removeEventListener("questionCreated", handleQuestionCreated);
         };
-    }, [walletConnection]);
+    }, [walletConnection, publicKey]);
 
     const fetchVoterListPDA = async () => {
         try {
@@ -69,6 +76,30 @@ const QuestionsList = () => {
             setQuestions(parsedQuestions);
         } catch (error) {
             console.error("Error fetching questions:", error);
+        }
+    };
+
+    const finalizeVoting = async (questionId) => {
+        if (!publicKey) {
+            alert("Please connect your wallet.");
+            return;
+        }
+        try {
+            console.log("Finalizing voting for question ID:", questionId);
+            const questionPublicKey = new PublicKey(questionId);
+    
+            const tx = await program.methods
+                .finalizeVoting()
+                .accounts({
+                    question: questionPublicKey,
+                    asker: publicKey,
+                })
+                .rpc();
+    
+            console.log("Voting finalized, transaction signature:", tx);
+            fetchQuestions();
+        } catch (error) {
+            console.error("Error finalizing voting:", error);
         }
     };
 
