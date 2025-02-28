@@ -1,5 +1,5 @@
 {
-  "address": "8Vr6WGK4B8ZRnGL3991QEBhWGrJ6uZ92XRf6RFM1iq1E",
+  "address": "3aoJ7CfsFPQP7MVFVDZtQ3xAGr5R7ZSsDHybvscaWtd6",
   "metadata": {
     "name": "truth_network",
     "version": "0.1.0",
@@ -170,7 +170,11 @@
           "type": "u64"
         },
         {
-          "name": "end_time",
+          "name": "commit_end_time",
+          "type": "i64"
+        },
+        {
+          "name": "reveal_end_time",
           "type": "i64"
         }
       ]
@@ -219,6 +223,61 @@
         },
         {
           "name": "voter",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "delete_expired_question",
+      "discriminator": [
+        63,
+        191,
+        168,
+        249,
+        120,
+        213,
+        66,
+        235
+      ],
+      "accounts": [
+        {
+          "name": "question",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  113,
+                  117,
+                  101,
+                  115,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "asker"
+              },
+              {
+                "kind": "account",
+                "path": "question.id",
+                "account": "Question"
+              }
+            ]
+          }
+        },
+        {
+          "name": "asker",
           "writable": true,
           "signer": true
         },
@@ -503,6 +562,36 @@
           "type": "string"
         }
       ]
+    },
+    {
+      "name": "update_reward",
+      "discriminator": [
+        62,
+        165,
+        125,
+        122,
+        39,
+        204,
+        160,
+        29
+      ],
+      "accounts": [
+        {
+          "name": "question",
+          "writable": true
+        },
+        {
+          "name": "updater",
+          "writable": true,
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "new_reward",
+          "type": "u64"
+        }
+      ]
     }
   ],
   "accounts": [
@@ -617,6 +706,26 @@
       "code": 6008,
       "name": "NotJoined",
       "msg": "You have already leaved the network."
+    },
+    {
+      "code": 6009,
+      "name": "RentNotExpired",
+      "msg": "Rent period has not expired yet."
+    },
+    {
+      "code": 6010,
+      "name": "InvalidTimeframe",
+      "msg": "Invalid timeframe."
+    },
+    {
+      "code": 6011,
+      "name": "CommitPhaseEnded",
+      "msg": "Commit phase ended."
+    },
+    {
+      "code": 6012,
+      "name": "RevealPhaseEnded",
+      "msg": "Reveal phase ended."
     }
   ],
   "types": [
@@ -650,7 +759,15 @@
             "type": "u64"
           },
           {
-            "name": "end_time",
+            "name": "commit_end_time",
+            "type": "i64"
+          },
+          {
+            "name": "reveal_end_time",
+            "type": "i64"
+          },
+          {
+            "name": "rent_expiration",
             "type": "i64"
           },
           {
