@@ -104,6 +104,9 @@ const QuestionsList = () => {
                             {q.revealEndTime > Date.now() / 1000 ? (
                                 <button onClick={() => setSelectedQuestion(q)}>Vote</button>
                             ) : <p className="text-green-600">Voting Period Ended</p>}
+                            {!q.finalized && q.revealEndTime <= Date.now() / 1000 && (
+                                <button onClick={() => finalizeVoting(q.id)}>Finalize</button>
+                            )}
                         </li>
                     ))}
                 </ul>
