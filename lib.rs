@@ -3,7 +3,9 @@ use anchor_lang::solana_program::keccak::hash;
 use anchor_lang::solana_program::{system_instruction, program::invoke};
 use anchor_lang::system_program;
 
-declare_id!("8Vr6WGK4B8ZRnGL3991QEBhWGrJ6uZ92XRf6RFM1iq1E");
+declare_id!("3aoJ7CfsFPQP7MVFVDZtQ3xAGr5R7ZSsDHybvscaWtd6");
+
+const RENT_COST: u64 = 50_000_000;
 
 /// An empty account for the vault.
 /// This account will only hold lamports and no other data.
@@ -77,38 +79,97 @@ pub mod truth_network {
         ctx: Context<CreateQuestion>,
         question_text: String,
         reward: u64,
-        end_time: i64,
+        commit_end_time: i64,
+        reveal_end_time: i64,
     ) -> Result<()> {
         let question_counter = &mut ctx.accounts.question_counter;
+        let question_key = ctx.accounts.question.key();
+    
+        // Ensure commit and reveal times are valid
+        require!(Clock::get()?.unix_timestamp < commit_end_time, VotingError::VotingEnded);
+        require!(commit_end_time < reveal_end_time, VotingError::InvalidTimeframe);
+    
+        // Transfer rent from asker to the question account
+        invoke(
+            &system_instruction::transfer(
+                &ctx.accounts.asker.key(),
+                &question_key,
+                RENT_COST,
+            ),
+            &[
+                ctx.accounts.asker.to_account_info(),
+                ctx.accounts.question.to_account_info(),
+                ctx.accounts.system_program.to_account_info(),
+            ],
+        )?;
+    
         let question = &mut ctx.accounts.question;
-    
-        // Ensure the end time is in the future.
-        require!(Clock::get()?.unix_timestamp < end_time, VotingError::VotingEnded);
-    
-        // Increment counter before using it.
-        question_counter.count += 1;
-        let question_id = question_counter.count;  // Assigning ID.
-    
-        // Set the question details.
-        question.id = question_id;
+        question.id = question_counter.count;
         question.asker = *ctx.accounts.asker.key;
         question.question_text = question_text;
         question.option_1 = "True".to_string();
         question.option_2 = "False".to_string();
         question.reward = reward;
-        question.end_time = end_time;
+        question.commit_end_time = commit_end_time;
+        question.reveal_end_time = reveal_end_time;
+        question.rent_expiration = Clock::get()?.unix_timestamp + 86400;
         question.votes_option_1 = 0;
         question.votes_option_2 = 0;
         question.finalized = false;
+        question.committed_voters = 0;
+    
+        question_counter.count += 1;
+        let question_id = question_counter.count;
     
         msg!("Question Created: {}", question.id);
         Ok(())
     }
+
+    pub fn update_reward(
+        ctx: Context<UpdateReward>,
+        new_reward: u64,
+    ) -> Result<()> {
+        let question = &mut ctx.accounts.question;
+    
+        // Ensure the question has not ended
+        require!(
+            Clock::get()?.unix_timestamp < question.commit_end_time,
+            VotingError::VotingEnded
+        );
+    
+        // Update the reward
+        question.reward = new_reward;
+    
+        msg!("Reward Updated: {}", new_reward);
+        Ok(())
+    }        
+     
+
+    pub fn delete_expired_question(ctx: Context<DeleteExpiredQuestion>) -> Result<()> {
+        let question = &ctx.accounts.question;
+    
+        // Ensure the rent period has expired
+        require!(
+            Clock::get()?.unix_timestamp >= question.rent_expiration,
+            VotingError::RentNotExpired
+        );
+    
+        msg!(
+            "Expired question deleted. Rent refunded to {}",
+            ctx.accounts.asker.key()
+        );
+    
+        // Account will be automatically closed and rent refunded due to `close = asker`
+        Ok(())
+    }
+    
+    
+    
     
     pub fn finalize_voting(ctx: Context<FinalizeVoting>) -> Result<()> {
         let question = &mut ctx.accounts.question;
     
-        require!(Clock::get()?.unix_timestamp >= question.end_time, VotingError::VotingStillActive);
+        require!(Clock::get()?.unix_timestamp >= question.reveal_end_time, VotingError::VotingStillActive);
         require!(!question.finalized, VotingError::AlreadyFinalized);
     
         question.finalized = true;
@@ -153,9 +214,11 @@ pub mod truth_network {
         let question_key = ctx.accounts.question.key(); // Clone the key before borrowing.
     
         let voter_record = &mut ctx.accounts.voter_record;
-        let question = &mut ctx.accounts.question; // Mutably borrow after storing key.
+        let question = &mut ctx.accounts.question;
     
         require!(!voter_record.revealed, VotingError::AlreadyRevealed);
+
+        require!(Clock::get()?.unix_timestamp < question.commit_end_time, VotingError::CommitPhaseEnded);
     
         // Store precomputed hash from frontend.
         voter_record.commitment = commitment;
@@ -179,6 +242,8 @@ pub mod truth_network {
         let question = &mut ctx.accounts.question;
     
         require!(!voter_record.revealed, VotingError::AlreadyRevealed);
+
+        require!(Clock::get()?.unix_timestamp < question.reveal_end_time, VotingError::RevealPhaseEnded);
     
         // Try both vote options (1 and 2) to reconstruct the hash.
         let mut valid_vote: Option<u8> = None;
@@ -220,12 +285,15 @@ pub struct Question {
     pub option_1: String,
     pub option_2: String,
     pub reward: u64,
-    pub end_time: i64,
+    pub commit_end_time: i64,
+    pub reveal_end_time: i64,
+    pub rent_expiration: i64,
     pub votes_option_1: u64,
     pub votes_option_2: u64,
     pub finalized: bool,
     pub committed_voters: u64,
 }
+
 
 #[derive(Accounts)]
 #[instruction(question_text: String)]
@@ -252,6 +320,32 @@ pub struct CreateQuestion<'info> {
 
     pub system_program: Program<'info, System>,
 }
+
+#[derive(Accounts)]
+pub struct UpdateReward<'info> {
+    #[account(mut)]
+    pub question: Account<'info, Question>,
+    #[account(mut)]
+    pub updater: Signer<'info>,
+}
+
+
+#[derive(Accounts)]
+pub struct DeleteExpiredQuestion<'info> {
+    #[account(
+        mut,
+        seeds = [b"question", asker.key().as_ref(), &question.id.to_le_bytes()],
+        bump,
+        close = asker
+    )]
+    pub question: Account<'info, Question>,
+
+    #[account(mut)]
+    pub asker: Signer<'info>,
+
+    pub system_program: Program<'info, System>,
+}
+
 
 #[derive(Accounts)]
 pub struct JoinNetwork<'info> {
@@ -429,4 +523,13 @@ pub enum VotingError {
     InvalidReveal,
     #[msg("You have already leaved the network.")]
     NotJoined,
+    #[msg("Rent period has not expired yet.")]
+    RentNotExpired,
+    #[msg("Invalid timeframe.")]
+    InvalidTimeframe,
+    #[msg("Commit phase ended.")]
+    CommitPhaseEnded,
+    #[msg("Reveal phase ended.")]
+    RevealPhaseEnded
 }
+
