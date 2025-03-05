@@ -1,5 +1,5 @@
 {
-  "address": "3aoJ7CfsFPQP7MVFVDZtQ3xAGr5R7ZSsDHybvscaWtd6",
+  "address": "Af4GKPVNrHLHuYAgqkT4KiFFL2aJFyfRThrMrC2wjshf",
   "metadata": {
     "name": "truth_network",
     "version": "0.1.0",
@@ -7,6 +7,73 @@
     "description": "Created with Anchor"
   },
   "instructions": [
+    {
+      "name": "claim_reward",
+      "discriminator": [
+        149,
+        95,
+        181,
+        242,
+        94,
+        90,
+        158,
+        162
+      ],
+      "accounts": [
+        {
+          "name": "voter",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "voter_record"
+          ]
+        },
+        {
+          "name": "voter_record",
+          "writable": true
+        },
+        {
+          "name": "question",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  113,
+                  117,
+                  101,
+                  115,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "question.asker",
+                "account": "Question"
+              },
+              {
+                "kind": "account",
+                "path": "question.id",
+                "account": "Question"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "writable": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
     {
       "name": "commit_vote",
       "discriminator": [
@@ -143,6 +210,28 @@
                 "kind": "account",
                 "path": "question_counter.count",
                 "account": "QuestionCounter"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "question"
               }
             ]
           }
@@ -581,9 +670,7 @@
           "writable": true
         },
         {
-          "name": "updater",
-          "writable": true,
-          "signer": true
+          "name": "updater"
         }
       ],
       "args": [
@@ -726,6 +813,41 @@
       "code": 6012,
       "name": "RevealPhaseEnded",
       "msg": "Reveal phase ended."
+    },
+    {
+      "code": 6013,
+      "name": "VotingNotFinalized",
+      "msg": "Voting is not finalize yet."
+    },
+    {
+      "code": 6014,
+      "name": "NotEligible",
+      "msg": "You're not eligible"
+    },
+    {
+      "code": 6015,
+      "name": "AlreadyClaimed",
+      "msg": "Already claimed."
+    },
+    {
+      "code": 6016,
+      "name": "NoEligibleVoters",
+      "msg": "No eligible voters."
+    },
+    {
+      "code": 6017,
+      "name": "InvalidVaultAccount",
+      "msg": "Invalid vault account"
+    },
+    {
+      "code": 6018,
+      "name": "InsufficientFunds",
+      "msg": "Insufficient funds."
+    },
+    {
+      "code": 6019,
+      "name": "Overflow",
+      "msg": "Overflow"
     }
   ],
   "types": [
@@ -740,6 +862,14 @@
           },
           {
             "name": "asker",
+            "type": "pubkey"
+          },
+          {
+            "name": "question_key",
+            "type": "pubkey"
+          },
+          {
+            "name": "vault_address",
             "type": "pubkey"
           },
           {
@@ -785,6 +915,14 @@
           {
             "name": "committed_voters",
             "type": "u64"
+          },
+          {
+            "name": "eligible_voters",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
           }
         ]
       }
@@ -864,6 +1002,10 @@
             "type": "pubkey"
           },
           {
+            "name": "selected_option",
+            "type": "u8"
+          },
+          {
             "name": "commitment",
             "type": {
               "array": [
@@ -874,6 +1016,10 @@
           },
           {
             "name": "revealed",
+            "type": "bool"
+          },
+          {
+            "name": "claimed",
             "type": "bool"
           }
         ]
