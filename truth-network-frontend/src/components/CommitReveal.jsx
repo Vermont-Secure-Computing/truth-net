@@ -5,7 +5,7 @@ import { Program, AnchorProvider, web3 } from "@coral-xyz/anchor";
 import idl from "../idl.json";
 import { keccak256 } from "js-sha3"; // Import hashing library
 
-const PROGRAM_ID = new PublicKey("3aoJ7CfsFPQP7MVFVDZtQ3xAGr5R7ZSsDHybvscaWtd6");
+const PROGRAM_ID = new PublicKey("Af4GKPVNrHLHuYAgqkT4KiFFL2aJFyfRThrMrC2wjshf");
 const connection = new web3.Connection(web3.clusterApiUrl("devnet"), "confirmed");
 
 const CommitReveal = ({ question, onClose, refreshQuestions }) => {
@@ -59,6 +59,7 @@ const CommitReveal = ({ question, onClose, refreshQuestions }) => {
         }
     };
 
+   
     // **Commit Vote**
     const commitVote = async () => {
         if (!publicKey || !program) return alert("Please connect your wallet");
@@ -158,26 +159,52 @@ const CommitReveal = ({ question, onClose, refreshQuestions }) => {
             <br />
 
             {/* Password Input for Both Commit & Reveal */}
-            <input
+            {!hasCommitted && new Date().getTime() / 1000 < question.commitEndTime && (
+                <input
                 type="password"
-                placeholder={hasCommitted ? "Enter password to reveal" : "Enter password to commit"}
+                placeholder="Enter password to commit"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-            />
+                />
+            )}
+
+            {hasCommitted &&
+                new Date().getTime() / 1000 > question.commitEndTime &&
+                new Date().getTime() / 1000 < question.revealEndTime && (
+                <input
+                    type="password"
+                    placeholder="Enter password to reveal"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                />
+            )}
             <br />
 
-            {/* Commit Button (If not committed yet) */}
+            {/* Conditionally show Commit Button based on commit end time */}
             {!hasCommitted && (
+                new Date().getTime() / 1000 < question.commitEndTime ? (
                 <button onClick={commitVote} disabled={loading}>
                     {loading ? "Submitting..." : "Commit Vote"}
                 </button>
+                ) : (
+                <div>Voting commit ended</div>
+                )
             )}
 
             {/* Reveal Button (Only show if user has committed) */}
             {canReveal && (
-                <button onClick={revealVote} disabled={loading}>
+                new Date().getTime() / 1000 > question.commitEndTime &&
+                new Date().getTime() / 1000 < question.revealEndTime ? (
+                    <button onClick={revealVote} disabled={loading}>
                     {loading ? "Revealing..." : "Reveal Vote"}
-                </button>
+                    </button>
+                ) : (
+                    <div>
+                    {new Date().getTime() / 1000 <= question.commitEndTime
+                        ? "Commit phase is still active"
+                        : "Voting reveal ended"}
+                    </div>
+                )
             )}
 
             <button onClick={onClose}>Close</button>

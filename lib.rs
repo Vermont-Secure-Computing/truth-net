@@ -1,9 +1,11 @@
 use anchor_lang::{prelude::*, solana_program::clock::Clock};
 use anchor_lang::solana_program::keccak::hash;
 use anchor_lang::solana_program::{system_instruction, program::invoke};
-use anchor_lang::system_program;
+use anchor_lang::solana_program::program::invoke_signed;
+use anchor_lang::solana_program::rent::Rent;
 
-declare_id!("3aoJ7CfsFPQP7MVFVDZtQ3xAGr5R7ZSsDHybvscaWtd6");
+
+declare_id!("Af4GKPVNrHLHuYAgqkT4KiFFL2aJFyfRThrMrC2wjshf");
 
 const RENT_COST: u64 = 50_000_000;
 
@@ -84,25 +86,28 @@ pub mod truth_network {
     ) -> Result<()> {
         let question_counter = &mut ctx.accounts.question_counter;
         let question_key = ctx.accounts.question.key();
-    
-        // Ensure commit and reveal times are valid
+        
+        // Ensure commit and reveal times are valid.
         require!(Clock::get()?.unix_timestamp < commit_end_time, VotingError::VotingEnded);
         require!(commit_end_time < reveal_end_time, VotingError::InvalidTimeframe);
-    
-        // Transfer rent from asker to the question account
+        
+        let total_transfer = RENT_COST + reward;
+        
+        // Transfer funds from the asker to the vault.
         invoke(
             &system_instruction::transfer(
                 &ctx.accounts.asker.key(),
-                &question_key,
-                RENT_COST,
+                &ctx.accounts.vault.key(),
+                total_transfer,
             ),
             &[
                 ctx.accounts.asker.to_account_info(),
-                ctx.accounts.question.to_account_info(),
+                ctx.accounts.vault.to_account_info(),
                 ctx.accounts.system_program.to_account_info(),
             ],
         )?;
-    
+        
+        // Initialize the question account.
         let question = &mut ctx.accounts.question;
         question.id = question_counter.count;
         question.asker = *ctx.accounts.asker.key;
@@ -117,13 +122,25 @@ pub mod truth_network {
         question.votes_option_2 = 0;
         question.finalized = false;
         question.committed_voters = 0;
-    
+        question.question_key = question_key;
+        // For clarity, store the vault address in a dedicated field.
+        question.vault_address = ctx.accounts.vault.key();
+        
+        // Derive the bump for the question PDA.
+        let (_derived_pubkey, bump) = Pubkey::find_program_address(
+            &[b"question", ctx.accounts.asker.key.as_ref(), &question_counter.count.to_le_bytes()],
+            ctx.program_id,
+        );
+        question.bump = bump;
+        
         question_counter.count += 1;
-        let question_id = question_counter.count;
-    
+        
         msg!("Question Created: {}", question.id);
+        msg!("Vault PDA: {}", ctx.accounts.vault.key());
         Ok(())
     }
+    
+            
 
     pub fn update_reward(
         ctx: Context<UpdateReward>,
@@ -138,7 +155,7 @@ pub mod truth_network {
         );
     
         // Update the reward
-        question.reward = new_reward;
+        question.reward += new_reward;
     
         msg!("Reward Updated: {}", new_reward);
         Ok(())
@@ -164,24 +181,54 @@ pub mod truth_network {
     }
     
     
-    
-    
     pub fn finalize_voting(ctx: Context<FinalizeVoting>) -> Result<()> {
         let question = &mut ctx.accounts.question;
-    
-        require!(Clock::get()?.unix_timestamp >= question.reveal_end_time, VotingError::VotingStillActive);
+        
+        require!(
+            Clock::get()?.unix_timestamp >= question.reveal_end_time,
+            VotingError::VotingStillActive
+        );
         require!(!question.finalized, VotingError::AlreadyFinalized);
-    
+        
         question.finalized = true;
     
-        msg!(
-            "Voting Finalized. Option 1: {}, Option 2: {}",
-            question.votes_option_1,
-            question.votes_option_2
-        );
+        let total_votes = question.votes_option_1 + question.votes_option_2;
+        // Avoid division by zero if there are no votes
+        let option1_percent = if total_votes > 0 {
+            (question.votes_option_1 as f64 / total_votes as f64) * 100.0
+        } else {
+            0.0
+        };
+        let option2_percent = if total_votes > 0 {
+            (question.votes_option_2 as f64 / total_votes as f64) * 100.0
+        } else {
+            0.0
+        };
     
+        let winning_option = if question.votes_option_1 >= question.votes_option_2 {
+            1
+        } else {
+            2
+        };
+
+        question.eligible_voters = if winning_option == 1 {
+            question.votes_option_1
+        } else {
+            question.votes_option_2
+        };
+    
+        msg!(
+            "Voting Finalized. Total Votes: {}. Option 1: {:.0}% ({} votes), Option 2: {:.0}% ({} votes). Winning Votes: {}",
+            total_votes,
+            option1_percent,
+            question.votes_option_1,
+            option2_percent,
+            question.votes_option_2,
+            winning_option,
+        );
+        
         Ok(())
-    }
+    }    
 
     pub fn initialize_counter(ctx: Context<InitializeCounter>) -> Result<()> {
         let counter = &mut ctx.accounts.question_counter;
@@ -271,16 +318,77 @@ pub mod truth_network {
     
         // Mark vote as revealed.
         voter_record.revealed = true;
+
+        // **Set the revealed vote in plaintext.**
+        voter_record.selected_option = vote;
     
         msg!("Vote Revealed Successfully! Option {}", vote);
         Ok(())
     }
+
+    pub fn claim_reward(ctx: Context<ClaimReward>) -> Result<()> {
+        let question = &ctx.accounts.question;
+        require!(question.finalized, VotingError::VotingNotFinalized);
+        
+        let winning_option = if question.votes_option_1 >= question.votes_option_2 {
+            1
+        } else {
+            2
+        };
+        
+        require!(
+            ctx.accounts.voter_record.selected_option == winning_option,
+            VotingError::NotEligible
+        );
+        require!(
+            !ctx.accounts.voter_record.claimed,
+            VotingError::AlreadyClaimed
+        );
+        
+        let eligible_count = question.eligible_voters;
+        require!(eligible_count > 0, VotingError::NoEligibleVoters);
+        
+        let voter_share = question.reward / eligible_count;
+        ctx.accounts.voter_record.claimed = true;
+        
+        let vault_info = ctx.accounts.vault.to_account_info();
+        let voter_info = ctx.accounts.voter.to_account_info();
+        
+        let rent = Rent::get()?;
+        let min_balance = rent.minimum_balance(vault_info.data_len());
+        let vault_balance = **vault_info.lamports.borrow();
+        require!(
+            vault_balance.saturating_sub(voter_share) >= min_balance,
+            VotingError::InsufficientFunds
+        );
+        
+        {
+            let current_vault_balance = **vault_info.lamports.borrow();
+            let new_vault_balance = current_vault_balance.checked_sub(voter_share)
+                .ok_or(VotingError::InsufficientFunds)?;
+            **vault_info.lamports.borrow_mut() = new_vault_balance;
+        }
+        
+        {
+            let current_voter_balance = **voter_info.lamports.borrow();
+            let new_voter_balance = current_voter_balance.checked_add(voter_share)
+                .ok_or(VotingError::Overflow)?;
+            **voter_info.lamports.borrow_mut() = new_voter_balance;
+        }
+        
+        
+        Ok(())
+    }
+        
+        
 }
 
 #[account]
 pub struct Question {
     pub id: u64,
     pub asker: Pubkey,
+    pub question_key: Pubkey,
+    pub vault_address: Pubkey,
     pub question_text: String,
     pub option_1: String,
     pub option_2: String,
@@ -292,6 +400,8 @@ pub struct Question {
     pub votes_option_2: u64,
     pub finalized: bool,
     pub committed_voters: u64,
+    pub eligible_voters: u64,
+    pub bump: u8,
 }
 
 
@@ -315,18 +425,29 @@ pub struct CreateQuestion<'info> {
     )]
     pub question: Account<'info, Question>, 
 
+    // Change vault from UncheckedAccount to Account<Vault>
+    #[account(
+        init,
+        payer = asker,
+        space = 8,  // Minimal space for Vault (only the 8-byte discriminator).
+        seeds = [b"vault", question.key().as_ref()],
+        bump
+    )]
+    pub vault: Account<'info, Vault>,
+
     #[account(mut)]
     pub asker: Signer<'info>,
 
     pub system_program: Program<'info, System>,
 }
 
+
 #[derive(Accounts)]
 pub struct UpdateReward<'info> {
     #[account(mut)]
     pub question: Account<'info, Question>,
-    #[account(mut)]
-    pub updater: Signer<'info>,
+    /// CHECK: This account is not required to sign; its authorization is managed by the caller.
+    pub updater: UncheckedAccount<'info>,
 }
 
 
@@ -451,8 +572,10 @@ pub struct Voter {
 pub struct VoterRecord {
     pub question: Pubkey,
     pub voter: Pubkey,
+    pub selected_option: u8,
     pub commitment: [u8; 32],
     pub revealed: bool,
+    pub claimed: bool,
 }
 
 #[derive(Accounts)]
@@ -498,6 +621,25 @@ pub struct FinalizeVoting<'info> {
 }
 
 #[derive(Accounts)]
+pub struct ClaimReward<'info> {
+    #[account(mut)]
+    pub voter: Signer<'info>,
+    #[account(mut, has_one = voter)]
+    pub voter_record: Account<'info, VoterRecord>,
+    #[account(
+        mut,
+        seeds = [b"question", question.asker.as_ref(), &question.id.to_le_bytes()],
+        bump = question.bump,
+    )]
+    pub question: Account<'info, Question>,
+    // Vault is now a program-owned account.
+    #[account(mut)]
+    pub vault: Account<'info, Vault>,
+    pub system_program: Program<'info, System>,
+}
+
+
+#[derive(Accounts)]
 pub struct HelloWorld<'info> {
     #[account(mut)]
     pub user: Signer<'info>,
@@ -530,6 +672,20 @@ pub enum VotingError {
     #[msg("Commit phase ended.")]
     CommitPhaseEnded,
     #[msg("Reveal phase ended.")]
-    RevealPhaseEnded
+    RevealPhaseEnded,
+    #[msg("Voting is not finalize yet.")]
+    VotingNotFinalized,
+    #[msg("You're not eligible")]
+    NotEligible,
+    #[msg("Already claimed.")]
+    AlreadyClaimed,
+    #[msg("No eligible voters.")]
+    NoEligibleVoters,
+    #[msg("Invalid vault account")]
+    InvalidVaultAccount,
+    #[msg("Insufficient funds.")]
+    InsufficientFunds,
+    #[msg("Overflow")]
+    Overflow
 }
 
