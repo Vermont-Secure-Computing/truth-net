@@ -2,7 +2,7 @@ import idl from "../idl.json";
 import { Program, AnchorProvider, web3 } from "@coral-xyz/anchor";
 import { useWallet } from "@solana/wallet-adapter-react";
 
-const PROGRAM_ID = new web3.PublicKey("Af4GKPVNrHLHuYAgqkT4KiFFL2aJFyfRThrMrC2wjshf");
+const PROGRAM_ID = new web3.PublicKey("CaKtVz5bhapzdaxr8r5Sx6Jq8ZnanXFNTwY6oCCCVuFP");
 const connection = new web3.Connection(web3.clusterApiUrl("devnet"), "confirmed");
 
 const HelloWorld = () => {

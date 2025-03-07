@@ -6,7 +6,7 @@ import idl from "../idl.json";
 import VotingComponent from "./VotingComponent";
 import CommitReveal from "./CommitReveal";
 
-const PROGRAM_ID = new PublicKey("Af4GKPVNrHLHuYAgqkT4KiFFL2aJFyfRThrMrC2wjshf");
+const PROGRAM_ID = new PublicKey("CaKtVz5bhapzdaxr8r5Sx6Jq8ZnanXFNTwY6oCCCVuFP");
 const connection = new web3.Connection(web3.clusterApiUrl("devnet"), "confirmed");
 
 const QuestionsList = () => {
@@ -70,7 +70,7 @@ const QuestionsList = () => {
             committedVoters: account.committedVoters.toNumber(),
             commitEndTime: account.commitEndTime.toNumber(),
             revealEndTime: account.revealEndTime.toNumber(),
-            finalized: account.finalized,
+            // finalized: account.finalized,
             asker: account.asker.toString(),
             userVoterRecord: null, // Default to null
           };
@@ -188,13 +188,19 @@ const QuestionsList = () => {
         <ul>
           {questions.map((q) => {
             // Calculate the winning option based on on-chain vote counts.
+            const totalVotes = q.votesOption1 + q.votesOption2;
             const winningOption = q.votesOption1 >= q.votesOption2 ? 1 : 2;
-            // Safely check if the current user is eligible to claim their reward.
+            const winningVotes = winningOption === 1 ? q.votesOption1 : q.votesOption2;
+            const winningPercentage = totalVotes > 0 ? (winningVotes / totalVotes) * 100 : 0;
+            // Check if reveal phase ended.
+            const revealEnded = q.revealEndTime <= Date.now() / 1000;
+            // Determine if the current user is eligible to claim their reward.
             const eligibleToClaim =
-              q.finalized &&
+              revealEnded &&
               q.userVoterRecord &&
               q.userVoterRecord.selected_option === winningOption &&
-              !q.userVoterRecord.claimed;
+              !q.userVoterRecord.claimed &&
+              winningPercentage >= 51;
 
             return (
               <li
@@ -230,9 +236,9 @@ const QuestionsList = () => {
                 ) : (
                   <p className="text-green-600">Voting Period Ended</p>
                 )}
-                {!q.finalized && q.revealEndTime <= Date.now() / 1000 && (
+                {/* {!q.finalized && q.revealEndTime <= Date.now() / 1000 && (
                   <button onClick={() => finalizeVoting(q.id)}>Finalize</button>
-                )}
+                )} */}
                 {/* Show "Claim Reward" button if eligible */}
                 {eligibleToClaim && (
                   <button onClick={() => claimReward(q.id)}>Claim Reward</button>

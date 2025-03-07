@@ -1,5 +1,5 @@
 {
-  "address": "Af4GKPVNrHLHuYAgqkT4KiFFL2aJFyfRThrMrC2wjshf",
+  "address": "CaKtVz5bhapzdaxr8r5Sx6Jq8ZnanXFNTwY6oCCCVuFP",
   "metadata": {
     "name": "truth_network",
     "version": "0.1.0",
@@ -395,7 +395,12 @@
           "writable": true
         }
       ],
-      "args": []
+      "args": [
+        {
+          "name": "question_id",
+          "type": "u64"
+        }
+      ]
     },
     {
       "name": "hello_world",
@@ -848,6 +853,16 @@
       "code": 6019,
       "name": "Overflow",
       "msg": "Overflow"
+    },
+    {
+      "code": 6020,
+      "name": "InsufficientMajority",
+      "msg": "Winning votes do not meet the required 51% majority."
+    },
+    {
+      "code": 6021,
+      "name": "QuestionIdMismatch",
+      "msg": "Question ID mismatch."
     }
   ],
   "types": [
@@ -919,6 +934,14 @@
           {
             "name": "eligible_voters",
             "type": "u64"
+          },
+          {
+            "name": "winning_option",
+            "type": "u8"
+          },
+          {
+            "name": "winning_percent",
+            "type": "f64"
           },
           {
             "name": "bump",
