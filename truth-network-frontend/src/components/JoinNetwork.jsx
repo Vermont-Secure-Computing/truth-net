@@ -5,7 +5,7 @@ import { Program, AnchorProvider, web3 } from "@coral-xyz/anchor";
 import idl from "../idl.json";
 
 const PROGRAM_ID = new web3.PublicKey(
-  "CaKtVz5bhapzdaxr8r5Sx6Jq8ZnanXFNTwY6oCCCVuFP"
+  "9PBFznkpYBp1FHCEvm2VyrYxW1Ro737vpxwmuSCw9Wpg"
 );
 const connection = new web3.Connection(web3.clusterApiUrl("devnet"), "confirmed");
 

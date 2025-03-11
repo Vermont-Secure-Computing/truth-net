@@ -1,5 +1,5 @@
 {
-  "address": "CaKtVz5bhapzdaxr8r5Sx6Jq8ZnanXFNTwY6oCCCVuFP",
+  "address": "9PBFznkpYBp1FHCEvm2VyrYxW1Ro737vpxwmuSCw9Wpg",
   "metadata": {
     "name": "truth_network",
     "version": "0.1.0",
@@ -115,6 +115,10 @@
               }
             ]
           }
+        },
+        {
+          "name": "voter_list",
+          "writable": true
         },
         {
           "name": "voter",
@@ -863,6 +867,11 @@
       "code": 6021,
       "name": "QuestionIdMismatch",
       "msg": "Question ID mismatch."
+    },
+    {
+      "code": 6022,
+      "name": "NotPartOfVoterList",
+      "msg": "Not a part of the voters list."
     }
   ],
   "types": [
