@@ -1,11 +1,10 @@
 use anchor_lang::{prelude::*, solana_program::clock::Clock};
 use anchor_lang::solana_program::keccak::hash;
 use anchor_lang::solana_program::{system_instruction, program::invoke};
-use anchor_lang::solana_program::program::invoke_signed;
 use anchor_lang::solana_program::rent::Rent;
 
 
-declare_id!("Af4GKPVNrHLHuYAgqkT4KiFFL2aJFyfRThrMrC2wjshf");
+declare_id!("9PBFznkpYBp1FHCEvm2VyrYxW1Ro737vpxwmuSCw9Wpg");
 
 const RENT_COST: u64 = 50_000_000;
 
@@ -181,8 +180,11 @@ pub mod truth_network {
     }
     
     
-    pub fn finalize_voting(ctx: Context<FinalizeVoting>) -> Result<()> {
+    pub fn finalize_voting(ctx: Context<FinalizeVoting>, question_id: u64) -> Result<()> {
         let question = &mut ctx.accounts.question;
+        
+        // Verify that the passed question_id matches the one stored on the account.
+        require!(question.id == question_id, VotingError::QuestionIdMismatch);
         
         require!(
             Clock::get()?.unix_timestamp >= question.reveal_end_time,
@@ -191,9 +193,10 @@ pub mod truth_network {
         require!(!question.finalized, VotingError::AlreadyFinalized);
         
         question.finalized = true;
-    
+        
         let total_votes = question.votes_option_1 + question.votes_option_2;
-        // Avoid division by zero if there are no votes
+        
+        // Calculate percentage for each option
         let option1_percent = if total_votes > 0 {
             (question.votes_option_1 as f64 / total_votes as f64) * 100.0
         } else {
@@ -204,27 +207,36 @@ pub mod truth_network {
         } else {
             0.0
         };
-    
-        let winning_option = if question.votes_option_1 >= question.votes_option_2 {
-            1
-        } else {
-            2
-        };
 
+        // Determine winning option and percentage
+        let (winning_option, winning_percent) = if question.votes_option_1 >= question.votes_option_2 {
+            (1, option1_percent)
+        } else {
+            (2, option2_percent)
+        };
+        
+        
+        // Set eligible voters to the winning votes count
         question.eligible_voters = if winning_option == 1 {
             question.votes_option_1
         } else {
             question.votes_option_2
         };
     
+        
+
+        // Store winning_option and winning_percent in the Question struct
+        question.winning_option = winning_option;
+        question.winning_percent = winning_percent;
+    
+        
         msg!(
-            "Voting Finalized. Total Votes: {}. Option 1: {:.0}% ({} votes), Option 2: {:.0}% ({} votes). Winning Votes: {}",
+            "Voting Finalized. Total Votes: {}. Option 1: {} votes, Option 2: {} votes. Winning Option: {} with {:.0}% votes",
             total_votes,
-            option1_percent,
             question.votes_option_1,
-            option2_percent,
             question.votes_option_2,
             winning_option,
+            winning_percent,
         );
         
         Ok(())
@@ -262,7 +274,14 @@ pub mod truth_network {
     
         let voter_record = &mut ctx.accounts.voter_record;
         let question = &mut ctx.accounts.question;
-    
+        let voter_list = &ctx.accounts.voter_list;
+
+        // Check if the voter is in the voter list
+        require!(
+            voter_list.voters.iter().any(|v| v.address == *ctx.accounts.voter.key),
+            VotingError::NotPartOfVoterList
+        );
+
         require!(!voter_record.revealed, VotingError::AlreadyRevealed);
 
         require!(Clock::get()?.unix_timestamp < question.commit_end_time, VotingError::CommitPhaseEnded);
@@ -328,13 +347,25 @@ pub mod truth_network {
 
     pub fn claim_reward(ctx: Context<ClaimReward>) -> Result<()> {
         let question = &ctx.accounts.question;
-        require!(question.finalized, VotingError::VotingNotFinalized);
+        // require!(question.finalized, VotingError::VotingNotFinalized);
+
+        let total_votes = question.votes_option_1 + question.votes_option_2;
+        require!(total_votes > 0, VotingError::NoEligibleVoters);
         
         let winning_option = if question.votes_option_1 >= question.votes_option_2 {
             1
         } else {
             2
         };
+
+        // Calculate winning percentage.
+        let winning_votes = if winning_option == 1 {
+            question.votes_option_1
+        } else {
+            question.votes_option_2
+        };
+        let winning_percentage = (winning_votes as f64 / total_votes as f64) * 100.0;
+        require!(winning_percentage >= 51.0, VotingError::InsufficientMajority);
         
         require!(
             ctx.accounts.voter_record.selected_option == winning_option,
@@ -345,10 +376,10 @@ pub mod truth_network {
             VotingError::AlreadyClaimed
         );
         
-        let eligible_count = question.eligible_voters;
-        require!(eligible_count > 0, VotingError::NoEligibleVoters);
+        // Use winning_votes as the count of eligible voters.
+        require!(winning_votes > 0, VotingError::NoEligibleVoters);
         
-        let voter_share = question.reward / eligible_count;
+        let voter_share = question.reward / winning_votes;
         ctx.accounts.voter_record.claimed = true;
         
         let vault_info = ctx.accounts.vault.to_account_info();
@@ -401,7 +432,18 @@ pub struct Question {
     pub finalized: bool,
     pub committed_voters: u64,
     pub eligible_voters: u64,
+    pub winning_option: u8,
+    pub winning_percent: f64,
     pub bump: u8,
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize)]
+pub struct WinnerResult {
+    pub total_votes: u64,
+    pub votes_option1: u64,
+    pub votes_option2: u64,
+    pub winning_option: u8,
+    pub winning_percent: f64,
 }
 
 
@@ -590,7 +632,10 @@ pub struct CommitVote<'info> {
         seeds = [b"vote", voter.key().as_ref(), question.key().as_ref()],
         bump
     )]
-    pub voter_record: Account<'info, VoterRecord>, 
+    pub voter_record: Account<'info, VoterRecord>,
+
+    #[account(mut)]
+    pub voter_list: Account<'info, VoterList>, 
 
     #[account(mut)]
     pub voter: Signer<'info>,
@@ -686,6 +731,12 @@ pub enum VotingError {
     #[msg("Insufficient funds.")]
     InsufficientFunds,
     #[msg("Overflow")]
-    Overflow
+    Overflow,
+    #[msg("Winning votes do not meet the required 51% majority.")]
+    InsufficientMajority,
+    #[msg("Question ID mismatch.")]
+    QuestionIdMismatch,
+    #[msg("Not a part of the voters list.")]
+    NotPartOfVoterList
 }
 

@@ -5,7 +5,7 @@ import { Program, AnchorProvider, web3 } from "@coral-xyz/anchor";
 import idl from "../idl.json";
 import { keccak256 } from "js-sha3"; // Import hashing library
 
-const PROGRAM_ID = new PublicKey("CaKtVz5bhapzdaxr8r5Sx6Jq8ZnanXFNTwY6oCCCVuFP");
+const PROGRAM_ID = new PublicKey("9PBFznkpYBp1FHCEvm2VyrYxW1Ro737vpxwmuSCw9Wpg");
 const connection = new web3.Connection(web3.clusterApiUrl("devnet"), "confirmed");
 
 const CommitReveal = ({ question, onClose, refreshQuestions }) => {
@@ -81,12 +81,18 @@ const CommitReveal = ({ question, onClose, refreshQuestions }) => {
             const commitmentHex = keccak256(voteString + password);
             const commitmentBytes = Buffer.from(commitmentHex, "hex"); // Convert to byte array
 
+            const [voterListPDA] = await PublicKey.findProgramAddressSync(
+                [Buffer.from("voter_list")], // Adjust seeds based on your program logic
+                PROGRAM_ID
+            );
+
             const tx = await program.methods
                 .commitVote(commitmentBytes) // Send precomputed hash
                 .accounts({
                     voter: publicKey,
                     question: questionPubKey,
                     voterRecord: voterRecordPDA,
+                    voterList: voterListPDA,
                     systemProgram: web3.SystemProgram.programId,
                 })
                 .rpc();
