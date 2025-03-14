@@ -1,5 +1,5 @@
 {
-  "address": "9PBFznkpYBp1FHCEvm2VyrYxW1Ro737vpxwmuSCw9Wpg",
+  "address": "4z8w5yvsZP8XpDVD7uuYWTy6AidoeMGpDM5qeXgA69t2",
   "metadata": {
     "name": "truth_network",
     "version": "0.1.0",
@@ -66,6 +66,29 @@
         {
           "name": "vault",
           "writable": true
+        },
+        {
+          "name": "voter_list",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  111,
+                  116,
+                  101,
+                  114,
+                  95,
+                  108,
+                  105,
+                  115,
+                  116
+                ]
+              }
+            ]
+          }
         },
         {
           "name": "system_program",
@@ -998,6 +1021,18 @@
           {
             "name": "reputation",
             "type": "u8"
+          },
+          {
+            "name": "total_earnings",
+            "type": "u64"
+          },
+          {
+            "name": "total_revealed_votes",
+            "type": "u64"
+          },
+          {
+            "name": "total_correct_votes",
+            "type": "u64"
           }
         ]
       }

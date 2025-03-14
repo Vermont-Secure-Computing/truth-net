@@ -4,7 +4,7 @@ use anchor_lang::solana_program::{system_instruction, program::invoke};
 use anchor_lang::solana_program::rent::Rent;
 
 
-declare_id!("9PBFznkpYBp1FHCEvm2VyrYxW1Ro737vpxwmuSCw9Wpg");
+declare_id!("4z8w5yvsZP8XpDVD7uuYWTy6AidoeMGpDM5qeXgA69t2");
 
 const RENT_COST: u64 = 50_000_000;
 
@@ -47,7 +47,10 @@ pub mod truth_network {
         let new_voter = Voter {
             address: *ctx.accounts.user.key,
             reputation: 0, // Default reputation.
-        };
+            total_earnings: 0,
+            total_revealed_votes: 0,
+            total_correct_votes: 0,
+        };        
     
         require!(
             !voter_list.voters.contains(&new_voter),
@@ -347,69 +350,60 @@ pub mod truth_network {
 
     pub fn claim_reward(ctx: Context<ClaimReward>) -> Result<()> {
         let question = &ctx.accounts.question;
-        // require!(question.finalized, VotingError::VotingNotFinalized);
-
+        let voter_list = &mut ctx.accounts.voter_list;
+        let voter_pubkey = ctx.accounts.voter.key();
+    
         let total_votes = question.votes_option_1 + question.votes_option_2;
         require!(total_votes > 0, VotingError::NoEligibleVoters);
-        
+    
         let winning_option = if question.votes_option_1 >= question.votes_option_2 {
             1
         } else {
             2
         };
-
-        // Calculate winning percentage.
+    
+        require!(ctx.accounts.voter_record.selected_option == winning_option, VotingError::NotEligible);
+        require!(!ctx.accounts.voter_record.claimed, VotingError::AlreadyClaimed);
+    
         let winning_votes = if winning_option == 1 {
             question.votes_option_1
         } else {
             question.votes_option_2
         };
-        let winning_percentage = (winning_votes as f64 / total_votes as f64) * 100.0;
-        require!(winning_percentage >= 51.0, VotingError::InsufficientMajority);
-        
-        require!(
-            ctx.accounts.voter_record.selected_option == winning_option,
-            VotingError::NotEligible
-        );
-        require!(
-            !ctx.accounts.voter_record.claimed,
-            VotingError::AlreadyClaimed
-        );
-        
-        // Use winning_votes as the count of eligible voters.
+    
         require!(winning_votes > 0, VotingError::NoEligibleVoters);
-        
+    
         let voter_share = question.reward / winning_votes;
         ctx.accounts.voter_record.claimed = true;
-        
+    
         let vault_info = ctx.accounts.vault.to_account_info();
         let voter_info = ctx.accounts.voter.to_account_info();
-        
+    
         let rent = Rent::get()?;
         let min_balance = rent.minimum_balance(vault_info.data_len());
         let vault_balance = **vault_info.lamports.borrow();
-        require!(
-            vault_balance.saturating_sub(voter_share) >= min_balance,
-            VotingError::InsufficientFunds
+        require!(vault_balance.saturating_sub(voter_share) >= min_balance, VotingError::InsufficientFunds);
+    
+        **vault_info.lamports.borrow_mut() -= voter_share;
+        **voter_info.lamports.borrow_mut() += voter_share;
+    
+        // ✅ Update voter stats in the VoterList
+        if let Some(voter) = voter_list.voters.iter_mut().find(|v| v.address == voter_pubkey) {
+            voter.total_earnings += voter_share; // Update total earnings
+            voter.total_revealed_votes += 1; // Increment revealed votes
+            if ctx.accounts.voter_record.selected_option == winning_option {
+                voter.total_correct_votes += 1; // Increment correct votes
+            }
+        }
+    
+        msg!(
+            "Reward Claimed! {} lamports sent to voter: {}",
+            voter_share,
+            voter_pubkey
         );
-        
-        {
-            let current_vault_balance = **vault_info.lamports.borrow();
-            let new_vault_balance = current_vault_balance.checked_sub(voter_share)
-                .ok_or(VotingError::InsufficientFunds)?;
-            **vault_info.lamports.borrow_mut() = new_vault_balance;
-        }
-        
-        {
-            let current_voter_balance = **voter_info.lamports.borrow();
-            let new_voter_balance = current_voter_balance.checked_add(voter_share)
-                .ok_or(VotingError::Overflow)?;
-            **voter_info.lamports.borrow_mut() = new_voter_balance;
-        }
-        
-        
+    
         Ok(())
-    }
+    }    
         
         
 }
@@ -608,7 +602,11 @@ pub struct VoterList {
 pub struct Voter {
     pub address: Pubkey,
     pub reputation: u8,
+    pub total_earnings: u64,
+    pub total_revealed_votes: u64,
+    pub total_correct_votes: u64,
 }
+
 
 #[account]
 pub struct VoterRecord {
@@ -677,11 +675,17 @@ pub struct ClaimReward<'info> {
         bump = question.bump,
     )]
     pub question: Account<'info, Question>,
-    // Vault is now a program-owned account.
     #[account(mut)]
     pub vault: Account<'info, Vault>,
+    #[account(
+        mut,
+        seeds = [b"voter_list"],
+        bump
+    )]
+    pub voter_list: Account<'info, VoterList>,
     pub system_program: Program<'info, System>,
 }
+
 
 
 #[derive(Accounts)]

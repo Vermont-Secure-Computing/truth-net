@@ -5,7 +5,7 @@ import { Program, AnchorProvider, web3 } from "@coral-xyz/anchor";
 import idl from "../idl.json";
 import CommitReveal from "./CommitReveal";
 
-const PROGRAM_ID = new PublicKey("9PBFznkpYBp1FHCEvm2VyrYxW1Ro737vpxwmuSCw9Wpg");
+const PROGRAM_ID = new PublicKey("4z8w5yvsZP8XpDVD7uuYWTy6AidoeMGpDM5qeXgA69t2");
 const connection = new web3.Connection(web3.clusterApiUrl("devnet"), "confirmed");
 
 const QuestionsList = () => {
@@ -15,6 +15,7 @@ const QuestionsList = () => {
     const [voterListPDA, setVoterListPDA] = useState(null);
     const [userInVoterList, setUserInVoterList] = useState(false);
     const [selectedQuestionId, setSelectedQuestionId] = useState(null); // Stores the ID of the question with an open modal
+    const [sortOrder, setSortOrder] = useState("highest");
 
     const wallet = {
         publicKey,
@@ -38,7 +39,7 @@ const QuestionsList = () => {
         return () => {
             window.removeEventListener("questionCreated", handleQuestionCreated);
         };
-    }, [walletConnection, publicKey]);
+    }, [walletConnection, publicKey, sortOrder]);
 
     const fetchVoterListPDA = async () => {
         try {
@@ -81,7 +82,7 @@ const QuestionsList = () => {
   
           const parsedQuestions = await Promise.all(
               accounts.map(async ({ publicKey: questionPubKey, account }) => {
-                  const solReward = (account.reward.toNumber() / 1_000_000_000).toFixed(1); // Convert to SOL
+                  const solReward = (account.reward.toNumber() / 1_000_000_000).toFixed(7); // Convert to SOL
   
                   const revealEnded = account.revealEndTime.toNumber() <= Date.now() / 1000;
   
@@ -135,7 +136,7 @@ const QuestionsList = () => {
           const endedQuestions = parsedQuestions.filter(q => q.revealEnded && (!q.userVoterRecord || q.userVoterRecord.claimed));
   
           // Sort active questions by highest reward first
-          activeQuestions.sort((a, b) => b.reward - a.reward);
+          activeQuestions.sort((a, b) => sortOrder === "highest" ? b.reward - a.reward : a.reward - b.reward);
   
           // Combine sorted active and ended questions (active first)
           const sortedQuestions = [...activeQuestions, ...endedQuestions];
@@ -194,6 +195,9 @@ const QuestionsList = () => {
     return (
         <div>
             <h2>All Questions</h2>
+            <button onClick={() => setSortOrder(sortOrder === "highest" ? "lowest" : "highest")} className="bg-blue-500 text-white px-4 py-2 rounded mb-4">
+                Sort by {sortOrder === "highest" ? "Lowest" : "Highest"} Reward
+            </button>
             {questions.length === 0 ? (
                 <p>No questions found.</p>
             ) : (
@@ -217,6 +221,14 @@ const QuestionsList = () => {
                                 <strong>{q.questionText}</strong>
                                 <br />
                                 <strong>Reward:</strong> {q.reward} SOL
+                                <br />
+                                {q.revealEnded && (
+                                    <>
+                                        <strong>Winning Vote:</strong> {winningOption === 1 ? q.option1 : q.option2}
+                                        <br />
+                                        <strong>Winning Percentage:</strong> {winningPercentage.toFixed(2)}%
+                                    </>
+                                )}
                                 <br />
                                 <strong>Number of Committed Voters:</strong> {q.committedVoters}
                                 <br />
