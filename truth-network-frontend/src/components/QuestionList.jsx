@@ -193,81 +193,89 @@ const QuestionsList = () => {
   
 
     return (
-        <div>
-            <h2>All Questions</h2>
-            <button onClick={() => setSortOrder(sortOrder === "highest" ? "lowest" : "highest")} className="bg-blue-500 text-white px-4 py-2 rounded mb-4">
-                Sort by {sortOrder === "highest" ? "Lowest" : "Highest"} Reward
-            </button>
-            {questions.length === 0 ? (
-                <p>No questions found.</p>
-            ) : (
-                <ul>
-                    {questions.map((q) => {
-                        const totalVotes = q.votesOption1 + q.votesOption2;
-                        const winningOption = q.votesOption1 >= q.votesOption2 ? 1 : 2;
-                        const winningVotes = winningOption === 1 ? q.votesOption1 : q.votesOption2;
-                        const winningPercentage = totalVotes > 0 ? (winningVotes / totalVotes) * 100 : 0;
-                        const revealEnded = q.revealEndTime <= Date.now() / 1000;
+        <div className="container mx-auto px-6 py-6">
+                <h2 className="text-2xl font-bold mb-4">All Questions</h2>
 
-                        return (
-                            <li
-                                key={q.id}
-                                style={{
-                                    marginBottom: "20px",
-                                    borderBottom: "1px solid #ccc",
-                                    paddingBottom: "10px",
-                                }}
-                            >
-                                <strong>{q.questionText}</strong>
-                                <br />
-                                <strong>Reward:</strong> {q.reward} SOL
-                                <br />
-                                {q.revealEnded && (
-                                    <>
-                                        <strong>Winning Vote:</strong> {winningOption === 1 ? q.option1 : q.option2}
-                                        <br />
-                                        <strong>Winning Percentage:</strong> {winningPercentage.toFixed(2)}%
-                                    </>
-                                )}
-                                <br />
-                                <strong>Number of Committed Voters:</strong> {q.committedVoters}
-                                <br />
-                                Commit Phase Ends: {new Date(q.commitEndTime * 1000).toLocaleString()}
-                                <br />
-                                Reveal Phase Ends: {new Date(q.revealEndTime * 1000).toLocaleString()}
-                                <br />
-                                {q.revealEndTime > Date.now() / 1000 ? (
-                                    userInVoterList && selectedQuestionId !== q.id ? (
-                                        <button onClick={() => setSelectedQuestionId(q.id)}>Vote</button>
-                                    ) : null
-                                ) : (
-                                    <p className="text-green-600">Voting Period Ended</p>
-                                )}
+                {/* Sort Button */}
+                <button 
+                    onClick={() => setSortOrder(sortOrder === "highest" ? "lowest" : "highest")} 
+                    className="bg-blue-500 text-white px-4 py-2 rounded mb-6 hover:bg-blue-600 transition duration-300"
+                >
+                    Sort by {sortOrder === "highest" ? "Lowest" : "Highest"} Reward
+                </button>
 
-                                {selectedQuestionId === q.id && (
-                                    <CommitReveal
-                                        question={q}
-                                        onClose={() => setSelectedQuestionId(null)}
-                                        refreshQuestions={fetchQuestions}
-                                    />
-                                )}
+                {/* Check for Empty Questions */}
+                {questions.length === 0 ? (
+                    <p className="text-gray-600 text-center">No questions found.</p>
+                ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                        {questions.map((q) => {
+                            const totalVotes = q.votesOption1 + q.votesOption2;
+                            const winningOption = q.votesOption1 >= q.votesOption2 ? 1 : 2;
+                            const winningVotes = winningOption === 1 ? q.votesOption1 : q.votesOption2;
+                            const winningPercentage = totalVotes > 0 ? (winningVotes / totalVotes) * 100 : 0;
+                            const revealEnded = q.revealEndTime <= Date.now() / 1000;
 
-                                {q.revealEndTime <= Date.now() / 1000 && // Reveal phase ended
-                                    q.userVoterRecord && // User voted
-                                    q.userVoterRecord.selected_option === (q.votesOption1 >= q.votesOption2 ? 1 : 2) && // User picked winning option
-                                    !q.userVoterRecord.claimed && // User hasn't claimed reward yet
-                                    (q.votesOption1 + q.votesOption2 > 0) && // Ensure votes exist
-                                    (q.votesOption1 >= q.votesOption2 ? q.votesOption1 : q.votesOption2) / (q.votesOption1 + q.votesOption2) >= 0.51 && ( // Ensure 51% majority
-                                        <button onClick={() => claimReward(q.id)} className="bg-blue-500 text-white px-4 py-2 rounded">
-                                            Claim Reward
-                                        </button>
-                                )}
-                            </li>
-                        );
-                    })}
-                </ul>
-            )}
-        </div>
+                            return (
+                                <div key={q.id} className="bg-white shadow-md rounded-lg p-6 border border-gray-200">
+                                    <h3 className="text-lg font-semibold mb-2">{q.questionText}</h3>
+                                    <p className="text-gray-700"><strong>Reward:</strong> {q.reward} SOL</p>
+
+                                    {/* Reveal Results (After Reveal Ends) */}
+                                    {revealEnded && (
+                                        <>
+                                            <p className="text-gray-700"><strong>Winning Vote:</strong> {winningOption === 1 ? q.option1 : q.option2}</p>
+                                            <p className="text-gray-700"><strong>Winning Percentage:</strong> {winningPercentage.toFixed(2)}%</p>
+                                        </>
+                                    )}
+
+                                    <p className="text-gray-700"><strong>Committed Voters:</strong> {q.committedVoters}</p>
+                                    <p className="text-gray-500 text-sm">Commit Ends: {new Date(q.commitEndTime * 1000).toLocaleString()}</p>
+                                    <p className="text-gray-500 text-sm">Reveal Ends: {new Date(q.revealEndTime * 1000).toLocaleString()}</p>
+
+                                    {/* Vote Button */}
+                                    {q.revealEndTime > Date.now() / 1000 ? (
+                                        userInVoterList && selectedQuestionId !== q.id ? (
+                                            <button 
+                                                onClick={() => setSelectedQuestionId(q.id)}
+                                                className="mt-3 bg-blue-500 text-white px-4 py-2 rounded w-full hover:bg-blue-600 transition duration-300"
+                                            >
+                                                Vote
+                                            </button>
+                                        ) : null
+                                    ) : (
+                                        <p className="text-green-600 mt-2">Voting Period Ended</p>
+                                    )}
+
+                                    {/* Voting Modal */}
+                                    {selectedQuestionId === q.id && (
+                                        <CommitReveal
+                                            question={q}
+                                            onClose={() => setSelectedQuestionId(null)}
+                                            refreshQuestions={fetchQuestions}
+                                        />
+                                    )}
+
+                                    {/* Claim Reward Button */}
+                                    {q.revealEndTime <= Date.now() / 1000 && 
+                                        q.userVoterRecord &&
+                                        q.userVoterRecord.selected_option === (q.votesOption1 >= q.votesOption2 ? 1 : 2) &&
+                                        !q.userVoterRecord.claimed &&
+                                        (q.votesOption1 + q.votesOption2 > 0) &&
+                                        (q.votesOption1 >= q.votesOption2 ? q.votesOption1 : q.votesOption2) / (q.votesOption1 + q.votesOption2) >= 0.51 && (
+                                            <button 
+                                                onClick={() => claimReward(q.id)} 
+                                                className="mt-3 bg-green-500 text-white px-4 py-2 rounded w-full hover:bg-green-600 transition duration-300"
+                                            >
+                                                Claim Reward
+                                            </button>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
+            </div>
     );
 };
 

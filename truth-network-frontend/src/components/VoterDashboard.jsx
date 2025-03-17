@@ -18,6 +18,8 @@ const VoterDashboard = () => {
     
         const fetchData = async () => {
             try {
+                console.log("Fetching voter stats...");
+    
                 const walletAdapter = {
                     publicKey,
                     signTransaction,
@@ -30,22 +32,64 @@ const VoterDashboard = () => {
                     { preflightCommitment: "processed" }
                 );
     
+                // Remove PROGRAM_ID (Let Anchor detect it)
                 const program = new Program(idl, provider);
     
-                console.log("Fetching voter stats...");
+                // Fetch voter stats (Total Earnings, Total Revealed Votes, Total Correct Votes)
                 const stats = await getVoterStats(program, publicKey);
                 console.log("Voter Stats:", stats);
-    
                 setTotalEarnings(stats.totalEarnings);
                 setTotalRevealedVotes(stats.totalRevealedVotes);
                 setTotalCorrectVotes(stats.totalCorrectVotes);
+    
+                console.log("Fetching voter records...");
+    
+                // Fetch all voter records
+                const voterRecords = await program.account.voterRecord.all();
+                console.log("Voter Records:", voterRecords);
+    
+                // Filter records where the user is the voter
+                const userVoterRecords = voterRecords.filter(
+                    record => record.account.voter.toBase58() === publicKey.toBase58()
+                );
+                console.log("User Voter Records:", userVoterRecords);
+    
+                if (userVoterRecords.length === 0) {
+                    console.warn("No voter records found for this user.");
+                    setQuestions([]); // Clear the state to reflect "No voted questions found"
+                    return;
+                }
+    
+                // Get public keys of voted questions
+                const questionPubkeys = userVoterRecords.map(record => record.account.question);
+                console.log("Fetching questions:", questionPubkeys);
+    
+                // Fetch question details
+                const questionsData = await Promise.all(
+                    questionPubkeys.map(async (pubkey) => {
+                        try {
+                            return await program.account.question.fetch(pubkey);
+                        } catch (error) {
+                            console.error("Error fetching question:", pubkey.toBase58(), error);
+                            return null; // Handle potential fetch errors
+                        }
+                    })
+                );
+    
+                // Filter out null values (failed fetches)
+                const validQuestions = questionsData.filter(q => q !== null);
+                console.log("Voted Questions:", validQuestions);
+    
+                // Update state with fetched questions
+                setQuestions(validQuestions);
+    
             } catch (error) {
                 console.error("Error fetching voter data:", error);
             }
         };
     
         fetchData();
-    }, [publicKey, wallet]);
+    }, [publicKey, wallet]);    
     
 
     async function getVoterStats(program, voterPubkey) {
@@ -83,7 +127,7 @@ const VoterDashboard = () => {
     
 
     return (
-        <div>
+        <div className="container mx-auto px-6 py-6">
             <h2>Voter Dashboard</h2>
             <h3>Total Earnings: {totalEarnings} SOL</h3>
             <h3>Total Revealed Votes: {totalRevealedVotes}</h3>
@@ -91,16 +135,17 @@ const VoterDashboard = () => {
             
             <h3>Voted Questions:</h3>
             {questions.length > 0 ? (
-                questions.map((q) => (
-                    <div key={q.id}>
+                questions.map((q, index) => (
+                    <div key={index}> {/* ✅ Use array index as fallback key */}
                         <h4>{q.questionText}</h4>
-                        <p>Votes: {q.votesOption1} - {q.votesOption2}</p>
-                        <p>Finalized: {q.finalized ? "Yes" : "No"}</p>
+                        <p><strong>Question:</strong> {q.questionText}</p>
+                        <p><strong>Votes:</strong> {q.votesOption1.toNumber()} - {q.votesOption2.toNumber()}</p> {/* ✅ Convert BN to number */}
                     </div>
                 ))
             ) : (
                 <p>No voted questions found.</p>
             )}
+
         </div>
     );
 };
