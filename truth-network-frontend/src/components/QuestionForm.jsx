@@ -122,13 +122,48 @@ const QuestionForm = () => {
   };     
 
   return (
-    <div>
-      <h2>Create a Question</h2>
-      <input type="text" placeholder="Enter your question" value={questionText} onChange={(e) => setQuestionText(e.target.value)} />
-      <input type="number" placeholder="Reward (SOL)" value={reward} onChange={(e) => setReward(e.target.value)} />
-      <input type="datetime-local" value={commitEndTime} onChange={(e) => setCommitEndTime(e.target.value)} placeholder="Commit End Time" />
-      <input type="datetime-local" value={revealEndTime} onChange={(e) => setRevealEndTime(e.target.value)} placeholder="Reveal End Time" />
-      <button onClick={createQuestion}>Submit Question</button>
+    <div className="container items-center bg-white mx-auto px-6 py-6">
+        {/* Question Input */}
+        <input 
+            type="text" 
+            placeholder="Enter your question" 
+            value={questionText} 
+            onChange={(e) => setQuestionText(e.target.value)} 
+            className="p-3 border rounded-lg w-1/4 focus:outline-none focus:ring-2 focus:ring-blue-500 mx-2"
+        />
+
+        {/* Reward Input */}
+        <input 
+            type="number" 
+            placeholder="Reward (SOL)" 
+            value={reward} 
+            onChange={(e) => setReward(e.target.value)} 
+            className="p-3 border rounded-lg w-1/6 focus:outline-none focus:ring-2 focus:ring-blue-500 mx-2"
+        />
+
+        {/* Commit End Time */}
+        <input 
+            type="datetime-local" 
+            value={commitEndTime} 
+            onChange={(e) => setCommitEndTime(e.target.value)} 
+            className="p-3 border rounded-lg w-1/5 focus:outline-none focus:ring-2 focus:ring-blue-500 mx-2"
+        />
+
+        {/* Reveal End Time */}
+        <input 
+            type="datetime-local" 
+            value={revealEndTime} 
+            onChange={(e) => setRevealEndTime(e.target.value)} 
+            className="p-3 border rounded-lg w-1/5 focus:outline-none focus:ring-2 focus:ring-blue-500 mx-2"
+        />
+
+        {/* Submit Button */}
+        <button 
+            onClick={createQuestion} 
+            className="bg-blue-500 text-white px-4 py-3 rounded-lg hover:bg-blue-600 transition duration-300 mx-2"
+        >
+            Submit
+        </button>
     </div>
   );
 };
