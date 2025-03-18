@@ -1,5 +1,5 @@
 {
-  "address": "4z8w5yvsZP8XpDVD7uuYWTy6AidoeMGpDM5qeXgA69t2",
+  "address": "7mhm8nAhLY3rSvsbMfMRuRaBT3aUUcB9Wk3c4Dpzbigg",
   "metadata": {
     "name": "truth_network",
     "version": "0.1.0",
@@ -89,6 +89,11 @@
               }
             ]
           }
+        },
+        {
+          "name": "fee_receiver",
+          "writable": true,
+          "address": "7qfdvYGEKnM2zrMYATbwtAdzagRGQUUCXxU3hhgG3V2u"
         },
         {
           "name": "system_program",
@@ -675,6 +680,10 @@
           "name": "voter",
           "writable": true,
           "signer": true
+        },
+        {
+          "name": "voter_list",
+          "writable": true
         }
       ],
       "args": [
@@ -974,6 +983,10 @@
           {
             "name": "winning_percent",
             "type": "f64"
+          },
+          {
+            "name": "reward_fee_taken",
+            "type": "bool"
           },
           {
             "name": "bump",

@@ -8,7 +8,7 @@ import { Program, AnchorProvider, web3, BN } from "@coral-xyz/anchor";
 
 const RENT_COST = 50_000_000;
 const SYS_ID = SystemProgram.programId;
-const PROGRAM_ID = new web3.PublicKey("4z8w5yvsZP8XpDVD7uuYWTy6AidoeMGpDM5qeXgA69t2");
+const PROGRAM_ID = new web3.PublicKey("7mhm8nAhLY3rSvsbMfMRuRaBT3aUUcB9Wk3c4Dpzbigg");
 const connection = new Connection(clusterApiUrl("devnet"), "confirmed");
 
 const QuestionForm = () => {

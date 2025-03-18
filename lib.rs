@@ -3,8 +3,10 @@ use anchor_lang::solana_program::keccak::hash;
 use anchor_lang::solana_program::{system_instruction, program::invoke};
 use anchor_lang::solana_program::rent::Rent;
 
+pub const FEE_RECEIVER_ADDRESS: &str = "7qfdvYGEKnM2zrMYATbwtAdzagRGQUUCXxU3hhgG3V2u";
 
-declare_id!("4z8w5yvsZP8XpDVD7uuYWTy6AidoeMGpDM5qeXgA69t2");
+
+declare_id!("7mhm8nAhLY3rSvsbMfMRuRaBT3aUUcB9Wk3c4Dpzbigg");
 
 const RENT_COST: u64 = 50_000_000;
 
@@ -12,6 +14,7 @@ const RENT_COST: u64 = 50_000_000;
 /// This account will only hold lamports and no other data.
 #[account]
 pub struct Vault {}
+
 
 #[program]
 pub mod truth_network {
@@ -309,6 +312,8 @@ pub mod truth_network {
     pub fn reveal_vote(ctx: Context<RevealVote>, password: String) -> Result<()> {
         let voter_record = &mut ctx.accounts.voter_record;
         let question = &mut ctx.accounts.question;
+        let voter_list = &mut ctx.accounts.voter_list;
+        let voter_pubkey = ctx.accounts.voter.key();
     
         require!(!voter_record.revealed, VotingError::AlreadyRevealed);
 
@@ -343,13 +348,18 @@ pub mod truth_network {
 
         // **Set the revealed vote in plaintext.**
         voter_record.selected_option = vote;
+
+        // ✅ **Increase voter reputation by 1**
+        if let Some(voter) = voter_list.voters.iter_mut().find(|v| v.address == voter_pubkey) {
+            voter.reputation += 1;
+        }
     
         msg!("Vote Revealed Successfully! Option {}", vote);
         Ok(())
     }
 
     pub fn claim_reward(ctx: Context<ClaimReward>) -> Result<()> {
-        let question = &ctx.accounts.question;
+        let question = &mut ctx.accounts.question;
         let voter_list = &mut ctx.accounts.voter_list;
         let voter_pubkey = ctx.accounts.voter.key();
     
@@ -378,10 +388,32 @@ pub mod truth_network {
     
         let vault_info = ctx.accounts.vault.to_account_info();
         let voter_info = ctx.accounts.voter.to_account_info();
+        let fee_receiver_info = ctx.accounts.fee_receiver.to_account_info(); // New Fee Receiver Account
     
         let rent = Rent::get()?;
         let min_balance = rent.minimum_balance(vault_info.data_len());
         let vault_balance = **vault_info.lamports.borrow();
+    
+        let mut fee = 0;
+    
+        // First claim execution: Deduct 2% fee and send to designated address
+        if !question.reward_fee_taken {
+            fee = question.reward * 2 / 100;
+            question.reward_fee_taken = true; // Mark that the fee has been taken
+        
+            require!(vault_balance.saturating_sub(fee) >= min_balance, VotingError::InsufficientFunds);
+        
+            **vault_info.lamports.borrow_mut() -= fee;
+            **fee_receiver_info.lamports.borrow_mut() += fee;
+        
+            msg!(
+                "2% fee ({}) sent to fee receiver: {}",
+                fee,
+                fee_receiver_info.key()
+            );
+        }
+    
+        // Ensure sufficient funds after deducting fee
         require!(vault_balance.saturating_sub(voter_share) >= min_balance, VotingError::InsufficientFunds);
     
         **vault_info.lamports.borrow_mut() -= voter_share;
@@ -403,7 +435,7 @@ pub mod truth_network {
         );
     
         Ok(())
-    }    
+    }        
         
         
 }
@@ -428,6 +460,7 @@ pub struct Question {
     pub eligible_voters: u64,
     pub winning_option: u8,
     pub winning_percent: f64,
+    pub reward_fee_taken: bool,
     pub bump: u8,
 }
 
@@ -655,6 +688,9 @@ pub struct RevealVote<'info> {
 
     #[account(mut)]
     pub voter: Signer<'info>,
+
+    #[account(mut)]
+    pub voter_list: Account<'info, VoterList>,
 }
 
 #[derive(Accounts)]
@@ -683,6 +719,9 @@ pub struct ClaimReward<'info> {
         bump
     )]
     pub voter_list: Account<'info, VoterList>,
+    /// CHECK: This is a fixed known address for the fee receiver, no need for ownership verification.
+    #[account(mut, address = FEE_RECEIVER_ADDRESS.parse::<Pubkey>().unwrap())]
+    pub fee_receiver: AccountInfo<'info>,
     pub system_program: Program<'info, System>,
 }
 

@@ -5,7 +5,7 @@ import { Program, AnchorProvider, web3 } from "@coral-xyz/anchor";
 import idl from "../idl.json";
 import { keccak256 } from "js-sha3";
 
-const PROGRAM_ID = new PublicKey("4z8w5yvsZP8XpDVD7uuYWTy6AidoeMGpDM5qeXgA69t2");
+const PROGRAM_ID = new PublicKey("7mhm8nAhLY3rSvsbMfMRuRaBT3aUUcB9Wk3c4Dpzbigg");
 const connection = new web3.Connection(web3.clusterApiUrl("devnet"), "confirmed");
 
 const CommitReveal = ({ question, onClose, refreshQuestions }) => {
@@ -76,7 +76,7 @@ const CommitReveal = ({ question, onClose, refreshQuestions }) => {
 
             setLoading(true);
 
-            // ✅ Hash (vote + password) in frontend
+            // Hash (vote + password) in frontend
             const voteString = selectedOption.toString(); // Convert vote option to string
             const commitmentHex = keccak256(voteString + password);
             const commitmentBytes = Buffer.from(commitmentHex, "hex"); // Convert to byte array
@@ -128,6 +128,13 @@ const CommitReveal = ({ question, onClose, refreshQuestions }) => {
                 [Buffer.from("vote"), publicKey.toBuffer(), questionPubKey.toBuffer()],
                 PROGRAM_ID
             );
+
+            // Find the PDA for voter_list
+            const [voterListPDA] = await PublicKey.findProgramAddressSync(
+                [Buffer.from("voter_list")],  // ✅ Matches your program seed
+                PROGRAM_ID
+            );
+
     
             setLoading(true);
     
@@ -138,6 +145,7 @@ const CommitReveal = ({ question, onClose, refreshQuestions }) => {
                     voter: publicKey,
                     question: questionPubKey,
                     voterRecord: voterRecordPDA,
+                    voterList: voterListPDA,
                 })
                 .rpc();
     
