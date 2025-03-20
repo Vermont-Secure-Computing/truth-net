@@ -1,40 +1,40 @@
 import React, { useState } from "react";
-import { PublicKey, Connection, clusterApiUrl, Transaction, SystemProgram } from "@solana/web3.js";
+import { PublicKey, Connection, clusterApiUrl } from "@solana/web3.js";
 import { useWallet } from "@solana/wallet-adapter-react";
-import idl from "../idl.json"; // Import the IDL file
 import { Program, AnchorProvider, web3, BN } from "@coral-xyz/anchor";
-
-
+import { toast } from "react-toastify"; // ✅ Import toast
+import "react-toastify/dist/ReactToastify.css"; // ✅ Import styles
+import idl from "../idl.json"; // Import the IDL file
 
 const RENT_COST = 50_000_000;
-const SYS_ID = SystemProgram.programId;
 const PROGRAM_ID = new web3.PublicKey("7mhm8nAhLY3rSvsbMfMRuRaBT3aUUcB9Wk3c4Dpzbigg");
 const connection = new Connection(clusterApiUrl("devnet"), "confirmed");
 
-const QuestionForm = () => {
+const QuestionForm = ({ fetchQuestions }) => {
   const { publicKey, signTransaction, signAllTransactions } = useWallet();
-
   const [questionText, setQuestionText] = useState("");
   const [reward, setReward] = useState("");
   const [commitEndTime, setCommitEndTime] = useState("");
   const [revealEndTime, setRevealEndTime] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(false); // ✅ Added loading state
 
   const walletAdapter = { publicKey, signTransaction, signAllTransactions };
-
   const provider = new AnchorProvider(connection, walletAdapter, {
     preflightCommitment: "processed",
   });
-
   const program = new Program(idl, provider);
 
   const createQuestion = async () => {
-    if (!publicKey) return alert("Please connect your wallet");
-    if (!questionText || !reward || !commitEndTime || !revealEndTime)
-      return alert("All fields are required");
+    if (!publicKey) {
+      toast.warn("⚠ Please connect your wallet.", { position: "top-center" });
+      return;
+    }
+    if (!questionText || !reward || !commitEndTime || !revealEndTime) {
+      toast.warn("⚠ All fields are required.", { position: "top-center" });
+      return;
+    }
 
-    console.log("Creating question...");
-    console.log("Public Key:", publicKey.toString());
+    setLoading(true); // ✅ Start loading state
 
     const rewardLamports = new BN(parseFloat(reward) * 1_000_000_000);
     const commitEndTimeTimestamp = new BN(Math.floor(new Date(commitEndTime).getTime() / 1000));
@@ -50,7 +50,8 @@ const QuestionForm = () => {
       let questionCounterAccount = await program.account.questionCounter.fetch(questionCounterPDA).catch(() => null);
 
       if (!questionCounterAccount) {
-        console.log("Initializing question counter...");
+        toast.info("Initializing question counter...", { position: "top-center" });
+
         const tx = await program.methods
           .initializeCounter()
           .accounts({
@@ -60,14 +61,10 @@ const QuestionForm = () => {
           })
           .rpc();
 
-        console.log("Question counter initialized: ", tx);
         questionCounterAccount = await program.account.questionCounter.fetch(questionCounterPDA);
       }
 
       const questionCount = questionCounterAccount.count;
-      console.log("Question count:", questionCount);
-
-      // Convert question count to an 8-byte Buffer (little-endian).
       const questionCountBN = new BN(questionCount);
       const questionCountBuffer = questionCountBN.toArrayLike(Buffer, "le", 8);
 
@@ -76,24 +73,14 @@ const QuestionForm = () => {
         [Buffer.from("question"), publicKey.toBuffer(), questionCountBuffer],
         PROGRAM_ID
       );
-      if (!questionPDA) throw new Error("Failed to derive question PDA");
-      console.log("Derived question PDA:", questionPDA.toString());
 
-      // Derive the vault PDA using the question PDA.
-      const [vaultPDA, vaultBump] = await PublicKey.findProgramAddress(
+      // Derive the vault PDA.
+      const [vaultPDA] = await PublicKey.findProgramAddress(
         [Buffer.from("vault"), questionPDA.toBuffer()],
         PROGRAM_ID
       );
-      if (!vaultPDA) throw new Error("Failed to derive vault PDA");
-      console.log("Derived vault PDA:", vaultPDA.toString(), "with bump", vaultBump);
 
-      // Calculate total lamports to fund the vault.
       const totalTransferLamports = Number(RENT_COST) + Number(rewardLamports.toString());
-      console.log("Total lamports to transfer:", totalTransferLamports);
-
-      // Instead of creating the vault here on the client using invoke_signed,
-      // assume that the on-chain create_question instruction will create the vault.
-      // So we simply pass the vault PDA to the instruction.
 
       const tx = await program.methods
         .createQuestion(questionText, rewardLamports, commitEndTimeTimestamp, revealEndTimeTimestamp)
@@ -101,25 +88,35 @@ const QuestionForm = () => {
           asker: publicKey,
           questionCounter: questionCounterPDA,
           question: questionPDA,
-          vault: vaultPDA, // Pass the derived vault PDA.
+          vault: vaultPDA,
           systemProgram: web3.SystemProgram.programId,
         })
         .rpc();
 
-      console.log("Transaction Signature:", tx);
-      alert("Question Created Successfully!");
+      toast.success(`🎉 Question Created! ✅`, {
+        position: "top-center",
+        autoClose: 5000,
+        onClick: () => window.open(`https://explorer.solana.com/tx/${tx}?cluster=devnet`, "_blank"),
+      });
+
       window.dispatchEvent(new CustomEvent("questionCreated"));
 
+      fetchQuestions()
+
+      // ✅ Reset form fields after success
       setQuestionText("");
       setReward("");
       setCommitEndTime("");
       setRevealEndTime("");
-      setLoading(false);
     } catch (error) {
-      console.error("Transaction failed:", error);
-      alert(`Failed to create question. Error: ${error.message}`);
+      toast.error(`Failed to create question: ${error.message}`, {
+        position: "top-center",
+        autoClose: 5000,
+      });
+    } finally {
+      setLoading(false); // ✅ Stop loading state
     }
-  };     
+  };
 
   return (
     <div className="container items-center bg-white mx-auto px-6 py-6">
@@ -160,9 +157,10 @@ const QuestionForm = () => {
         {/* Submit Button */}
         <button 
             onClick={createQuestion} 
-            className="bg-blue-500 text-white px-4 py-3 rounded-lg hover:bg-blue-600 transition duration-300 mx-2"
+            disabled={loading} // ✅ Disable button during loading
+            className={`px-4 py-3 rounded-lg transition duration-300 mx-2 ${loading ? "bg-gray-400 cursor-not-allowed" : "bg-blue-500 text-white hover:bg-blue-600"}`}
         >
-            Submit
+            {loading ? "Submitting..." : "Submit"}
         </button>
     </div>
   );

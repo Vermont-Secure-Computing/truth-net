@@ -2,6 +2,8 @@ import React, { useState, useEffect } from "react";
 import { PublicKey } from "@solana/web3.js";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { Program, AnchorProvider, web3 } from "@coral-xyz/anchor";
+import { toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 import idl from "../idl.json";
 
 const PROGRAM_ID = new PublicKey("7mhm8nAhLY3rSvsbMfMRuRaBT3aUUcB9Wk3c4Dpzbigg");
@@ -17,125 +19,74 @@ const VotingComponent = ({ question, onClose }) => {
     const [selectedOption, setSelectedOption] = useState(1);
     const [loading, setLoading] = useState(false);
     const [votes, setVotes] = useState([]);
-    // const [isEligible, setIsEligible] = useState(false);
     const [hasVoted, setHasVoted] = useState(false);
 
     const walletAdapter = publicKey && signTransaction ? { publicKey, signTransaction, signAllTransactions } : null;
-
-    // Ensure a valid provider before creating a program instance
     const provider = walletAdapter ? new AnchorProvider(connection, walletAdapter, { preflightCommitment: "processed" }) : null;
     const program = provider ? new Program(idl, provider) : null;
 
     useEffect(() => {
         if (publicKey && program) {
-            // checkEligibility();
             checkIfVoted();
         }
     }, [question]);
 
-    // **Check if the user is in the question's voter list**
-    const checkEligibility = async () => {
-        if (!publicKey || !program) {
-            console.log("No publicKey or program")   
-            return;
-        }
-
-        try {
-            console.log("Checking voter eligibility...");
-
-            // Ensure `questionId` is a valid PublicKey
-            const questionPubKey = new PublicKey(questionId);
-
-            // Fetch the question account
-            const questionAccount = await program.account.question.fetch(questionPubKey);
-            if (!questionAccount) {
-                console.error("Question account not found.");
-                return;
-            }
-
-            // Check if the user's wallet is in the `selected_voters` list
-            const isMember = questionAccount.selectedVoters.some((voter) => voter.toString() === publicKey.toString());
-
-            console.log("User eligibility:", isMember);
-            // setIsEligible(isMember);
-        } catch (error) {
-            console.error("Error checking eligibility:", error);
-        }
-    };
-
     const checkIfVoted = async () => {
-        if (!publicKey || ! program) return;
+        if (!publicKey || !program) return;
 
         try {
-            console.log("Checking if user has already voted...");
-    
             const questionPubKey = new PublicKey(questionId);
             const [voterRecordPDA] = await PublicKey.findProgramAddressSync(
                 [Buffer.from("vote"), publicKey.toBuffer(), questionPubKey.toBuffer()],
                 PROGRAM_ID
             );
-    
+
             const voterRecordAccount = await program.account.voterRecord.fetch(voterRecordPDA).catch(() => null);
-            console.log("voter record account ", voterRecordAccount)
+            
             if (voterRecordAccount) {
-                console.log("User has already voted.");
+                toast.info("You have already voted.", { position: "top-center" });
                 setHasVoted(true);
             } else {
-                console.log("User has not voted yet.");
+                toast.info("You have not voted yet.", { position: "top-center" });
                 setHasVoted(false);
             }
-    
         } catch (error) {
-            console.error("Error checking vote status:", error);
+            toast.error(`Error checking vote status: ${error.message}`, { position: "top-center", autoClose: 5000 });
         }
-    }
+    };
 
-    
-
-    // **Fetch all votes for the question**
     const fetchVotes = async () => {
         if (!program) return;
     
         try {
-            console.log("Fetching selected voters for question:", questionId);
-    
-            // Ensure `questionId` is a valid PublicKey
             const questionPubKey = new PublicKey(questionId);
-    
-            // Fetch the `Question` account to get `selected_voters`
             const questionAccount = await program.account.question.fetch(questionPubKey);
             if (!questionAccount) {
-                console.error("Question account not found.");
+                toast.error("Question account not found.", { position: "top-center" });
                 return;
             }
-    
-            console.log("Question data:", questionAccount);
-    
-            // Extract selected voters
+
             const selectedVoters = questionAccount.selectedVoters.map((voter) => ({
                 voter: voter.toString(),
             }));
 
-            // Check if the user has already voted (logic: if the user exists in votes)
             const userHasVoted = selectedVoters.includes(publicKey.toString()) && 
-            (questionAccount.votes_option_1 > 0 || questionAccount.votes_option_2 > 0);
-            console.log("user has voted: ", userHasVoted)
-            setHasVoted(userHasVoted)
-    
-            console.log("Selected voters:", selectedVoters);
+                (questionAccount.votes_option_1 > 0 || questionAccount.votes_option_2 > 0);
+            setHasVoted(userHasVoted);
             setVotes(selectedVoters);
         } catch (error) {
-            console.error("Error fetching votes:", error);
+            toast.error(`Error fetching votes: ${error.message}`, { position: "top-center", autoClose: 5000 });
         }
     };
-    
 
-    // **Submit Vote**
     const submitVote = async () => {
-        if (!publicKey || !program) return alert("Please connect your wallet");
+        if (!publicKey || !program) {
+            toast.warn("Please connect your wallet.", { position: "top-center" });
+            return;
+        }
 
         try {
-            console.log("Submitting vote for question:", questionId);
+            toast.info("Submitting your vote...", { position: "top-center" });
 
             const questionPubKey = new PublicKey(questionId);
             const [voterRecordPDA] = await PublicKey.findProgramAddress(
@@ -145,7 +96,6 @@ const VotingComponent = ({ question, onClose }) => {
 
             setLoading(true);
 
-            // Submit the vote
             const tx = await program.methods
                 .submitVote(selectedOption)
                 .accounts({
@@ -156,15 +106,15 @@ const VotingComponent = ({ question, onClose }) => {
                 })
                 .rpc();
 
-            console.log("Vote Submitted! Transaction:", tx);
-            alert("Vote Submitted Successfully!");
+            toast.success(`Vote Submitted Successfully! Tx: ${tx.slice(0, 6)}...${tx.slice(-6)}`, {
+                position: "top-center",
+                autoClose: 5000,
+                onClick: () => window.open(`https://explorer.solana.com/tx/${tx}?cluster=devnet`, "_blank"),
+            });
 
-            // Refresh votes after submitting
-            //fetchVotes();
             checkIfVoted();
         } catch (error) {
-            console.error("Failed to submit vote:", error);
-            alert(`Failed to submit vote. Error: ${error.message}`);
+            toast.error(`Failed to submit vote: ${error.message}`, { position: "top-center", autoClose: 5000 });
         } finally {
             setLoading(false);
         }
