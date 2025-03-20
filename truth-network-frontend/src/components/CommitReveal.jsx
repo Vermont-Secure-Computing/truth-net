@@ -2,6 +2,8 @@ import React, { useState, useEffect } from "react";
 import { PublicKey } from "@solana/web3.js";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { Program, AnchorProvider, web3 } from "@coral-xyz/anchor";
+import { toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 import idl from "../idl.json";
 import { keccak256 } from "js-sha3";
 
@@ -19,6 +21,7 @@ const CommitReveal = ({ question, onClose, refreshQuestions }) => {
     const [password, setPassword] = useState("");
     const [loading, setLoading] = useState(false);
     const [hasCommitted, setHasCommitted] = useState(false);
+    const [hasCheckedCommitment, setHasCheckedCommitment] = useState(false);
     const [canReveal, setCanReveal] = useState(false);
 
     const walletAdapter = publicKey && signTransaction ? { publicKey, signTransaction, signAllTransactions } : null;
@@ -26,18 +29,16 @@ const CommitReveal = ({ question, onClose, refreshQuestions }) => {
     const program = provider ? new Program(idl, provider) : null;
 
     useEffect(() => {
-        if (publicKey && program) {
+        if (publicKey && program && !hasCheckedCommitment) {
             checkCommitment();
+            setHasCheckedCommitment(true);
         }
-    }, [question]);
+    }, [publicKey, program]);
 
-    // **Check if the user has already committed a vote**
     const checkCommitment = async () => {
         if (!publicKey || !program) return;
 
         try {
-            console.log("Checking if user has committed a vote...");
-
             const questionPubKey = new PublicKey(questionId);
             const [voterRecordPDA] = await PublicKey.findProgramAddressSync(
                 [Buffer.from("vote"), publicKey.toBuffer(), questionPubKey.toBuffer()],
@@ -47,26 +48,30 @@ const CommitReveal = ({ question, onClose, refreshQuestions }) => {
             const voterRecordAccount = await program.account.voterRecord.fetch(voterRecordPDA).catch(() => null);
 
             if (voterRecordAccount) {
-                console.log("User has committed a vote.");
+                toast.info("You have already committed your vote.", { position: "top-center" });
                 setHasCommitted(true);
-                setCanReveal(!voterRecordAccount.revealed); // Reveal only if not revealed yet
+                setCanReveal(!voterRecordAccount.revealed);
             } else {
-                console.log("User has not committed a vote.");
+                toast.info("You have not committed a vote yet.", { position: "top-center" });
                 setHasCommitted(false);
             }
         } catch (error) {
-            console.error("Error checking commitment:", error);
+            toast.error(`Error checking commitment: ${error.message}`, { position: "top-center", autoClose: 5000 });
         }
     };
 
-   
-    // **Commit Vote**
     const commitVote = async () => {
-        if (!publicKey || !program) return alert("Please connect your wallet");
-        if (!password) return alert("Enter a password to commit your vote");
+        if (!publicKey || !program) {
+            toast.warn("Please connect your wallet.", { position: "top-center" });
+            return;
+        }
+        if (!password) {
+            toast.warn("Enter a password to commit your vote.", { position: "top-center" });
+            return;
+        }
 
         try {
-            console.log("Committing vote for question:", questionId);
+            toast.info("Committing your vote...", { position: "top-center" });
 
             const questionPubKey = new PublicKey(questionId);
             const [voterRecordPDA] = await PublicKey.findProgramAddressSync(
@@ -76,18 +81,17 @@ const CommitReveal = ({ question, onClose, refreshQuestions }) => {
 
             setLoading(true);
 
-            // Hash (vote + password) in frontend
-            const voteString = selectedOption.toString(); // Convert vote option to string
+            const voteString = selectedOption.toString();
             const commitmentHex = keccak256(voteString + password);
-            const commitmentBytes = Buffer.from(commitmentHex, "hex"); // Convert to byte array
+            const commitmentBytes = Buffer.from(commitmentHex, "hex");
 
             const [voterListPDA] = await PublicKey.findProgramAddressSync(
-                [Buffer.from("voter_list")], // Adjust seeds based on your program logic
+                [Buffer.from("voter_list")],
                 PROGRAM_ID
             );
 
             const tx = await program.methods
-                .commitVote(commitmentBytes) // Send precomputed hash
+                .commitVote(commitmentBytes)
                 .accounts({
                     voter: publicKey,
                     question: questionPubKey,
@@ -97,50 +101,51 @@ const CommitReveal = ({ question, onClose, refreshQuestions }) => {
                 })
                 .rpc();
 
-            console.log("Vote Committed! Transaction:", tx);
-            alert("Vote Committed Successfully!");
+            toast.success(`Vote Committed! Tx: ${tx.slice(0, 6)}...${tx.slice(-6)}`, {
+                position: "top-center",
+                autoClose: 5000,
+                onClick: () => window.open(`https://explorer.solana.com/tx/${tx}?cluster=devnet`, "_blank"),
+            });
 
             setHasCommitted(true);
             setCanReveal(true);
-
-            if (refreshQuestions) {
-                refreshQuestions();
-            }
+            if (refreshQuestions) refreshQuestions();
         } catch (error) {
-            console.error("Failed to commit vote:", error);
-            alert(`Failed to commit vote. Error: ${error.message}`);
+            toast.error(`Failed to commit vote: ${error.message}`, { position: "top-center", autoClose: 5000 });
         } finally {
             setLoading(false);
-            setPassword(""); // Clear password field
+            setPassword("");
         }
     };
 
-    // **Reveal Vote**
     const revealVote = async () => {
-        if (!publicKey || !program) return alert("Please connect your wallet");
-        if (!password) return alert("Enter your password to reveal your vote");
-    
+        if (!publicKey || !program) {
+            toast.warn("Please connect your wallet.", { position: "top-center" });
+            return;
+        }
+        if (!password) {
+            toast.warn("Enter your password to reveal your vote.", { position: "top-center" });
+            return;
+        }
+
         try {
-            console.log("Revealing vote...");
-    
+            toast.info("Revealing your vote...", { position: "top-center" });
+
             const questionPubKey = new PublicKey(questionId);
             const [voterRecordPDA] = await PublicKey.findProgramAddressSync(
                 [Buffer.from("vote"), publicKey.toBuffer(), questionPubKey.toBuffer()],
                 PROGRAM_ID
             );
 
-            // Find the PDA for voter_list
             const [voterListPDA] = await PublicKey.findProgramAddressSync(
-                [Buffer.from("voter_list")],  // ✅ Matches your program seed
+                [Buffer.from("voter_list")],
                 PROGRAM_ID
             );
 
-    
             setLoading(true);
-    
-            // Send only the password
+
             const tx = await program.methods
-                .revealVote(password) // Send only the password
+                .revealVote(password)
                 .accounts({
                     voter: publicKey,
                     question: questionPubKey,
@@ -148,81 +153,101 @@ const CommitReveal = ({ question, onClose, refreshQuestions }) => {
                     voterList: voterListPDA,
                 })
                 .rpc();
-    
-            console.log("Vote Revealed! Transaction:", tx);
-            alert("Vote Revealed Successfully!");
-    
+
+            toast.success(`Vote Revealed! Tx: ${tx.slice(0, 6)}...${tx.slice(-6)}`, {
+                position: "top-center",
+                autoClose: 5000,
+                onClick: () => window.open(`https://explorer.solana.com/tx/${tx}?cluster=devnet`, "_blank"),
+            });
+
             setCanReveal(false);
         } catch (error) {
-            console.error("Failed to reveal vote:", error);
-            alert(`Failed to reveal vote. Error: ${error.message}`);
+            toast.error(`Failed to reveal vote: ${error.message}`, { position: "top-center", autoClose: 5000 });
         } finally {
             setLoading(false);
-            setPassword(""); // Clear password field
+            setPassword("");
         }
     };
 
-    return (
-        <div className="modal">
-            <h2>{question.questionText}</h2>
-            <p>Choose an option:</p>
-            <select onChange={(e) => setSelectedOption(parseInt(e.target.value, 10))} disabled={hasCommitted}>
-                <option value={1}>{question.option1}</option>
-                <option value={2}>{question.option2}</option>
-            </select>
-            <br />
+    const isCommitTimeOver = new Date().getTime() / 1000 > question.commitEndTime;
 
-            {/* Password Input for Both Commit & Reveal */}
-            {!hasCommitted && new Date().getTime() / 1000 < question.commitEndTime && (
-                <input
-                type="password"
-                placeholder="Enter password to commit"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                />
+    return (
+        <div className="modal bg-white p-6 max-w-md mx-auto text-center border-t border-b border-gray-300">
+            {/* ✅ Styled Title */}
+            {/* <h2 className="text-xl font-semibold mb-4">{question.questionText}</h2> */}
+            
+            {/* ✅ Updated Section Header */}
+            <p className="text-gray-700 font-medium mb-4">{isCommitTimeOver ? "Reveal Vote" : "Commit Vote"}</p>
+
+            {/* ✅ Show Commit Options Only Before Reveal Phase */}
+            {!isCommitTimeOver && (
+                <div className="flex justify-center space-x-4 mb-4">
+                    <label className="flex items-center space-x-2">
+                        <input
+                            type="radio"
+                            name="commitOption"
+                            value="1"
+                            checked={selectedOption === "1"}
+                            onChange={(e) => setSelectedOption(e.target.value)}
+                            disabled={hasCommitted}
+                            className="form-radio text-blue-500"
+                        />
+                        <span>True</span>
+                    </label>
+
+                    <label className="flex items-center space-x-2">
+                        <input
+                            type="radio"
+                            name="commitOption"
+                            value="2"
+                            checked={selectedOption === "2"}
+                            onChange={(e) => setSelectedOption(e.target.value)}
+                            disabled={hasCommitted}
+                            className="form-radio text-blue-500"
+                        />
+                        <span>False</span>
+                    </label>
+                </div>
             )}
 
-            {hasCommitted &&
-                new Date().getTime() / 1000 > question.commitEndTime &&
-                new Date().getTime() / 1000 < question.revealEndTime && (
+            {/* ✅ Password Input Field */}
+            {( 
+                (!hasCommitted && new Date().getTime() / 1000 < question.commitEndTime) ||
+                (hasCommitted && new Date().getTime() / 1000 > question.commitEndTime && new Date().getTime() / 1000 < question.revealEndTime)
+            ) && (
                 <input
                     type="password"
-                    placeholder="Enter password to reveal"
+                    placeholder={isCommitTimeOver ? "Enter password to reveal" : "Enter password to commit"}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
+                    className="border border-gray-300 rounded-lg p-2 w-full mb-4 focus:ring focus:ring-blue-200"
                 />
             )}
-            <br />
 
-            {/* Conditionally show Commit Button based on commit end time */}
-            {!hasCommitted && (
-                new Date().getTime() / 1000 < question.commitEndTime ? (
-                <button onClick={commitVote} disabled={loading}>
+            {/* ✅ Commit Vote Button */}
+            {!hasCommitted && new Date().getTime() / 1000 < question.commitEndTime && (
+                <button 
+                    onClick={commitVote} 
+                    disabled={loading}
+                    className="w-full bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600 transition duration-300 disabled:bg-gray-400"
+                >
                     {loading ? "Submitting..." : "Commit Vote"}
                 </button>
-                ) : (
-                <div>Voting commit ended</div>
-                )
             )}
 
-            {/* Reveal Button (Only show if user has committed) */}
-            {canReveal && (
-                new Date().getTime() / 1000 > question.commitEndTime &&
-                new Date().getTime() / 1000 < question.revealEndTime ? (
-                    <button onClick={revealVote} disabled={loading}>
+            {/* ✅ Reveal Vote Button */}
+            {canReveal && new Date().getTime() / 1000 > question.commitEndTime &&
+                new Date().getTime() / 1000 < question.revealEndTime && (
+                <button 
+                    onClick={revealVote} 
+                    disabled={loading}
+                    className="w-full bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600 transition duration-300 disabled:bg-gray-400"
+                >
                     {loading ? "Revealing..." : "Reveal Vote"}
-                    </button>
-                ) : (
-                    <div>
-                    {new Date().getTime() / 1000 <= question.commitEndTime
-                        ? "Commit phase is still active"
-                        : "Voting reveal ended"}
-                    </div>
-                )
+                </button>
             )}
-
-            <button onClick={onClose}>Close</button>
         </div>
+
     );
 };
 
