@@ -13,7 +13,7 @@ import JoinNetwork from "./components/JoinNetwork";
 import VoterDashboard from "./components/VoterDashboard";
 import idl from "./idl.json";
 
-const PROGRAM_ID = new web3.PublicKey("7mhm8nAhLY3rSvsbMfMRuRaBT3aUUcB9Wk3c4Dpzbigg");
+const PROGRAM_ID = new web3.PublicKey("FALibc4uYqiUd6hasYN7VaPX2oXdd13HeprenWp3wLpf");
 const connection = new web3.Connection(web3.clusterApiUrl("devnet"), "confirmed");
 
 const App = () => {

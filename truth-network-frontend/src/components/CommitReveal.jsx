@@ -7,7 +7,7 @@ import "react-toastify/dist/ReactToastify.css";
 import idl from "../idl.json";
 import { keccak256 } from "js-sha3";
 
-const PROGRAM_ID = new PublicKey("7mhm8nAhLY3rSvsbMfMRuRaBT3aUUcB9Wk3c4Dpzbigg");
+const PROGRAM_ID = new PublicKey("FALibc4uYqiUd6hasYN7VaPX2oXdd13HeprenWp3wLpf");
 const connection = new web3.Connection(web3.clusterApiUrl("devnet"), "confirmed");
 
 const CommitReveal = ({ question, onClose, refreshQuestions }) => {
@@ -231,7 +231,15 @@ const CommitReveal = ({ question, onClose, refreshQuestions }) => {
                     disabled={loading}
                     className="w-full bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600 transition duration-300 disabled:bg-gray-400"
                 >
-                    {loading ? "Submitting..." : "Commit Vote"}
+                    {loading ? (
+                    <span className="flex items-center justify-center">
+                        Submitting<span className="dot-animate">.</span>
+                        <span className="dot-animate dot2">.</span>
+                        <span className="dot-animate dot3">.</span>
+                    </span>
+                    ) : (
+                    "Commit Vote"
+                    )}
                 </button>
             )}
 
@@ -243,7 +251,15 @@ const CommitReveal = ({ question, onClose, refreshQuestions }) => {
                     disabled={loading}
                     className="w-full bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600 transition duration-300 disabled:bg-gray-400"
                 >
-                    {loading ? "Revealing..." : "Reveal Vote"}
+                    {loading ? (
+                    <span className="flex items-center justify-center">
+                        Revealing<span className="dot-animate">.</span>
+                        <span className="dot-animate dot2">.</span>
+                        <span className="dot-animate dot3">.</span>
+                    </span>
+                    ) : (
+                    "Reveal Vote"
+                    )}
                 </button>
             )}
         </div>

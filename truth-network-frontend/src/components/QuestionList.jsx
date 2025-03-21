@@ -7,7 +7,7 @@ import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import idl from "../idl.json";
 
-const PROGRAM_ID = new PublicKey("7mhm8nAhLY3rSvsbMfMRuRaBT3aUUcB9Wk3c4Dpzbigg");
+const PROGRAM_ID = new PublicKey("FALibc4uYqiUd6hasYN7VaPX2oXdd13HeprenWp3wLpf");
 const connection = new web3.Connection(web3.clusterApiUrl("devnet"), "confirmed");
 
 const QuestionsList = ({ questions, fetchQuestions }) => {
@@ -156,7 +156,7 @@ const QuestionsList = ({ questions, fetchQuestions }) => {
 
     return (
         <div className="container mx-auto px-6 py-6">
-            <h2 className="text-2xl font-bold mb-4">All Questions</h2>
+            <h2 className="text-2xl font-bold mb-4">All Events</h2>
 
             <button 
                 onClick={() => setSortOrder(sortOrder === "highest" ? "lowest" : "highest")} 
@@ -166,7 +166,7 @@ const QuestionsList = ({ questions, fetchQuestions }) => {
             </button>
 
             {questions.length === 0 ? (
-                <p className="text-gray-600 text-center">No questions found.</p>
+                <p className="text-gray-600 text-center">No events found.</p>
             ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
                     {questions.map((q) => {

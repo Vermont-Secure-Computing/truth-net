@@ -6,10 +6,10 @@ import { Program, AnchorProvider, web3 } from "@coral-xyz/anchor";
 import { QRCodeCanvas } from "qrcode.react";
 import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
-import CommitReveal from "./CommitReveal"; // ✅ Import CommitReveal component
+import CommitReveal from "./CommitReveal";
 import idl from "../idl.json";
 
-const PROGRAM_ID = new PublicKey("7mhm8nAhLY3rSvsbMfMRuRaBT3aUUcB9Wk3c4Dpzbigg");
+const PROGRAM_ID = new PublicKey("FALibc4uYqiUd6hasYN7VaPX2oXdd13HeprenWp3wLpf");
 const connection = new web3.Connection(web3.clusterApiUrl("devnet"), "confirmed");
 
 const QuestionDetail = () => {
@@ -63,6 +63,11 @@ const QuestionDetail = () => {
             setLoading(false);
         } catch (error) {
             console.error("Error fetching question:", error);
+            if (error.message.includes("Account does not exist")) {
+                // Clean up related tx data since the question is deleted
+                localStorage.removeItem(`claim_tx_${id}_${publicKey.toString()}`);
+                setQuestionDeleted(true); // for UI state if needed
+              }
         }
     };
 
@@ -108,50 +113,68 @@ const QuestionDetail = () => {
             toast.warn("Please connect your wallet.", { position: "top-center" });
             return;
         }
-
+    
         try {
-            toast.info("Processing reward claim...", { position: "top-center" });
-
+            toast.info("⏳ Processing reward claim...", { position: "top-center" });
+    
             const questionPublicKey = new PublicKey(id);
             const [voterRecordPDA] = await PublicKey.findProgramAddress(
                 [Buffer.from("vote"), publicKey.toBuffer(), questionPublicKey.toBuffer()],
                 PROGRAM_ID
             );
 
+            const [voterListPDA] = web3.PublicKey.findProgramAddressSync(
+                [Buffer.from("voter_list")],
+                PROGRAM_ID
+            );
+    
             const [vaultPDA] = await PublicKey.findProgramAddress(
                 [Buffer.from("vault"), questionPublicKey.toBuffer()],
                 PROGRAM_ID
             );
+    
+            const txSig = web3.Keypair.generate().publicKey.toBase58();
 
             const tx = await program.methods
-                .claimReward()
+                .claimReward(txSig)
                 .accounts({
                     question: questionPublicKey,
                     voter: publicKey,
                     voterRecord: voterRecordPDA,
                     vault: vaultPDA,
+                    voterList: voterListPDA,
+                    feeReceiver: new PublicKey("7qfdvYGEKnM2zrMYATbwtAdzagRGQUUCXxU3hhgG3V2u"),
                     systemProgram: web3.SystemProgram.programId,
                 })
                 .rpc();
-
-            toast.success(`Reward claimed! Tx: ${tx.slice(0, 6)}...${tx.slice(-6)}`, {
+    
+            toast.success(`🎉 Reward claimed! Tx: ${tx.slice(0, 6)}...${tx.slice(-6)}`, {
                 position: "top-center",
                 autoClose: 5000,
-                onClick: () => window.open(`https://explorer.solana.com/tx/${tx}?cluster=devnet`, "_blank"),
+                onClick: () =>
+                    window.open(`https://explorer.solana.com/tx/${tx}?cluster=devnet`, "_blank"),
             });
-
-            fetchQuestion();
+    
+            // Persist tx ID to localStorage so we can use it even on reload
+            localStorage.setItem(`claim_tx_${id}_${publicKey.toString()}`, tx);
+    
+            fetchQuestion(); // Refresh UI
         } catch (error) {
-            toast.error(`Error claiming reward: ${error.message}`, { position: "top-center", autoClose: 5000 });
+            toast.error(`❌ Error claiming reward: ${error.message}`, {
+                position: "top-center",
+                autoClose: 5000,
+            });
         }
     };
-
+    
     const copyToClipboard = () => {
         navigator.clipboard.writeText(question.vaultAddress);
         toast.info("Vault Address copied to clipboard!", { position: "top-center" });
     };
 
     if (loading) return <p className="text-center text-gray-600">Loading...</p>;
+
+    const txId = localStorage.getItem(`claim_tx_${id}_${publicKey.toString()}`);
 
     return (
         <div className="container mx-auto px-6 py-6 flex justify-center">
@@ -195,19 +218,19 @@ const QuestionDetail = () => {
                     </button>
                 )}
                 
-                {/* {question.userVoterRecord?.claimed && question.userVoterRecord?.claimTxId && (
-                    <p className="text-green-600 mt-4 font-semibold">
-                        Rewards Claimed! 
-                        <a 
-                            href={`https://explorer.solana.com/tx/${question.userVoterRecord.claimTxId}?cluster=devnet`} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="text-blue-500 hover:underline ml-1"
+                {txId && (
+                    <p className="text-green-700 font-semibold mt-4">
+                        Rewards claimed!{" "}
+                        <a
+                        href={`https://explorer.solana.com/tx/${txId}?cluster=devnet`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 underline"
                         >
-                            View Transaction
+                        View Transaction
                         </a>
                     </p>
-                )} */}
+                )}
             </div>
             {showModal && (
                 <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
