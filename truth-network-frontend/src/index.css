@@ -71,3 +71,29 @@ button:focus-visible {
     background-color: #f9f9f9;
   }
 }
+
+@keyframes blink {
+  0%, 20% {
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.dot-animate {
+  animation: blink 1.4s infinite;
+  animation-delay: 0s;
+}
+
+.dot-animate.dot2 {
+  animation-delay: 0.2s;
+}
+
+.dot-animate.dot3 {
+  animation-delay: 0.4s;
+}
+

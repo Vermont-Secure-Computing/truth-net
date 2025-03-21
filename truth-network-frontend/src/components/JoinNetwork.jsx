@@ -2,10 +2,12 @@ import React, { useState, useEffect } from "react";
 import { PublicKey } from "@solana/web3.js";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { Program, AnchorProvider, web3 } from "@coral-xyz/anchor";
+import { toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 import idl from "../idl.json";
 
 const PROGRAM_ID = new web3.PublicKey(
-  "7mhm8nAhLY3rSvsbMfMRuRaBT3aUUcB9Wk3c4Dpzbigg"
+  "FALibc4uYqiUd6hasYN7VaPX2oXdd13HeprenWp3wLpf"
 );
 const connection = new web3.Connection(web3.clusterApiUrl("devnet"), "confirmed");
 
@@ -31,18 +33,29 @@ const JoinNetwork = () => {
         [Buffer.from("voter_list")],
         PROGRAM_ID
       );
-      // Attempt to fetch the voter list account.
+  
       const voterListAccount = await program.account.voterList.fetch(voterListPDA);
-      // Check if the user is in the voters array
       const member = voterListAccount.voters.some(
         (voter) => voter.address.toString() === publicKey.toString()
       );
       setIsMember(member);
+      toast.dismiss();
+      if (member) {
+        toast.success("✅ You are a member of the Truth Network.", { position: "top-center" });
+      } else {
+        toast.info("ℹ️ You are not a member yet.", { position: "top-center" });
+      }
     } catch (error) {
-      console.error("Error fetching membership:", error);
+      if (error.message.includes("Account does not exist")) {
+        toast.info("No voter list found. You are not a member yet.", { position: "top-center" });
+      } else {
+        toast.error(`Error fetching membership: ${error.message}`, { position: "top-center" });
+      }
+  
+      // Still set false in either case
       setIsMember(false);
     }
-  };
+  };  
 
   useEffect(() => {
     if (program && publicKey) {
@@ -73,13 +86,18 @@ const JoinNetwork = () => {
         systemProgram: web3.SystemProgram.programId,
       }).rpc();
 
-      console.log("Joined network. Tx:", tx);
-      alert("Successfully joined the Truth Network!");
+      toast.success(`Joined the network! Tx: ${tx.slice(0, 6)}...${tx.slice(-6)}`, {
+        position: "top-center",
+        autoClose: 6000,
+        onClick: () =>
+          window.open(`https://explorer.solana.com/tx/${tx}?cluster=devnet`, "_blank"),
+      });
+
       await fetchMembership();
-      setLoading(false);
     } catch (error) {
+      toast.error(`Failed to join: ${error.message}`, { position: "top-center" });
       console.error("Failed to join network:", error);
-      alert("Failed to join the network.");
+    } finally {
       setLoading(false);
     }
   };
@@ -106,13 +124,18 @@ const JoinNetwork = () => {
         systemProgram: web3.SystemProgram.programId,
       }).rpc();
 
-      console.log("Left network. Tx:", tx);
-      alert("Successfully left the Truth Network and withdrawn your deposit!");
+      toast.success(`Left the network. Tx: ${tx.slice(0, 6)}...${tx.slice(-6)}`, {
+        position: "top-center",
+        autoClose: 6000,
+        onClick: () =>
+          window.open(`https://explorer.solana.com/tx/${tx}?cluster=devnet`, "_blank"),
+      });
+
       await fetchMembership();
-      setLoading(false);
     } catch (error) {
+      toast.error(`Failed to leave: ${error.message}`, { position: "top-center" });
       console.error("Failed to leave network:", error);
-      alert("Failed to leave the network.");
+    } finally {
       setLoading(false);
     }
   };
@@ -134,11 +157,27 @@ const JoinNetwork = () => {
           </p>
           {isMember ? (
             <button onClick={leaveNetworkHandler} disabled={loading}>
-              {loading ? "Processing..." : "Leave Truth Network"}
+              {loading ? (
+                <span className="flex items-center justify-center">
+                  Processing<span className="dot-animate">.</span>
+                  <span className="dot-animate dot2">.</span>
+                  <span className="dot-animate dot3">.</span>
+                </span>
+              ) : (
+                "Leave Truth Network"
+              )}
             </button>
           ) : (
             <button onClick={joinNetworkHandler} disabled={loading}>
-              {loading ? "Joining..." : "Join Truth Network"}
+              {loading ? (
+                <span className="flex items-center justify-center">
+                  Joining<span className="dot-animate">.</span>
+                  <span className="dot-animate dot2">.</span>
+                  <span className="dot-animate dot3">.</span>
+                </span>
+              ) : (
+                "Join Truth Network"
+              )}
             </button>
           )}
         </>

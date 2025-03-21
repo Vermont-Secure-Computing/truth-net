@@ -4,7 +4,7 @@ import { useConnection } from "@solana/wallet-adapter-react";
 import { Program, AnchorProvider, web3 } from "@coral-xyz/anchor";
 import idl from "../idl.json";
 
-const PROGRAM_ID = new PublicKey("7mhm8nAhLY3rSvsbMfMRuRaBT3aUUcB9Wk3c4Dpzbigg");
+const PROGRAM_ID = new PublicKey("E3791ATbxae3NKVRVD3quBAxav5acfTN7rTxUA6NNLsd");
 const connection = new web3.Connection(web3.clusterApiUrl("devnet"), "confirmed");
 
 const VotersList = () => {

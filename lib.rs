@@ -6,7 +6,7 @@ use anchor_lang::solana_program::rent::Rent;
 pub const FEE_RECEIVER_ADDRESS: &str = "7qfdvYGEKnM2zrMYATbwtAdzagRGQUUCXxU3hhgG3V2u";
 
 
-declare_id!("7mhm8nAhLY3rSvsbMfMRuRaBT3aUUcB9Wk3c4Dpzbigg");
+declare_id!("FALibc4uYqiUd6hasYN7VaPX2oXdd13HeprenWp3wLpf");
 
 const RENT_COST: u64 = 50_000_000;
 
@@ -91,6 +91,12 @@ pub mod truth_network {
     ) -> Result<()> {
         let question_counter = &mut ctx.accounts.question_counter;
         let question_key = ctx.accounts.question.key();
+
+        // Minimum length check for question text
+        require!(
+            question_text.len() >= 10,
+            VotingError::QuestionTooShort
+        );
         
         // Ensure commit and reveal times are valid.
         require!(Clock::get()?.unix_timestamp < commit_end_time, VotingError::VotingEnded);
@@ -176,6 +182,12 @@ pub mod truth_network {
             VotingError::RentNotExpired
         );
     
+        // ✅ Prevent deletion if there is still a reward left
+        require!(
+            question.reward == 0,
+            VotingError::RemainingRewardExists
+        );
+    
         msg!(
             "Expired question deleted. Rent refunded to {}",
             ctx.accounts.asker.key()
@@ -184,6 +196,7 @@ pub mod truth_network {
         // Account will be automatically closed and rent refunded due to `close = asker`
         Ok(())
     }
+    
     
     
     pub fn finalize_voting(ctx: Context<FinalizeVoting>, question_id: u64) -> Result<()> {
@@ -358,10 +371,11 @@ pub mod truth_network {
         Ok(())
     }
 
-    pub fn claim_reward(ctx: Context<ClaimReward>) -> Result<()> {
+    pub fn claim_reward(ctx: Context<ClaimReward>, tx_id: String) -> Result<()> {
         let question = &mut ctx.accounts.question;
         let voter_list = &mut ctx.accounts.voter_list;
         let voter_pubkey = ctx.accounts.voter.key();
+        let voter_record = &mut ctx.accounts.voter_record;
     
         let total_votes = question.votes_option_1 + question.votes_option_2;
         require!(total_votes > 0, VotingError::NoEligibleVoters);
@@ -372,8 +386,8 @@ pub mod truth_network {
             2
         };
     
-        require!(ctx.accounts.voter_record.selected_option == winning_option, VotingError::NotEligible);
-        require!(!ctx.accounts.voter_record.claimed, VotingError::AlreadyClaimed);
+        require!(voter_record.selected_option == winning_option, VotingError::NotEligible);
+        require!(!voter_record.claimed, VotingError::AlreadyClaimed);
     
         let winning_votes = if winning_option == 1 {
             question.votes_option_1
@@ -384,7 +398,7 @@ pub mod truth_network {
         require!(winning_votes > 0, VotingError::NoEligibleVoters);
     
         let voter_share = question.reward / winning_votes;
-        ctx.accounts.voter_record.claimed = true;
+        voter_record.claimed = true;
     
         let vault_info = ctx.accounts.vault.to_account_info();
         let voter_info = ctx.accounts.voter.to_account_info();
@@ -418,6 +432,15 @@ pub mod truth_network {
     
         **vault_info.lamports.borrow_mut() -= voter_share;
         **voter_info.lamports.borrow_mut() += voter_share;
+
+        question.reward = question.reward.saturating_sub(voter_share);
+
+        let tx_id_bytes = tx_id.as_bytes(); // tx_id comes from frontend
+        let len = tx_id_bytes.len().min(64);
+        voter_record.claim_tx_id[..len].copy_from_slice(&tx_id_bytes[..len]);
+        for i in len..64 {
+            voter_record.claim_tx_id[i] = 0; // zero out the rest
+        }
     
         // ✅ Update voter stats in the VoterList
         if let Some(voter) = voter_list.voters.iter_mut().find(|v| v.address == voter_pubkey) {
@@ -614,7 +637,7 @@ pub struct CreateVoterRecord<'info> {
     #[account(
         init_if_needed,
         payer = voter, 
-        space = 8 + 128,
+        space = 8 + 200,
         seeds = [b"vote", voter.key().as_ref(), question.key().as_ref()],
         bump
     )]
@@ -649,6 +672,7 @@ pub struct VoterRecord {
     pub commitment: [u8; 32],
     pub revealed: bool,
     pub claimed: bool,
+    pub claim_tx_id: [u8; 64],
 }
 
 #[derive(Accounts)]
@@ -659,7 +683,7 @@ pub struct CommitVote<'info> {
     #[account(
         init_if_needed,
         payer = voter,
-        space = 8 + 128,
+        space = 8 + 200,
         seeds = [b"vote", voter.key().as_ref(), question.key().as_ref()],
         bump
     )]
@@ -780,6 +804,9 @@ pub enum VotingError {
     #[msg("Question ID mismatch.")]
     QuestionIdMismatch,
     #[msg("Not a part of the voters list.")]
-    NotPartOfVoterList
+    NotPartOfVoterList,
+    #[msg("Remaining reward exists, cannot delete.")]
+    RemainingRewardExists,
+    #[msg("Question must be at least 10 characters long.")]
+    QuestionTooShort,
 }
-

@@ -1,5 +1,5 @@
 {
-  "address": "7mhm8nAhLY3rSvsbMfMRuRaBT3aUUcB9Wk3c4Dpzbigg",
+  "address": "FALibc4uYqiUd6hasYN7VaPX2oXdd13HeprenWp3wLpf",
   "metadata": {
     "name": "truth_network",
     "version": "0.1.0",
@@ -100,7 +100,12 @@
           "address": "11111111111111111111111111111111"
         }
       ],
-      "args": []
+      "args": [
+        {
+          "name": "tx_id",
+          "type": "string"
+        }
+      ]
     },
     {
       "name": "commit_vote",
@@ -904,6 +909,16 @@
       "code": 6022,
       "name": "NotPartOfVoterList",
       "msg": "Not a part of the voters list."
+    },
+    {
+      "code": 6023,
+      "name": "RemainingRewardExists",
+      "msg": "Remaining reward exists, cannot delete."
+    },
+    {
+      "code": 6024,
+      "name": "QuestionTooShort",
+      "msg": "Question must be at least 10 characters long."
     }
   ],
   "types": [
@@ -1101,6 +1116,15 @@
           {
             "name": "claimed",
             "type": "bool"
+          },
+          {
+            "name": "claim_tx_id",
+            "type": {
+              "array": [
+                "u8",
+                64
+              ]
+            }
           }
         ]
       }

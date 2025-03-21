@@ -5,7 +5,7 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 
-const PROGRAM_ID = new web3.PublicKey("7mhm8nAhLY3rSvsbMfMRuRaBT3aUUcB9Wk3c4Dpzbigg");
+const PROGRAM_ID = new web3.PublicKey("FALibc4uYqiUd6hasYN7VaPX2oXdd13HeprenWp3wLpf");
 const connection = new web3.Connection(web3.clusterApiUrl("devnet"), "confirmed");
 
 const VoterDashboard = () => {
@@ -150,7 +150,7 @@ const VoterDashboard = () => {
     return (
         <div className="container mx-auto px-6 py-6">
             <h2 className="text-2xl font-semibold mb-4 text-center border-b border-gray-300 pb-2">
-                Voter Dashboard
+            Truth Provider Dashboard
             </h2>
             <div className="mb-6">
                 <h3 className="text-lg">Total Earnings: <span className="font-bold">{totalEarnings} SOL</span></h3>
@@ -158,9 +158,9 @@ const VoterDashboard = () => {
                 <h3 className="text-lg">Total Correct Votes: <span className="font-bold">{totalCorrectVotes}</span></h3>
             </div>
 
-            <h3 className="text-green-600 font-semibold mt-2">Voter Reputation: {voterReputation}</h3>
+            <h3 className="text-green-600 font-semibold mt-2">Truth Provider Reputation: {voterReputation}</h3>
 
-            <h3 className="text-xl font-semibold mb-4">Voted Questions:</h3>
+            <h3 className="text-xl font-semibold mb-4">Voted Events:</h3>
             {questions.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {questions.map((q, index) => {
