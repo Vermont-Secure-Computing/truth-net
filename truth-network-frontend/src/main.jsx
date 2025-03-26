@@ -7,6 +7,7 @@ import { PhantomWalletAdapter, SolflareWalletAdapter } from "@solana/wallet-adap
 import { clusterApiUrl } from "@solana/web3.js";
 import App from "./App";
 import "@solana/wallet-adapter-react-ui/styles.css";
+import './index.css';
 
 const Root = () => {
     const network = clusterApiUrl("devnet");

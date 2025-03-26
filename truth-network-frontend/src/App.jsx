@@ -13,7 +13,7 @@ import JoinNetwork from "./components/JoinNetwork";
 import VoterDashboard from "./components/VoterDashboard";
 import idl from "./idl.json";
 
-const PROGRAM_ID = new web3.PublicKey("FALibc4uYqiUd6hasYN7VaPX2oXdd13HeprenWp3wLpf");
+const PROGRAM_ID = new web3.PublicKey("5CmM5VFJWKDozFLZ27mWEJ2a1dK7ctXVMCwWteKbW2jT");
 const connection = new web3.Connection(web3.clusterApiUrl("devnet"), "confirmed");
 
 const App = () => {
@@ -111,7 +111,24 @@ const App = () => {
             <ToastContainer position="top-center" autoClose={5000} />
             {/* Header */}
             <header className="flex justify-between items-center bg-white text-black px-6 py-4 shadow-md rounded-lg">
+            <div className="flex items-center space-x-2">
                 <h1 className="text-xl font-bold">Decentralized Truth Network</h1>
+                <a
+                    href="https://github.com/Vermont-Secure-Computing/truth-net"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-gray-700 hover:text-black"
+                    aria-label="GitHub Repository"
+                >
+                    <svg
+                    className="w-6 h-6"
+                    fill="currentColor"
+                    viewBox="0 0 24 24"
+                    >
+                    <path d="M12 0C5.37 0 0 5.373 0 12c0 5.302 3.438 9.8 8.205 11.387.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.727-4.042-1.61-4.042-1.61-.546-1.387-1.333-1.756-1.333-1.756-1.09-.745.082-.729.082-.729 1.205.085 1.84 1.237 1.84 1.237 1.07 1.834 2.807 1.304 3.495.997.108-.775.418-1.305.76-1.605-2.665-.303-5.466-1.332-5.466-5.932 0-1.31.467-2.38 1.235-3.22-.123-.303-.535-1.523.117-3.176 0 0 1.008-.322 3.3 1.23.957-.266 1.983-.399 3.003-.403 1.02.004 2.047.137 3.006.403 2.29-1.552 3.296-1.23 3.296-1.23.654 1.653.242 2.873.12 3.176.77.84 1.233 1.91 1.233 3.22 0 4.61-2.804 5.625-5.475 5.922.43.372.813 1.103.813 2.222 0 1.604-.015 2.898-.015 3.293 0 .32.217.694.825.576C20.565 21.796 24 17.298 24 12c0-6.627-5.373-12-12-12z"/>
+                    </svg>
+                </a>
+            </div>
                 <nav className="flex items-center space-x-4">
                     {/* Navigation Buttons */}
                     <button 

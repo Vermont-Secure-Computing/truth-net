@@ -6,7 +6,7 @@ use anchor_lang::solana_program::rent::Rent;
 pub const FEE_RECEIVER_ADDRESS: &str = "7qfdvYGEKnM2zrMYATbwtAdzagRGQUUCXxU3hhgG3V2u";
 
 
-declare_id!("FALibc4uYqiUd6hasYN7VaPX2oXdd13HeprenWp3wLpf");
+declare_id!("5CmM5VFJWKDozFLZ27mWEJ2a1dK7ctXVMCwWteKbW2jT");
 
 const RENT_COST: u64 = 50_000_000;
 
@@ -380,16 +380,28 @@ pub mod truth_network {
         let total_votes = question.votes_option_1 + question.votes_option_2;
         require!(total_votes > 0, VotingError::NoEligibleVoters);
     
-        let winning_option = if question.votes_option_1 >= question.votes_option_2 {
+        let is_tie = question.votes_option_1 == question.votes_option_2;
+        let winning_option = if is_tie {
+            0 // 0 = tie
+        } else if question.votes_option_1 > question.votes_option_2 {
             1
         } else {
             2
         };
     
-        require!(voter_record.selected_option == winning_option, VotingError::NotEligible);
         require!(!voter_record.claimed, VotingError::AlreadyClaimed);
     
-        let winning_votes = if winning_option == 1 {
+        // ✅ Only check if user voted for winning option if it’s not a tie
+        if !is_tie {
+            require!(
+                voter_record.selected_option == winning_option,
+                VotingError::NotEligible
+            );
+        }
+    
+        let winning_votes = if is_tie {
+            total_votes // All voters get a share
+        } else if winning_option == 1 {
             question.votes_option_1
         } else {
             question.votes_option_2
@@ -402,7 +414,7 @@ pub mod truth_network {
     
         let vault_info = ctx.accounts.vault.to_account_info();
         let voter_info = ctx.accounts.voter.to_account_info();
-        let fee_receiver_info = ctx.accounts.fee_receiver.to_account_info(); // New Fee Receiver Account
+        let fee_receiver_info = ctx.accounts.fee_receiver.to_account_info();
     
         let rent = Rent::get()?;
         let min_balance = rent.minimum_balance(vault_info.data_len());
@@ -410,16 +422,18 @@ pub mod truth_network {
     
         let mut fee = 0;
     
-        // First claim execution: Deduct 2% fee and send to designated address
         if !question.reward_fee_taken {
             fee = question.reward * 2 / 100;
-            question.reward_fee_taken = true; // Mark that the fee has been taken
-        
-            require!(vault_balance.saturating_sub(fee) >= min_balance, VotingError::InsufficientFunds);
-        
+            question.reward_fee_taken = true;
+    
+            require!(
+                vault_balance.saturating_sub(fee) >= min_balance,
+                VotingError::InsufficientFunds
+            );
+    
             **vault_info.lamports.borrow_mut() -= fee;
             **fee_receiver_info.lamports.borrow_mut() += fee;
-        
+    
             msg!(
                 "2% fee ({}) sent to fee receiver: {}",
                 fee,
@@ -427,27 +441,32 @@ pub mod truth_network {
             );
         }
     
-        // Ensure sufficient funds after deducting fee
-        require!(vault_balance.saturating_sub(voter_share) >= min_balance, VotingError::InsufficientFunds);
+        // Ensure enough lamports remain
+        require!(
+            vault_balance.saturating_sub(voter_share) >= min_balance,
+            VotingError::InsufficientFunds
+        );
     
         **vault_info.lamports.borrow_mut() -= voter_share;
         **voter_info.lamports.borrow_mut() += voter_share;
-
+    
+        // Deduct from total reward pool
         question.reward = question.reward.saturating_sub(voter_share);
-
-        let tx_id_bytes = tx_id.as_bytes(); // tx_id comes from frontend
+    
+        // ✅ Store tx_id
+        let tx_id_bytes = tx_id.as_bytes();
         let len = tx_id_bytes.len().min(64);
         voter_record.claim_tx_id[..len].copy_from_slice(&tx_id_bytes[..len]);
         for i in len..64 {
-            voter_record.claim_tx_id[i] = 0; // zero out the rest
+            voter_record.claim_tx_id[i] = 0;
         }
     
-        // ✅ Update voter stats in the VoterList
+        // ✅ Update voter stats
         if let Some(voter) = voter_list.voters.iter_mut().find(|v| v.address == voter_pubkey) {
-            voter.total_earnings += voter_share; // Update total earnings
-            voter.total_revealed_votes += 1; // Increment revealed votes
-            if ctx.accounts.voter_record.selected_option == winning_option {
-                voter.total_correct_votes += 1; // Increment correct votes
+            voter.total_earnings += voter_share;
+            voter.total_revealed_votes += 1;
+            if voter_record.selected_option == winning_option && !is_tie {
+                voter.total_correct_votes += 1;
             }
         }
     
@@ -458,7 +477,7 @@ pub mod truth_network {
         );
     
         Ok(())
-    }        
+    }            
         
         
 }
