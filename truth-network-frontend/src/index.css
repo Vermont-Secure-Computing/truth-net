@@ -2,6 +2,9 @@
 @import "tailwindcss/utilities";
 @import "tailwindcss/theme";
 
+/* Import custom DatePicker styles here */
+@import './styles/datepicker.css';
+
 #root {
   width: 100%;
   font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;

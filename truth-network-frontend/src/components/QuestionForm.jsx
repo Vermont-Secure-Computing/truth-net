@@ -4,18 +4,20 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { Program, AnchorProvider, web3, BN } from "@coral-xyz/anchor";
 import { toast } from "react-toastify"; // ✅ Import toast
 import "react-toastify/dist/ReactToastify.css"; // ✅ Import styles
+import DatePicker from "react-datepicker";
+import "react-datepicker/dist/react-datepicker.css";
 import idl from "../idl.json"; // Import the IDL file
 
 const RENT_COST = 50_000_000;
-const PROGRAM_ID = new web3.PublicKey("FALibc4uYqiUd6hasYN7VaPX2oXdd13HeprenWp3wLpf");
+const PROGRAM_ID = new web3.PublicKey("5CmM5VFJWKDozFLZ27mWEJ2a1dK7ctXVMCwWteKbW2jT");
 const connection = new Connection(clusterApiUrl("devnet"), "confirmed");
 
 const QuestionForm = ({ fetchQuestions }) => {
   const { publicKey, signTransaction, signAllTransactions } = useWallet();
   const [questionText, setQuestionText] = useState("");
   const [reward, setReward] = useState("");
-  const [commitEndTime, setCommitEndTime] = useState("");
-  const [revealEndTime, setRevealEndTime] = useState("");
+  const [commitEndTime, setCommitEndTime] = useState(null);
+  const [revealEndTime, setRevealEndTime] = useState(null);
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [pendingCreate, setPendingCreate] = useState(false);
@@ -95,7 +97,7 @@ const QuestionForm = ({ fetchQuestions }) => {
         })
         .rpc();
 
-      toast.success(`🎉 Question Created! ✅`, {
+      toast.success(`🎉 Event Created! ✅`, {
         position: "top-center",
         autoClose: 5000,
         onClick: () => window.open(`https://explorer.solana.com/tx/${tx}?cluster=devnet`, "_blank"),
@@ -111,7 +113,7 @@ const QuestionForm = ({ fetchQuestions }) => {
       setCommitEndTime("");
       setRevealEndTime("");
     } catch (error) {
-      toast.error(`Failed to create question: ${error.message}`, {
+      toast.error(`Failed to create event: ${error.message}`, {
         position: "top-center",
         autoClose: 5000,
       });
@@ -127,95 +129,142 @@ const QuestionForm = ({ fetchQuestions }) => {
     }
   
     if (questionText.trim().length < 10) {
-      toast.warn("⚠ Question must be at least 10 characters.", { position: "top-center" });
+      toast.warn("⚠ Event must be at least 10 characters.", { position: "top-center" });
       return;
     }
   
     setShowModal(true);
   };
 
+  const getMinTime = (selectedDate) => {
+    const now = new Date();
+    if (!selectedDate) return now; // prevent error when date is null
+  
+    const selected = new Date(selectedDate);
+    if (
+      selected.getFullYear() === now.getFullYear() &&
+      selected.getMonth() === now.getMonth() &&
+      selected.getDate() === now.getDate()
+    ) {
+      return now;
+    } else {
+      const startOfDay = new Date(selected);
+      startOfDay.setHours(0, 0, 0, 0);
+      return startOfDay;
+    }
+  };  
+
   return (
-    <div className="container items-center bg-white mx-auto px-6 py-6">
+    <div className="max-w-7xl mx-auto px-6 py-6">
+      <div className="flex flex-wrap items-center gap-4 space-x-4">
+
         {/* Question Input */}
         <input 
-            type="text" 
-            placeholder="Enter your question" 
-            value={questionText} 
-            onChange={(e) => setQuestionText(e.target.value)} 
-            className="p-3 border rounded-lg w-1/4 focus:outline-none focus:ring-2 focus:ring-blue-500 mx-2"
+          type="text" 
+          placeholder="Enter your event" 
+          value={questionText} 
+          onChange={(e) => setQuestionText(e.target.value)} 
+          className="p-3 border rounded-lg w-64 focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
 
         {/* Reward Input */}
         <input 
-            type="number" 
-            placeholder="Reward (SOL)" 
-            value={reward} 
-            onChange={(e) => setReward(e.target.value)} 
-            className="p-3 border rounded-lg w-1/6 focus:outline-none focus:ring-2 focus:ring-blue-500 mx-2"
+          type="number" 
+          placeholder="Reward (SOL)" 
+          value={reward} 
+          onChange={(e) => setReward(e.target.value)} 
+          className="p-3 border rounded-lg w-40 focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
 
         {/* Commit End Time */}
-        <input 
-            type="datetime-local" 
-            value={commitEndTime} 
-            onChange={(e) => setCommitEndTime(e.target.value)} 
-            className="p-3 border rounded-lg w-1/5 focus:outline-none focus:ring-2 focus:ring-blue-500 mx-2"
-        />
+        <div className="relative z-20 w-64">
+          <DatePicker
+            selected={commitEndTime}
+            onChange={(date) => setCommitEndTime(date)}
+            showTimeSelect
+            timeIntervals={1}
+            minDate={new Date()}
+            minTime={getMinTime(commitEndTime)}
+            maxTime={new Date(new Date().setHours(23, 59, 59, 999))}
+            timeCaption="Time"
+            dateFormat="yyyy-MM-dd HH:mm"
+            placeholderText="Select commit end time."
+            className="p-3 border rounded-lg w-full focus:outline-none focus:ring-2 focus:ring-blue-500"
+            popperPlacement="bottom-start"
+            popperClassName="z-50"
+            calendarClassName="custom-datepicker"
+          />
+        </div>
 
         {/* Reveal End Time */}
-        <input 
-            type="datetime-local" 
-            value={revealEndTime} 
-            onChange={(e) => setRevealEndTime(e.target.value)} 
-            className="p-3 border rounded-lg w-1/5 focus:outline-none focus:ring-2 focus:ring-blue-500 mx-2"
-        />
+        <div className="relative z-10 w-64">
+          <DatePicker
+            selected={revealEndTime}
+            onChange={(date) => setRevealEndTime(date)}
+            showTimeSelect
+            timeIntervals={1}
+            minDate={new Date()}
+            minTime={getMinTime(revealEndTime)}
+            maxTime={new Date(new Date().setHours(23, 59, 59, 999))}
+            timeCaption="Time"
+            dateFormat="yyyy-MM-dd HH:mm"
+            placeholderText="Select reveal end time."
+            className="p-3 border rounded-lg w-full focus:outline-none focus:ring-2 focus:ring-blue-500"
+            popperPlacement="bottom-start"
+            popperClassName="z-50"
+            calendarClassName="custom-datepicker"
+          />
+        </div>
 
         {/* Submit Button */}
         <button 
-            onClick={handleSubmit} 
-            disabled={loading}
-            className={`px-4 py-3 rounded-lg transition duration-300 mx-2 ${loading ? "bg-gray-400 cursor-not-allowed" : "bg-blue-500 text-white hover:bg-blue-600"}`}
+          onClick={handleSubmit} 
+          disabled={loading}
+          className={`px-4 py-3 rounded-lg transition duration-300 ${loading ? "bg-gray-400 cursor-not-allowed" : "bg-blue-500 text-white hover:bg-blue-600"}`}
         >
-            {loading ? (
-              <span className="flex items-center justify-center">
-                Submitting<span className="dot-animate">.</span>
-                <span className="dot-animate dot2">.</span>
-                <span className="dot-animate dot3">.</span>
-              </span>
-            ) : (
-              "Submit"
-            )}
+          {loading ? (
+            <span className="flex items-center justify-center">
+              Submitting<span className="dot-animate">.</span>
+              <span className="dot-animate dot2">.</span>
+              <span className="dot-animate dot3">.</span>
+            </span>
+          ) : (
+            "Submit"
+          )}
         </button>
+      </div>
 
-        {showModal && (
-          <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
-            <div className="bg-white p-6 rounded-lg shadow-lg text-center max-w-md w-full">
-              <h2 className="text-xl font-semibold mb-4">Review Your Question</h2>
-              <p className="mb-6 text-gray-700">
-                Make sure you are phrasing your event as <strong>True or False</strong>.
-              </p>
-              <div className="flex justify-center gap-4">
-                <button
-                  onClick={() => {
-                    setShowModal(false);
-                    setPendingCreate(true);
-                    createQuestion();
-                  }}
-                  className="bg-blue-500 text-white px-6 py-2 rounded hover:bg-blue-600"
-                >
-                  Okay, Proceed
-                </button>
-                <button
-                  onClick={() => setShowModal(false)}
-                  className="bg-gray-300 text-gray-700 px-6 py-2 rounded hover:bg-gray-400"
-                >
-                  Cancel
-                </button>
-              </div>
+      {/* Modal */}
+      {showModal && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
+          <div className="bg-white p-6 rounded-lg shadow-lg text-center max-w-md w-full">
+            <h2 className="text-xl font-semibold mb-4">Review Your Event</h2>
+            <p className="mb-6 text-gray-700">
+              Make sure you are phrasing your event as <strong>True or False</strong>.
+            </p>
+            <div className="flex justify-center gap-4">
+              <button
+                onClick={() => {
+                  setShowModal(false);
+                  setPendingCreate(true);
+                  createQuestion();
+                }}
+                className="bg-blue-500 text-white px-6 py-2 rounded hover:bg-blue-600"
+              >
+                Okay, Proceed
+              </button>
+              <button
+                onClick={() => setShowModal(false)}
+                className="bg-gray-300 text-gray-700 px-6 py-2 rounded hover:bg-gray-400"
+              >
+                Cancel
+              </button>
             </div>
           </div>
-        )}
+        </div>
+      )}
     </div>
+
   );
 };
 

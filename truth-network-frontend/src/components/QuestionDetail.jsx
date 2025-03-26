@@ -9,7 +9,7 @@ import "react-toastify/dist/ReactToastify.css";
 import CommitReveal from "./CommitReveal";
 import idl from "../idl.json";
 
-const PROGRAM_ID = new PublicKey("FALibc4uYqiUd6hasYN7VaPX2oXdd13HeprenWp3wLpf");
+const PROGRAM_ID = new PublicKey("5CmM5VFJWKDozFLZ27mWEJ2a1dK7ctXVMCwWteKbW2jT");
 const connection = new web3.Connection(web3.clusterApiUrl("devnet"), "confirmed");
 
 const QuestionDetail = () => {
@@ -21,6 +21,7 @@ const QuestionDetail = () => {
     const [showCommitReveal, setShowCommitReveal] = useState(false);
     const [userVoterRecord, setUserVoterRecord] = useState(null);
     const [isEligibleToClaim, setIsEligibleToClaim] = useState(false);
+    const [claiming, setClaiming] = useState(false);
 
     const wallet = { publicKey, signTransaction, signAllTransactions };
     const provider = new AnchorProvider(connection, wallet, { preflightCommitment: "processed" });
@@ -64,9 +65,10 @@ const QuestionDetail = () => {
         } catch (error) {
             console.error("Error fetching question:", error);
             if (error.message.includes("Account does not exist")) {
-                // Clean up related tx data since the question is deleted
-                localStorage.removeItem(`claim_tx_${id}_${publicKey.toString()}`);
-                setQuestionDeleted(true); // for UI state if needed
+                if (publicKey) {
+                  localStorage.removeItem(`claim_tx_${id}_${publicKey.toString()}`);
+                }
+                setQuestionDeleted(true);
               }
         }
     };
@@ -93,13 +95,15 @@ const QuestionDetail = () => {
             const winningPercentage =
                 totalVotes > 0 ? (Math.max(questionData.votesOption1, questionData.votesOption2) / totalVotes) * 100 : 0;
 
+            const isTie = questionData.votesOption1 === questionData.votesOption2;
+
             const eligibleToClaim =
                 questionData.revealEnded &&
                 userVoterData.selectedOption !== undefined &&
-                userVoterData.selectedOption === winningOption &&
                 userVoterData.claimed === false &&
                 totalVotes > 0 &&
-                winningPercentage >= 51;
+                (isTie || userVoterData.selectedOption === winningOption);
+                
 
             setIsEligibleToClaim(eligibleToClaim);
         } catch (error) {
@@ -115,6 +119,7 @@ const QuestionDetail = () => {
         }
     
         try {
+            setClaiming(true);
             toast.info("⏳ Processing reward claim...", { position: "top-center" });
     
             const questionPublicKey = new PublicKey(id);
@@ -164,6 +169,8 @@ const QuestionDetail = () => {
                 position: "top-center",
                 autoClose: 5000,
             });
+        } finally {
+            setClaiming(false);
         }
     };
     
@@ -174,7 +181,9 @@ const QuestionDetail = () => {
 
     if (loading) return <p className="text-center text-gray-600">Loading...</p>;
 
-    const txId = localStorage.getItem(`claim_tx_${id}_${publicKey.toString()}`);
+    const txId = publicKey
+        ? localStorage.getItem(`claim_tx_${id}_${publicKey.toString()}`)
+        : null;
 
     return (
         <div className="container mx-auto px-6 py-6 flex justify-center">
@@ -212,9 +221,18 @@ const QuestionDetail = () => {
                 {isEligibleToClaim && (
                     <button
                         onClick={claimReward}
-                        className="mt-3 bg-green-500 text-white px-4 py-2 rounded w-full hover:bg-green-600 transition duration-300"
+                        disabled={claiming}
+                        className="mt-3 bg-green-500 text-white px-4 py-2 rounded w-full hover:bg-green-600 transition duration-300 disabled:bg-gray-400"
                     >
-                        Claim Reward
+                        {claiming ? (
+                            <span className="flex items-center justify-center">
+                                Claiming<span className="dot-animate">.</span>
+                                <span className="dot-animate dot2">.</span>
+                                <span className="dot-animate dot3">.</span>
+                            </span>
+                        ) : (
+                            "Claim Reward"
+                        )}
                     </button>
                 )}
                 
