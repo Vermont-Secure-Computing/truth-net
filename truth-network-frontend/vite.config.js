@@ -1,14 +1,17 @@
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
-import tailwindcss from '@tailwindcss/vite'
+// vite.config.js
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import tailwindcss from '@tailwindcss/vite';
 
-// https://vite.dev/config/
 export default defineConfig({
-  plugins: [
-    react(),
-    tailwindcss()
-  ],
+  plugins: [react(), tailwindcss()],
   define: {
-    'process.env': {}, // Add this to prevent errors
-},
-})
+    global: 'globalThis',
+    'process.env': {}, // suppress process.env crashes
+  },
+  resolve: {
+    alias: {
+      buffer: 'buffer', // required for web3.js
+    },
+  },
+});

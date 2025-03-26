@@ -9,6 +9,7 @@ import App from "./App";
 import "@solana/wallet-adapter-react-ui/styles.css";
 import './index.css';
 
+
 const Root = () => {
     const network = clusterApiUrl("devnet");
     const wallets = useMemo(() => [new PhantomWalletAdapter(), new SolflareWalletAdapter()], []);
