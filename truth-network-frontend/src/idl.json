@@ -1,5 +1,5 @@
 {
-  "address": "7Xu5CjLJ731EpCMeYTk288oPHMqdV6pPXRDuvMDnf4ui",
+  "address": "FU9yzzBojVdo9oX6nYmB7bE3upgfzSfznHuSCaY5ejmJ",
   "metadata": {
     "name": "truth_network",
     "version": "0.1.0",
@@ -717,10 +717,6 @@
         },
         {
           "name": "updater"
-        },
-        {
-          "name": "vault",
-          "writable": true
         }
       ],
       "args": [
