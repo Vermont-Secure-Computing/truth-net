@@ -7,7 +7,7 @@ import "react-toastify/dist/ReactToastify.css";
 import idl from "../idl.json";
 import { keccak256 } from "js-sha3";
 
-const PROGRAM_ID = new PublicKey("5CmM5VFJWKDozFLZ27mWEJ2a1dK7ctXVMCwWteKbW2jT");
+const PROGRAM_ID = new PublicKey("7Xu5CjLJ731EpCMeYTk288oPHMqdV6pPXRDuvMDnf4ui");
 const connection = new web3.Connection(web3.clusterApiUrl("devnet"), "confirmed");
 
 const CommitReveal = ({ question, onClose, refreshQuestions }) => {
@@ -173,13 +173,13 @@ const CommitReveal = ({ question, onClose, refreshQuestions }) => {
 
     return (
         <div className="modal bg-white p-6 max-w-md mx-auto text-center border-t border-b border-gray-300">
-            {/* ✅ Styled Title */}
+            {/* Styled Title */}
             {/* <h2 className="text-xl font-semibold mb-4">{question.questionText}</h2> */}
             
-            {/* ✅ Updated Section Header */}
+            {/* Updated Section Header */}
             <p className="text-gray-700 font-medium mb-4">{isCommitTimeOver ? "Reveal Vote" : "Commit Vote"}</p>
 
-            {/* ✅ Show Commit Options Only Before Reveal Phase */}
+            {/* Show Commit Options Only Before Reveal Phase */}
             {!isCommitTimeOver && (
                 <div className="flex justify-center space-x-4 mb-4">
                     <label className="flex items-center space-x-2">
@@ -210,7 +210,7 @@ const CommitReveal = ({ question, onClose, refreshQuestions }) => {
                 </div>
             )}
 
-            {/* ✅ Password Input Field */}
+            {/* Password Input Field */}
             {( 
                 (!hasCommitted && new Date().getTime() / 1000 < question.commitEndTime) ||
                 (hasCommitted && new Date().getTime() / 1000 > question.commitEndTime && new Date().getTime() / 1000 < question.revealEndTime)
@@ -224,7 +224,7 @@ const CommitReveal = ({ question, onClose, refreshQuestions }) => {
                 />
             )}
 
-            {/* ✅ Commit Vote Button */}
+            {/* Commit Vote Button */}
             {!hasCommitted && new Date().getTime() / 1000 < question.commitEndTime && (
                 <button 
                     onClick={commitVote} 
@@ -243,7 +243,7 @@ const CommitReveal = ({ question, onClose, refreshQuestions }) => {
                 </button>
             )}
 
-            {/* ✅ Reveal Vote Button */}
+            {/* Reveal Vote Button */}
             {canReveal && new Date().getTime() / 1000 > question.commitEndTime &&
                 new Date().getTime() / 1000 < question.revealEndTime && (
                 <button 

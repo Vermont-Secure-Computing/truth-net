@@ -7,7 +7,7 @@ import "react-toastify/dist/ReactToastify.css";
 import idl from "../idl.json";
 
 const PROGRAM_ID = new web3.PublicKey(
-  "5CmM5VFJWKDozFLZ27mWEJ2a1dK7ctXVMCwWteKbW2jT"
+  "7Xu5CjLJ731EpCMeYTk288oPHMqdV6pPXRDuvMDnf4ui"
 );
 const connection = new web3.Connection(web3.clusterApiUrl("devnet"), "confirmed");
 
@@ -41,9 +41,9 @@ const JoinNetwork = () => {
       setIsMember(member);
       toast.dismiss();
       if (member) {
-        toast.success("✅ You are a member of the Truth Network.", { position: "top-center" });
+        toast.success("You are a member of the Truth Network.", { position: "top-center" });
       } else {
-        toast.info("ℹ️ You are not a member yet.", { position: "top-center" });
+        toast.info("You are not a member yet.", { position: "top-center" });
       }
     } catch (error) {
       if (error.message.includes("Account does not exist")) {

@@ -11,9 +11,10 @@ import QuestionsList from "./components/QuestionList";
 import QuestionDetail from "./components/QuestionDetail";
 import JoinNetwork from "./components/JoinNetwork";
 import VoterDashboard from "./components/VoterDashboard";
+import VotersList from "./components/VotersList";
 import idl from "./idl.json";
 
-const PROGRAM_ID = new web3.PublicKey("5CmM5VFJWKDozFLZ27mWEJ2a1dK7ctXVMCwWteKbW2jT");
+const PROGRAM_ID = new web3.PublicKey("7Xu5CjLJ731EpCMeYTk288oPHMqdV6pPXRDuvMDnf4ui");
 const connection = new web3.Connection(web3.clusterApiUrl("devnet"), "confirmed");
 
 const App = () => {
@@ -80,7 +81,7 @@ const App = () => {
                 })
             );
     
-            // ✅ Separate active and expired questions
+            // Separate active and expired questions
             const activeQuestions = parsedQuestions.filter(
                 (q) => !q.revealEnded || (q.userVoterRecord && !q.userVoterRecord.claimed)
             );
@@ -88,12 +89,12 @@ const App = () => {
                 (q) => q.revealEnded && (!q.userVoterRecord || q.userVoterRecord.claimed)
             );
     
-            // ✅ Sort active questions by reward
+            // Sort active questions by reward
             activeQuestions.sort((a, b) =>
                 sortOrder === "highest" ? b.reward - a.reward : a.reward - b.reward
             );
     
-            // ✅ Keep expired questions but push them to the end
+            // Keep expired questions but push them to the end
             const sortedQuestions = [...activeQuestions, ...endedQuestions];
     
             console.log("Sorted Questions:", sortedQuestions);
@@ -147,6 +148,13 @@ const App = () => {
                         </button>
                     )}
 
+                    <button 
+                        onClick={() => navigate("/voters")} 
+                        className="px-4 py-2 rounded-md transition duration-200 bg-white hover:bg-gray-300"
+                    >
+                        Voters
+                    </button>
+
                     <WalletMultiButton className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md transition duration-200" />
                     <JoinNetwork />
                 </nav>
@@ -162,6 +170,7 @@ const App = () => {
                 } />
                 <Route path="/question/:id" element={<QuestionDetail />} />
                 <Route path="/dashboard" element={<VoterDashboard />} />
+                <Route path="/voters" element={<VotersList />} />
             </Routes>
         </div>
     );
