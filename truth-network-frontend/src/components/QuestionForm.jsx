@@ -2,14 +2,14 @@ import React, { useState } from "react";
 import { PublicKey, Connection, clusterApiUrl } from "@solana/web3.js";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { Program, AnchorProvider, web3, BN } from "@coral-xyz/anchor";
-import { toast } from "react-toastify"; // ✅ Import toast
-import "react-toastify/dist/ReactToastify.css"; // ✅ Import styles
+import { toast } from "react-toastify"; // Import toast
+import "react-toastify/dist/ReactToastify.css"; // Import styles
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import idl from "../idl.json"; // Import the IDL file
 
 const RENT_COST = 50_000_000;
-const PROGRAM_ID = new web3.PublicKey("5CmM5VFJWKDozFLZ27mWEJ2a1dK7ctXVMCwWteKbW2jT");
+const PROGRAM_ID = new web3.PublicKey("7Xu5CjLJ731EpCMeYTk288oPHMqdV6pPXRDuvMDnf4ui");
 const connection = new Connection(clusterApiUrl("devnet"), "confirmed");
 
 const QuestionForm = ({ fetchQuestions }) => {
@@ -38,7 +38,7 @@ const QuestionForm = ({ fetchQuestions }) => {
       return;
     }
 
-    setLoading(true); // ✅ Start loading state
+    setLoading(true); // Start loading state
 
     const rewardLamports = new BN(parseFloat(reward) * 1_000_000_000);
     const commitEndTimeTimestamp = new BN(Math.floor(new Date(commitEndTime).getTime() / 1000));
@@ -97,7 +97,7 @@ const QuestionForm = ({ fetchQuestions }) => {
         })
         .rpc();
 
-      toast.success(`🎉 Event Created! ✅`, {
+      toast.success(`Event Created! `, {
         position: "top-center",
         autoClose: 5000,
         onClick: () => window.open(`https://explorer.solana.com/tx/${tx}?cluster=devnet`, "_blank"),
@@ -107,7 +107,7 @@ const QuestionForm = ({ fetchQuestions }) => {
 
       fetchQuestions()
 
-      // ✅ Reset form fields after success
+      // Reset form fields after success
       setQuestionText("");
       setReward("");
       setCommitEndTime("");
@@ -118,7 +118,7 @@ const QuestionForm = ({ fetchQuestions }) => {
         autoClose: 5000,
       });
     } finally {
-      setLoading(false); // ✅ Stop loading state
+      setLoading(false); // Stop loading state
     }
   };
 
@@ -236,7 +236,7 @@ const QuestionForm = ({ fetchQuestions }) => {
 
       {/* Modal */}
       {showModal && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
+        <div className="fixed inset-0 flex items-center justify-center z-50" style={{ backgroundColor: "rgba(0, 0, 0, 0.4)" }}>
           <div className="bg-white p-6 rounded-lg shadow-lg text-center max-w-md w-full">
             <h2 className="text-xl font-semibold mb-4">Review Your Event</h2>
             <p className="mb-6 text-gray-700">

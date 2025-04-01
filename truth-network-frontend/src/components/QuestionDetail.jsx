@@ -9,7 +9,7 @@ import "react-toastify/dist/ReactToastify.css";
 import CommitReveal from "./CommitReveal";
 import idl from "../idl.json";
 
-const PROGRAM_ID = new PublicKey("5CmM5VFJWKDozFLZ27mWEJ2a1dK7ctXVMCwWteKbW2jT");
+const PROGRAM_ID = new PublicKey("7Xu5CjLJ731EpCMeYTk288oPHMqdV6pPXRDuvMDnf4ui");
 const connection = new web3.Connection(web3.clusterApiUrl("devnet"), "confirmed");
 
 const QuestionDetail = () => {
@@ -22,16 +22,40 @@ const QuestionDetail = () => {
     const [userVoterRecord, setUserVoterRecord] = useState(null);
     const [isEligibleToClaim, setIsEligibleToClaim] = useState(false);
     const [claiming, setClaiming] = useState(false);
+    const [isMember, setIsMember] = useState(false);
 
     const wallet = { publicKey, signTransaction, signAllTransactions };
     const provider = new AnchorProvider(connection, wallet, { preflightCommitment: "processed" });
     const program = new Program(idl, provider);
 
+    const checkMembership = async () => {
+        try {
+            const [voterListPDA] = await PublicKey.findProgramAddress(
+                [Buffer.from("voter_list")],
+                PROGRAM_ID
+            );
+    
+            const voterListAccount = await program.account.voterList.fetch(voterListPDA);
+            const member = voterListAccount.voters.some(
+                (voter) => voter.address.toString() === publicKey.toString()
+            );
+    
+            setIsMember(member);
+        } catch (error) {
+            console.warn("Membership check failed or voter list not initialized");
+            setIsMember(false);
+        }
+    };
+
     useEffect(() => {
         fetchQuestion();
+
+        if (publicKey) {
+            checkMembership();
+        }
     }, [id, publicKey]);
 
-    // ✅ Fetch Question Details & User Voter Record
+    // Fetch Question Details & User Voter Record
     const fetchQuestion = async () => {
         try {
             const questionPublicKey = new PublicKey(id);
@@ -73,7 +97,7 @@ const QuestionDetail = () => {
         }
     };
 
-    // ✅ Fetch User's Voter Record
+    // Fetch User's Voter Record
     const fetchUserVoterRecord = async (questionPublicKey, questionData) => {
         try {
             const [voterRecordPDA] = await PublicKey.findProgramAddress(
@@ -111,7 +135,7 @@ const QuestionDetail = () => {
         }
     };
 
-    // ✅ Claim Reward Function
+    // Claim Reward Function
     const claimReward = async () => {
         if (!publicKey) {
             toast.warn("Please connect your wallet.", { position: "top-center" });
@@ -120,7 +144,7 @@ const QuestionDetail = () => {
     
         try {
             setClaiming(true);
-            toast.info("⏳ Processing reward claim...", { position: "top-center" });
+            toast.info("Processing reward claim...", { position: "top-center" });
     
             const questionPublicKey = new PublicKey(id);
             const [voterRecordPDA] = await PublicKey.findProgramAddress(
@@ -153,7 +177,7 @@ const QuestionDetail = () => {
                 })
                 .rpc();
     
-            toast.success(`🎉 Reward claimed! Tx: ${tx.slice(0, 6)}...${tx.slice(-6)}`, {
+            toast.success(`Reward claimed! Tx: ${tx.slice(0, 6)}...${tx.slice(-6)}`, {
                 position: "top-center",
                 autoClose: 5000,
                 onClick: () =>
@@ -165,7 +189,7 @@ const QuestionDetail = () => {
     
             fetchQuestion(); // Refresh UI
         } catch (error) {
-            toast.error(`❌ Error claiming reward: ${error.message}`, {
+            toast.error(`Error claiming reward: ${error.message}`, {
                 position: "top-center",
                 autoClose: 5000,
             });
@@ -184,6 +208,7 @@ const QuestionDetail = () => {
     const txId = publicKey
         ? localStorage.getItem(`claim_tx_${id}_${publicKey.toString()}`)
         : null;
+        
 
     return (
         <div className="container mx-auto px-6 py-6 flex justify-center">
@@ -191,11 +216,11 @@ const QuestionDetail = () => {
                 <h2 className="text-2xl font-bold mb-4">{question.questionText}</h2>
                 <p className="text-gray-700"><strong>Reward:</strong> {question.reward} SOL</p>
 
-                {/* ✅ Commit End Time & Reveal End Time */}
+                {/* Commit End Time & Reveal End Time */}
                 <p className="text-gray-700 mt-2"><strong>Commit End Time:</strong> {new Date(question.commitEndTime * 1000).toLocaleString()}</p>
                 <p className="text-gray-700"><strong>Reveal End Time:</strong> {new Date(question.revealEndTime * 1000).toLocaleString()}</p>
 
-                {/* ✅ Vault Address with QR Code */}
+                {/* Vault Address with QR Code */}
                 <div className="mt-4 mb-6">
                     <p className="text-gray-700 font-semibold">Vault Address:</p>
                     <div className="flex items-center justify-center space-x-2">
@@ -208,8 +233,8 @@ const QuestionDetail = () => {
                         </button>
                     </div>
                 </div>
-                {/* ✅ Commit & Reveal Component */}
-                {showCommitReveal && (
+                {/* Commit & Reveal Component */}
+                {showCommitReveal && isMember && (
                     <CommitReveal 
                         question={question}
                         onClose={() => setShowCommitReveal(false)}
@@ -217,7 +242,7 @@ const QuestionDetail = () => {
                     />
                 )}
 
-                {/* ✅ Claim Reward Button */}
+                {/* Claim Reward Button */}
                 {isEligibleToClaim && (
                     <button
                         onClick={claimReward}

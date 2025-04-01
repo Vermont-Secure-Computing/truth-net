@@ -7,7 +7,7 @@ import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import idl from "../idl.json";
 
-const PROGRAM_ID = new PublicKey("5CmM5VFJWKDozFLZ27mWEJ2a1dK7ctXVMCwWteKbW2jT");
+const PROGRAM_ID = new PublicKey("7Xu5CjLJ731EpCMeYTk288oPHMqdV6pPXRDuvMDnf4ui");
 const connection = new web3.Connection(web3.clusterApiUrl("devnet"), "confirmed");
 
 const QuestionsList = ({ questions, fetchQuestions }) => {
@@ -29,82 +29,6 @@ const QuestionsList = ({ questions, fetchQuestions }) => {
     useEffect(() => {
         fetchQuestions();
     }, [publicKey]);
-
-    // const fetchQuestions = async () => {
-    //     try {
-    //         const accounts = await program.account.question.all();
-    //         let parsedQuestions = await Promise.all(
-    //             accounts.map(async ({ publicKey: questionPubKey, account }) => {
-    //                 const solReward = (account.reward.toNumber() / 1_000_000_000).toFixed(7);
-    //                 const commitEndTime = account.commitEndTime.toNumber();
-    //                 const revealEndTime = account.revealEndTime.toNumber();
-    //                 const revealEnded = account.revealEndTime.toNumber() <= Date.now() / 1000;
-    //                 const committedVoters = account.committedVoters ? account.committedVoters.toNumber() : 0;
-    
-    //                 let userVoterRecord = null;
-    //                 if (publicKey) {
-    //                     try {
-    //                         const [voterRecordPDA] = await PublicKey.findProgramAddress(
-    //                             [
-    //                                 Buffer.from("vote"),
-    //                                 publicKey.toBuffer(),
-    //                                 questionPubKey.toBuffer(),
-    //                             ],
-    //                             PROGRAM_ID
-    //                         );
-    //                         const voterRecordAccount = await program.account.voterRecord.fetch(voterRecordPDA);
-    
-    //                         userVoterRecord = {
-    //                             selectedOption: voterRecordAccount.selectedOption,
-    //                             claimed: voterRecordAccount.claimed,
-    //                             revealed: voterRecordAccount.revealed,
-    //                             voterRecordPDA: voterRecordPDA.toString(),
-    //                         };
-    //                     } catch (error) {
-    //                         console.log("No voter record for question", questionPubKey.toString());
-    //                     }
-    //                 }
-    
-    //                 return {
-    //                     id: questionPubKey.toString(),
-    //                     questionText: account.questionText,
-    //                     reward: parseFloat(solReward),
-    //                     commitEndTime,
-    //                     revealEndTime,
-    //                     committedVoters: committedVoters,
-    //                     votesOption1: account.votesOption1.toNumber(),
-    //                     votesOption2: account.votesOption2.toNumber(),
-    //                     revealEnded,
-    //                     userVoterRecord,
-    //                 };
-    //             })
-    //         );
-    
-    //         // ✅ Separate active and expired questions
-    //         const activeQuestions = parsedQuestions.filter(
-    //             (q) => !q.revealEnded || (q.userVoterRecord && !q.userVoterRecord.claimed)
-    //         );
-    //         const endedQuestions = parsedQuestions.filter(
-    //             (q) => q.revealEnded && (!q.userVoterRecord || q.userVoterRecord.claimed)
-    //         );
-    
-    //         // ✅ Sort active questions by reward
-    //         activeQuestions.sort((a, b) =>
-    //             sortOrder === "highest" ? b.reward - a.reward : a.reward - b.reward
-    //         );
-    
-    //         // ✅ Keep expired questions but push them to the end
-    //         const sortedQuestions = [...activeQuestions, ...endedQuestions];
-    
-    //         console.log("Sorted Questions:", sortedQuestions);
-    //         setQuestions(sortedQuestions);
-    //     } catch (error) {
-    //         toast.error(`Error fetching questions: ${error.message}`, {
-    //             position: "top-center",
-    //             autoClose: 5000,
-    //         });
-    //     }
-    // };
     
 
     const claimReward = async (questionId) => {

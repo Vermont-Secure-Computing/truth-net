@@ -6,9 +6,9 @@ use anchor_lang::solana_program::rent::Rent;
 pub const FEE_RECEIVER_ADDRESS: &str = "7qfdvYGEKnM2zrMYATbwtAdzagRGQUUCXxU3hhgG3V2u";
 
 
-declare_id!("5CmM5VFJWKDozFLZ27mWEJ2a1dK7ctXVMCwWteKbW2jT");
+declare_id!("7Xu5CjLJ731EpCMeYTk288oPHMqdV6pPXRDuvMDnf4ui");
 
-const RENT_COST: u64 = 50_000_000;
+const QUESTION_INITIAL_FUND: u64 = 50_000_000;
 
 /// An empty account for the vault.
 /// This account will only hold lamports and no other data.
@@ -65,22 +65,27 @@ pub mod truth_network {
     }
     
     pub fn leave_network(ctx: Context<LeaveNetwork>) -> Result<()> {
-        // Remove the user from the voter list.
-        {
-            let voter_list = &mut ctx.accounts.voter_list;
-            let user_pubkey = *ctx.accounts.user.key;
-            if let Some(pos) = voter_list.voters.iter().position(|v| v.address == user_pubkey) {
-                voter_list.voters.swap_remove(pos);
-            } else {
-                return Err(VotingError::NotJoined.into());
-            }
-        }
+        let voter_list = &mut ctx.accounts.voter_list;
+        let user_pubkey = *ctx.accounts.user.key;
     
-        // No manual lamport transfer is needed.
-        // The `close = user` attribute on the vault account automatically transfers all its lamports
-        // to the user and closes the account.
+        // Find and reset the voter's data if they exist
+        if let Some(voter) = voter_list.voters.iter_mut().find(|v| v.address == user_pubkey) {
+            voter.reputation = 0;
+            voter.total_earnings = 0;
+            voter.total_revealed_votes = 0;
+            voter.total_correct_votes = 0;
+
+            msg!("Voter data for user {} has been reset.", user_pubkey);
+        } else {
+            return Err(VotingError::NotJoined.into());
+        }
+
+        // Remove the voter from the voter list using retain
+        voter_list.voters.retain(|v| v.address != user_pubkey);
+        msg!("User {} has been removed from the voter list.", user_pubkey);
+    
         Ok(())
-    }
+    }       
 
     pub fn create_question(
         ctx: Context<CreateQuestion>,
@@ -102,7 +107,7 @@ pub mod truth_network {
         require!(Clock::get()?.unix_timestamp < commit_end_time, VotingError::VotingEnded);
         require!(commit_end_time < reveal_end_time, VotingError::InvalidTimeframe);
         
-        let total_transfer = RENT_COST + reward;
+        let total_transfer = QUESTION_INITIAL_FUND + reward;
         
         // Transfer funds from the asker to the vault.
         invoke(
@@ -125,7 +130,7 @@ pub mod truth_network {
         question.question_text = question_text;
         question.option_1 = "True".to_string();
         question.option_2 = "False".to_string();
-        question.reward = reward;
+        question.reward = total_transfer;
         question.commit_end_time = commit_end_time;
         question.reveal_end_time = reveal_end_time;
         question.rent_expiration = Clock::get()?.unix_timestamp + 86400;
@@ -165,10 +170,12 @@ pub mod truth_network {
             VotingError::VotingEnded
         );
     
-        // Update the reward
-        question.reward += new_reward;
-    
-        msg!("Reward Updated: {}", new_reward);
+        // Use the total vault balance as the actual reward
+        let vault_balance = ctx.accounts.vault.lamports();
+        question.reward = vault_balance;
+
+        msg!("Vault Address: {}", ctx.accounts.vault.key());
+        msg!("Vault Balance (Total Reward): {}", vault_balance);
         Ok(())
     }        
      
@@ -182,7 +189,7 @@ pub mod truth_network {
             VotingError::RentNotExpired
         );
     
-        // ✅ Prevent deletion if there is still a reward left
+        // Prevent deletion if there is still a reward left
         require!(
             question.reward == 0,
             VotingError::RemainingRewardExists
@@ -362,7 +369,7 @@ pub mod truth_network {
         // **Set the revealed vote in plaintext.**
         voter_record.selected_option = vote;
 
-        // ✅ **Increase voter reputation by 1**
+        // **Increase voter reputation by 1**
         if let Some(voter) = voter_list.voters.iter_mut().find(|v| v.address == voter_pubkey) {
             voter.reputation += 1;
         }
@@ -391,7 +398,6 @@ pub mod truth_network {
     
         require!(!voter_record.claimed, VotingError::AlreadyClaimed);
     
-        // ✅ Only check if user voted for winning option if it’s not a tie
         if !is_tie {
             require!(
                 voter_record.selected_option == winning_option,
@@ -400,7 +406,7 @@ pub mod truth_network {
         }
     
         let winning_votes = if is_tie {
-            total_votes // All voters get a share
+            total_votes
         } else if winning_option == 1 {
             question.votes_option_1
         } else {
@@ -409,12 +415,9 @@ pub mod truth_network {
     
         require!(winning_votes > 0, VotingError::NoEligibleVoters);
     
-        let voter_share = question.reward / winning_votes;
-        voter_record.claimed = true;
-    
         let vault_info = ctx.accounts.vault.to_account_info();
-        let voter_info = ctx.accounts.voter.to_account_info();
         let fee_receiver_info = ctx.accounts.fee_receiver.to_account_info();
+        let voter_info = ctx.accounts.voter.to_account_info();
     
         let rent = Rent::get()?;
         let min_balance = rent.minimum_balance(vault_info.data_len());
@@ -424,36 +427,45 @@ pub mod truth_network {
     
         if !question.reward_fee_taken {
             fee = question.reward * 2 / 100;
+            question.reward = question.reward.saturating_sub(fee + min_balance);
             question.reward_fee_taken = true;
-    
-            require!(
-                vault_balance.saturating_sub(fee) >= min_balance,
-                VotingError::InsufficientFunds
-            );
-    
-            **vault_info.lamports.borrow_mut() -= fee;
-            **fee_receiver_info.lamports.borrow_mut() += fee;
-    
-            msg!(
-                "2% fee ({}) sent to fee receiver: {}",
-                fee,
-                fee_receiver_info.key()
-            );
         }
+    
+        require!(
+            vault_balance >= fee + min_balance,
+            VotingError::InsufficientFunds
+        );
+    
+        **vault_info.lamports.borrow_mut() -= fee;
+        **fee_receiver_info.lamports.borrow_mut() += fee;
+    
+        msg!(
+            "2% fee ({}) sent to fee receiver: {}",
+            fee,
+            fee_receiver_info.key()
+        );
+    
+        // Snapshot the total reward for fair distribution
+        let initial_reward = question.reward;
+        let mut voter_share = initial_reward / winning_votes;
+        let remainder = initial_reward % winning_votes;
+    
+        if remainder > 0 {
+            voter_share += 1; // Distribute remainder fairly
+        }
+    
+        voter_record.claimed = true;
     
         // Ensure enough lamports remain
         require!(
-            vault_balance.saturating_sub(voter_share) >= min_balance,
+            vault_balance >= voter_share + min_balance,
             VotingError::InsufficientFunds
         );
     
         **vault_info.lamports.borrow_mut() -= voter_share;
         **voter_info.lamports.borrow_mut() += voter_share;
     
-        // Deduct from total reward pool
-        question.reward = question.reward.saturating_sub(voter_share);
-    
-        // ✅ Store tx_id
+        // Store tx_id
         let tx_id_bytes = tx_id.as_bytes();
         let len = tx_id_bytes.len().min(64);
         voter_record.claim_tx_id[..len].copy_from_slice(&tx_id_bytes[..len]);
@@ -461,7 +473,6 @@ pub mod truth_network {
             voter_record.claim_tx_id[i] = 0;
         }
     
-        // ✅ Update voter stats
         if let Some(voter) = voter_list.voters.iter_mut().find(|v| v.address == voter_pubkey) {
             voter.total_earnings += voter_share;
             voter.total_revealed_votes += 1;
@@ -477,8 +488,8 @@ pub mod truth_network {
         );
     
         Ok(())
-    }            
-        
+    }
+                           
         
 }
 
@@ -559,6 +570,9 @@ pub struct UpdateReward<'info> {
     pub question: Account<'info, Question>,
     /// CHECK: This account is not required to sign; its authorization is managed by the caller.
     pub updater: UncheckedAccount<'info>,
+    /// CHECK: Vault to check for actual balance. Authority checks should be enforced elsewhere.
+    #[account(mut)]
+    pub vault: UncheckedAccount<'info>,
 }
 
 
@@ -624,6 +638,7 @@ pub struct LeaveNetwork<'info> {
 
     pub system_program: Program<'info, System>,
 }
+
 
 #[derive(Accounts)]
 pub struct InitializeCounter<'info> {
@@ -829,3 +844,4 @@ pub enum VotingError {
     #[msg("Question must be at least 10 characters long.")]
     QuestionTooShort,
 }
+

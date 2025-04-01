@@ -5,7 +5,7 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 
-const PROGRAM_ID = new web3.PublicKey("5CmM5VFJWKDozFLZ27mWEJ2a1dK7ctXVMCwWteKbW2jT");
+const PROGRAM_ID = new web3.PublicKey("7Xu5CjLJ731EpCMeYTk288oPHMqdV6pPXRDuvMDnf4ui");
 const connection = new web3.Connection(web3.clusterApiUrl("devnet"), "confirmed");
 
 const VoterDashboard = () => {
