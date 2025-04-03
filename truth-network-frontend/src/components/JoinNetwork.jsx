@@ -41,13 +41,13 @@ const JoinNetwork = () => {
       setIsMember(member);
       toast.dismiss();
       if (member) {
-        toast.success("You are a member of the Truth Network.", { position: "top-center" });
+        toast.success("You are a Registered Truth Provider.", { position: "top-center" });
       } else {
-        toast.info("You are not a member yet.", { position: "top-center" });
+        toast.info("You are not registered yet.", { position: "top-center" });
       }
     } catch (error) {
       if (error.message.includes("Account does not exist")) {
-        toast.info("No voter list found. You are not a member yet.", { position: "top-center" });
+        toast.info("No voter list found. You are not registered yet.", { position: "top-center" });
       } else {
         toast.error(`Error fetching membership: ${error.message}`, { position: "top-center" });
       }
@@ -152,8 +152,8 @@ const JoinNetwork = () => {
         <>
           <p>
             {isMember
-              ? "You are currently a member of the Truth Network."
-              : "You are not a member of the Truth Network."}
+              ? "You are a Registered Truth Provider."
+              : "You are not registered."}
           </p>
           {isMember ? (
             <button onClick={leaveNetworkHandler} disabled={loading}>
@@ -164,7 +164,7 @@ const JoinNetwork = () => {
                   <span className="dot-animate dot3">.</span>
                 </span>
               ) : (
-                "Leave Truth Network"
+                "Leave Truth It Network"
               )}
             </button>
           ) : (
@@ -176,7 +176,7 @@ const JoinNetwork = () => {
                   <span className="dot-animate dot3">.</span>
                 </span>
               ) : (
-                "Join Truth Network"
+                "Join Truth It Network"
               )}
             </button>
           )}

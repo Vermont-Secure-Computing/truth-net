@@ -113,7 +113,7 @@ const App = () => {
             {/* Header */}
             <header className="flex justify-between items-center bg-white text-black px-6 py-4 shadow-md rounded-lg">
             <div className="flex items-center space-x-2">
-                <h1 className="text-xl font-bold">Decentralized Truth Network</h1>
+                <h1 className="text-xl font-bold">Truth It Network</h1>
                 <a
                     href="https://github.com/Vermont-Secure-Computing/truth-net"
                     target="_blank"

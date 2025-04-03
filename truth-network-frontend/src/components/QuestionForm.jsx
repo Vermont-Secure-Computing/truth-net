@@ -155,16 +155,18 @@ const QuestionForm = ({ fetchQuestions }) => {
   };  
 
   return (
+  
+        
     <div className="max-w-7xl mx-auto px-6 py-6">
       <div className="flex flex-wrap items-center gap-4 space-x-4">
 
         {/* Question Input */}
         <input 
           type="text" 
-          placeholder="Enter your event" 
+          placeholder="Enter your event statement" 
           value={questionText} 
           onChange={(e) => setQuestionText(e.target.value)} 
-          className="p-3 border rounded-lg w-64 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="p-3 border rounded-lg w-84 focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
 
         {/* Reward Input */}
@@ -240,7 +242,7 @@ const QuestionForm = ({ fetchQuestions }) => {
           <div className="bg-white p-6 rounded-lg shadow-lg text-center max-w-md w-full">
             <h2 className="text-xl font-semibold mb-4">Review Your Event</h2>
             <p className="mb-6 text-gray-700">
-              Make sure you are phrasing your event as <strong>True or False</strong>.
+              Make sure you are phrasing your event as a <strong>True or False</strong> statement.
             </p>
             <div className="flex justify-center gap-4">
               <button
