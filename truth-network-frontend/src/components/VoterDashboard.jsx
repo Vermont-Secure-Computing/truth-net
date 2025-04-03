@@ -5,7 +5,7 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 
-const PROGRAM_ID = new web3.PublicKey("FU9yzzBojVdo9oX6nYmB7bE3upgfzSfznHuSCaY5ejmJ");
+const PROGRAM_ID = new web3.PublicKey("5eSEdSRgVcv2rfnAw5iY6dTNUGSSFfUVkUSkN55rmezq");
 const connection = new web3.Connection(web3.clusterApiUrl("devnet"), "confirmed");
 
 const VoterDashboard = () => {
@@ -49,7 +49,9 @@ const VoterDashboard = () => {
                             const question = await program.account.question.fetch(pubkey);
                             return {
                                 idque:pubkey.toBase58(),
-                                ...question
+                                ...question,
+                                committedVoters: question.committedVoters?.toNumber?.() || 0,
+                                originalReward: question.originalReward?.toNumber?.() || 0,
                             };
                         } catch (error) {
                             console.error("Error fetching question:", pubkey.toBase58(), error);
@@ -178,13 +180,19 @@ const VoterDashboard = () => {
                             winningPercentage >= 51;
 
 
-                            const currentTime = new Date().getTime() / 1000;
+                        const currentTime = new Date().getTime() / 1000;
 
-                            const userCanReveal =
-                                q?.commitEndTime < currentTime && // Commit phase is over
-                                q?.revealEndTime > currentTime && // Reveal phase is still active
-                                q.userVoterRecord?.committed === true && // User has committed a vote
-                                q.userVoterRecord?.revealed === false; // User has NOT revealed the vote
+                        const userCanReveal =
+                            q?.commitEndTime < currentTime && // Commit phase is over
+                            q?.revealEndTime > currentTime && // Reveal phase is still active
+                            q.userVoterRecord?.committed === true && // User has committed a vote
+                            q.userVoterRecord?.revealed === false; // User has NOT revealed the vote
+
+                        const displayRewardLamports = q.originalReward > 0 
+                            ? q.originalReward
+                            : q.reward * web3.LAMPORTS_PER_SOL;
+                        
+                        const displayReward = (displayRewardLamports / web3.LAMPORTS_PER_SOL).toFixed(4);
                         return (
                             <div 
                                 key={index} 
@@ -202,21 +210,14 @@ const VoterDashboard = () => {
                                 }}                                                               
                             >
                                 <h4 className="text-lg font-semibold mb-2">{q.questionText}</h4>
+                                <p className="text-gray-700"><strong>Reward:</strong> {displayReward} SOL</p>
+                                <p className="text-gray-700"><strong>Voters Committed:</strong> {q.committedVoters}</p>
+                                <p className="text-gray-700"><strong>Commit End Time:</strong> {new Date(q.commitEndTime * 1000).toLocaleString()}</p>
+                                <p className="text-gray-700"><strong>Reveal End Time:</strong> {new Date(q.revealEndTime * 1000).toLocaleString()}</p>
                                 <p className="text-sm text-gray-700">
                                     <strong>Votes:</strong> {q.votesOption1.toNumber()} - {q.votesOption2.toNumber()}
                                 </p>
 
-                                {isEligibleToClaim && (
-                                    <button 
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            claimReward(q.idque);
-                                        }}
-                                        className="mt-3 bg-green-500 text-white px-4 py-2 rounded w-full hover:bg-green-600 transition duration-300"
-                                    >
-                                        Claim Reward
-                                    </button>
-                                )}
 
                                 {userCanReveal && (
                                     <p className="text-green-600 font-semibold mt-2">You can reveal your vote</p>

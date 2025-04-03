@@ -6,6 +6,7 @@ import { ToastContainer } from "react-toastify";
 import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { Program, AnchorProvider, web3 } from "@coral-xyz/anchor";
+import { PublicKey } from "@solana/web3.js";
 import QuestionForm from "./components/QuestionForm";
 import QuestionsList from "./components/QuestionList";
 import QuestionDetail from "./components/QuestionDetail";
@@ -14,7 +15,7 @@ import VoterDashboard from "./components/VoterDashboard";
 import VotersList from "./components/VotersList";
 import idl from "./idl.json";
 
-const PROGRAM_ID = new web3.PublicKey("FU9yzzBojVdo9oX6nYmB7bE3upgfzSfznHuSCaY5ejmJ");
+const PROGRAM_ID = new web3.PublicKey("5eSEdSRgVcv2rfnAw5iY6dTNUGSSFfUVkUSkN55rmezq");
 const connection = new web3.Connection(web3.clusterApiUrl("devnet"), "confirmed");
 
 const App = () => {
@@ -34,10 +35,29 @@ const App = () => {
     const fetchQuestions = async () => {
         try {
             const accounts = await program.account.question.all();
+    
+            const rentExemption = await connection.getMinimumBalanceForRentExemption(8); // Vault is 8 bytes
+    
+            const vaultPDAs = await Promise.all(
+                accounts.map(async ({ publicKey: questionPubKey }) => {
+                    const [vaultPDA] = await PublicKey.findProgramAddress(
+                        [Buffer.from("vault"), questionPubKey.toBuffer()],
+                        PROGRAM_ID
+                    );
+                    return vaultPDA;
+                })
+            );
+    
+            const vaultAccountInfos = await connection.getMultipleAccountsInfo(vaultPDAs);
+    
             let parsedQuestions = await Promise.all(
-                accounts.map(async ({ publicKey: questionPubKey, account }) => {
-                    const solReward = (account.reward.toNumber() / 1_000_000_000).toFixed(7);
-                    const commitEndTime = account.commitEndTime.toNumber();
+                accounts.map(async ({ publicKey: questionPubKey, account }, index) => {
+                    const vaultInfo = vaultAccountInfos[index];
+                    const vaultBalance = vaultInfo?.lamports ?? 0;
+                    const rewardLamports = Math.max(vaultBalance - rentExemption, 0);
+                    const solReward = rewardLamports / web3.LAMPORTS_PER_SOL;
+    
+                    const commitEndTime = account.commitEndTime.toNumber() ;
                     const revealEndTime = account.revealEndTime.toNumber();
                     const revealEnded = account.revealEndTime.toNumber() <= Date.now() / 1000;
                     const committedVoters = account.committedVoters ? account.committedVoters.toNumber() : 0;
@@ -69,19 +89,20 @@ const App = () => {
                     return {
                         id: questionPubKey.toString(),
                         questionText: account.questionText,
-                        reward: parseFloat(solReward),
+                        reward: parseFloat(solReward.toFixed(4)), // ← Now actual vault reward
                         commitEndTime,
                         revealEndTime,
-                        committedVoters: committedVoters,
+                        committedVoters,
                         votesOption1: account.votesOption1.toNumber(),
                         votesOption2: account.votesOption2.toNumber(),
+                        originalReward: account.originalReward?.toNumber?.() || 0,
                         revealEnded,
                         userVoterRecord,
                     };
                 })
             );
     
-            // Separate active and expired questions
+            // Sort logic remains the same
             const activeQuestions = parsedQuestions.filter(
                 (q) => !q.revealEnded || (q.userVoterRecord && !q.userVoterRecord.claimed)
             );
@@ -89,12 +110,10 @@ const App = () => {
                 (q) => q.revealEnded && (!q.userVoterRecord || q.userVoterRecord.claimed)
             );
     
-            // Sort active questions by reward
             activeQuestions.sort((a, b) =>
                 sortOrder === "highest" ? b.reward - a.reward : a.reward - b.reward
             );
     
-            // Keep expired questions but push them to the end
             const sortedQuestions = [...activeQuestions, ...endedQuestions];
     
             console.log("Sorted Questions:", sortedQuestions);
@@ -105,7 +124,7 @@ const App = () => {
                 autoClose: 5000,
             });
         }
-    };
+    };    
 
     return (
         <div className="w-full min-h-screen bg-white text-black flex flex-col">

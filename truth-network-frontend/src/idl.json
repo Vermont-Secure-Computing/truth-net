@@ -1,5 +1,5 @@
 {
-  "address": "FU9yzzBojVdo9oX6nYmB7bE3upgfzSfznHuSCaY5ejmJ",
+  "address": "5eSEdSRgVcv2rfnAw5iY6dTNUGSSFfUVkUSkN55rmezq",
   "metadata": {
     "name": "truth_network",
     "version": "0.1.0",
@@ -403,6 +403,27 @@
           }
         },
         {
+          "name": "vault",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "question"
+              }
+            ]
+          }
+        },
+        {
           "name": "asker",
           "writable": true,
           "signer": true
@@ -697,34 +718,6 @@
           "type": "string"
         }
       ]
-    },
-    {
-      "name": "update_reward",
-      "discriminator": [
-        62,
-        165,
-        125,
-        122,
-        39,
-        204,
-        160,
-        29
-      ],
-      "accounts": [
-        {
-          "name": "question",
-          "writable": true
-        },
-        {
-          "name": "updater"
-        }
-      ],
-      "args": [
-        {
-          "name": "new_reward",
-          "type": "u64"
-        }
-      ]
     }
   ],
   "accounts": [
@@ -919,6 +912,11 @@
       "code": 6024,
       "name": "QuestionTooShort",
       "msg": "Question must be at least 10 characters long."
+    },
+    {
+      "code": 6025,
+      "name": "RewardTooSmall",
+      "msg": "Reward must be at least 0.05 SOL."
     }
   ],
   "types": [
@@ -954,10 +952,6 @@
           {
             "name": "option_2",
             "type": "string"
-          },
-          {
-            "name": "reward",
-            "type": "u64"
           },
           {
             "name": "commit_end_time",
@@ -1002,6 +996,30 @@
           {
             "name": "reward_fee_taken",
             "type": "bool"
+          },
+          {
+            "name": "snapshot_reward",
+            "type": "u64"
+          },
+          {
+            "name": "original_reward",
+            "type": "u64"
+          },
+          {
+            "name": "claimed_remainder_count",
+            "type": "u64"
+          },
+          {
+            "name": "snapshot_total_weight",
+            "type": "u64"
+          },
+          {
+            "name": "total_distributed",
+            "type": "u64"
+          },
+          {
+            "name": "claimed_voters_count",
+            "type": "u64"
           },
           {
             "name": "bump",

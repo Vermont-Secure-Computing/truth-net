@@ -9,7 +9,7 @@ import "react-toastify/dist/ReactToastify.css";
 import CommitReveal from "./CommitReveal";
 import idl from "../idl.json";
 
-const PROGRAM_ID = new PublicKey("FU9yzzBojVdo9oX6nYmB7bE3upgfzSfznHuSCaY5ejmJ");
+const PROGRAM_ID = new PublicKey("5eSEdSRgVcv2rfnAw5iY6dTNUGSSFfUVkUSkN55rmezq");
 const connection = new web3.Connection(web3.clusterApiUrl("devnet"), "confirmed");
 
 const QuestionDetail = () => {
@@ -61,7 +61,12 @@ const QuestionDetail = () => {
             const questionPublicKey = new PublicKey(id);
             const account = await program.account.question.fetch(questionPublicKey);
 
-            const solReward = (account.reward.toNumber() / 1_000_000_000).toFixed(7);
+            const vaultPubkey = new PublicKey(account.vaultAddress);
+            const vaultAccountInfo = await connection.getAccountInfo(vaultPubkey);
+            const rentExemption = await connection.getMinimumBalanceForRentExemption(8);
+            const vaultBalance = vaultAccountInfo?.lamports ?? 0;
+            const rewardLamports = Math.max(vaultBalance - rentExemption, 0);
+            const solReward = (rewardLamports / web3.LAMPORTS_PER_SOL).toFixed(4);
             const revealEnded = account.revealEndTime.toNumber() <= Date.now() / 1000;
 
             const newQuestion = {
@@ -72,8 +77,10 @@ const QuestionDetail = () => {
                 revealEndTime: account.revealEndTime.toNumber(),
                 votesOption1: account.votesOption1.toNumber(),
                 votesOption2: account.votesOption2.toNumber(),
+                committedVoters: account.committedVoters?.toNumber?.() || 0,
                 option1: account.option1,
                 option2: account.option2,
+                originalReward: account.originalReward?.toNumber?.() || 0,
                 revealEnded,
                 vaultAddress: account.vaultAddress.toString(),
             };
@@ -209,13 +216,17 @@ const QuestionDetail = () => {
         ? localStorage.getItem(`claim_tx_${id}_${publicKey.toString()}`)
         : null;
         
-
+    const displayRewardLamports = question.originalReward > 0 
+        ? question.originalReward
+        : question.reward * web3.LAMPORTS_PER_SOL;
+    
+    const displayReward = (displayRewardLamports / web3.LAMPORTS_PER_SOL).toFixed(4);
     return (
         <div className="container mx-auto px-6 py-6 flex justify-center">
             <div className="bg-white shadow-lg rounded-lg p-6 border border-gray-200 max-w-lg w-full text-center">
                 <h2 className="text-2xl font-bold mb-4">{question.questionText}</h2>
-                <p className="text-gray-700"><strong>Reward:</strong> {question.reward} SOL</p>
-
+                <p className="text-gray-700"><strong>Reward:</strong> {displayReward} SOL</p>
+                <p className="text-gray-700"><strong>Voters Committed:</strong> {question.committedVoters}</p>
                 {/* Commit End Time & Reveal End Time */}
                 <p className="text-gray-700 mt-2"><strong>Commit End Time:</strong> {new Date(question.commitEndTime * 1000).toLocaleString()}</p>
                 <p className="text-gray-700"><strong>Reveal End Time:</strong> {new Date(question.revealEndTime * 1000).toLocaleString()}</p>
@@ -276,7 +287,7 @@ const QuestionDetail = () => {
                 )}
             </div>
             {showModal && (
-                <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
+                <div className="fixed inset-0 flex items-center justify-center z-50" style={{ backgroundColor: "rgba(0, 0, 0, 0.4)" }}>
                     <div className="bg-white p-6 rounded-lg shadow-md max-w-lg w-full">
                         <h3 className="text-lg font-bold mb-4">Vault Address</h3>
 
