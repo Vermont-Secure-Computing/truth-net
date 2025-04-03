@@ -6,9 +6,8 @@ use anchor_lang::solana_program::rent::Rent;
 pub const FEE_RECEIVER_ADDRESS: &str = "7qfdvYGEKnM2zrMYATbwtAdzagRGQUUCXxU3hhgG3V2u";
 
 
-declare_id!("7Xu5CjLJ731EpCMeYTk288oPHMqdV6pPXRDuvMDnf4ui");
+declare_id!("5eSEdSRgVcv2rfnAw5iY6dTNUGSSFfUVkUSkN55rmezq");
 
-const QUESTION_INITIAL_FUND: u64 = 50_000_000;
 
 /// An empty account for the vault.
 /// This account will only hold lamports and no other data.
@@ -49,7 +48,7 @@ pub mod truth_network {
         let voter_list = &mut ctx.accounts.voter_list;
         let new_voter = Voter {
             address: *ctx.accounts.user.key,
-            reputation: 0, // Default reputation.
+            reputation: 1, // Default reputation.
             total_earnings: 0,
             total_revealed_votes: 0,
             total_correct_votes: 0,
@@ -70,7 +69,7 @@ pub mod truth_network {
     
         // Find and reset the voter's data if they exist
         if let Some(voter) = voter_list.voters.iter_mut().find(|v| v.address == user_pubkey) {
-            voter.reputation = 0;
+            voter.reputation = 1;
             voter.total_earnings = 0;
             voter.total_revealed_votes = 0;
             voter.total_correct_votes = 0;
@@ -107,14 +106,19 @@ pub mod truth_network {
         require!(Clock::get()?.unix_timestamp < commit_end_time, VotingError::VotingEnded);
         require!(commit_end_time < reveal_end_time, VotingError::InvalidTimeframe);
         
-        let total_transfer = QUESTION_INITIAL_FUND + reward;
-        
-        // Transfer funds from the asker to the vault.
+        // Require reward to be at least 0.05 SOL (in lamports)
+        const MIN_REWARD_LAMPORTS: u64 = 50_000_000; // 0.05 SOL
+        require!(
+            reward >= MIN_REWARD_LAMPORTS,
+            VotingError::RewardTooSmall
+        );
+
+        // Transfer reward from asker to vault
         invoke(
             &system_instruction::transfer(
                 &ctx.accounts.asker.key(),
                 &ctx.accounts.vault.key(),
-                total_transfer,
+                reward,
             ),
             &[
                 ctx.accounts.asker.to_account_info(),
@@ -130,7 +134,7 @@ pub mod truth_network {
         question.question_text = question_text;
         question.option_1 = "True".to_string();
         question.option_2 = "False".to_string();
-        question.reward = total_transfer;
+        // question.reward = total_transfer;
         question.commit_end_time = commit_end_time;
         question.reveal_end_time = reveal_end_time;
         question.rent_expiration = Clock::get()?.unix_timestamp + 86400;
@@ -158,30 +162,31 @@ pub mod truth_network {
     
             
 
-    pub fn update_reward(
-        ctx: Context<UpdateReward>,
-        new_reward: u64,
-    ) -> Result<()> {
-        let question = &mut ctx.accounts.question;
+    // pub fn update_reward(
+    //     ctx: Context<UpdateReward>,
+    //     new_reward: u64,
+    // ) -> Result<()> {
+    //     let question = &mut ctx.accounts.question;
     
-        // Ensure the question has not ended
-        require!(
-            Clock::get()?.unix_timestamp < question.commit_end_time,
-            VotingError::VotingEnded
-        );
+    //     // Ensure the question has not ended
+    //     require!(
+    //         Clock::get()?.unix_timestamp < question.commit_end_time,
+    //         VotingError::VotingEnded
+    //     );
     
-        // Use the total vault balance as the actual reward
-        let vault_balance = ctx.accounts.vault.lamports();
-        question.reward = vault_balance;
-
-        msg!("Vault Address: {}", ctx.accounts.vault.key());
-        msg!("Vault Balance (Total Reward): {}", vault_balance);
-        Ok(())
-    }        
-     
+    //     // Update the reward
+    //     question.reward += new_reward;
+    
+    //     msg!("Reward Updated: {}", new_reward);
+    //     Ok(())
+    // }              
 
     pub fn delete_expired_question(ctx: Context<DeleteExpiredQuestion>) -> Result<()> {
         let question = &ctx.accounts.question;
+        let vault_info = ctx.accounts.vault.to_account_info();
+        let rent = Rent::get()?;
+        let min_balance = rent.minimum_balance(vault_info.data_len());
+        let vault_balance = **vault_info.lamports.borrow();
     
         // Ensure the rent period has expired
         require!(
@@ -189,9 +194,9 @@ pub mod truth_network {
             VotingError::RentNotExpired
         );
     
-        // Prevent deletion if there is still a reward left
+        // ✅ Prevent deletion if there is still any reward left in the vault (besides rent exemption)
         require!(
-            question.reward == 0,
+            vault_balance <= min_balance,
             VotingError::RemainingRewardExists
         );
     
@@ -200,9 +205,8 @@ pub mod truth_network {
             ctx.accounts.asker.key()
         );
     
-        // Account will be automatically closed and rent refunded due to `close = asker`
         Ok(())
-    }
+    }    
     
     
     
@@ -370,9 +374,9 @@ pub mod truth_network {
         voter_record.selected_option = vote;
 
         // **Increase voter reputation by 1**
-        if let Some(voter) = voter_list.voters.iter_mut().find(|v| v.address == voter_pubkey) {
-            voter.reputation += 1;
-        }
+        // if let Some(voter) = voter_list.voters.iter_mut().find(|v| v.address == voter_pubkey) {
+        //     voter.reputation += 1;
+        // }
     
         msg!("Vote Revealed Successfully! Option {}", vote);
         Ok(())
@@ -389,7 +393,7 @@ pub mod truth_network {
     
         let is_tie = question.votes_option_1 == question.votes_option_2;
         let winning_option = if is_tie {
-            0 // 0 = tie
+            0
         } else if question.votes_option_1 > question.votes_option_2 {
             1
         } else {
@@ -405,16 +409,6 @@ pub mod truth_network {
             );
         }
     
-        let winning_votes = if is_tie {
-            total_votes
-        } else if winning_option == 1 {
-            question.votes_option_1
-        } else {
-            question.votes_option_2
-        };
-    
-        require!(winning_votes > 0, VotingError::NoEligibleVoters);
-    
         let vault_info = ctx.accounts.vault.to_account_info();
         let fee_receiver_info = ctx.accounts.fee_receiver.to_account_info();
         let voter_info = ctx.accounts.voter.to_account_info();
@@ -423,44 +417,79 @@ pub mod truth_network {
         let min_balance = rent.minimum_balance(vault_info.data_len());
         let vault_balance = **vault_info.lamports.borrow();
     
-        let mut fee = 0;
-    
+        // One-time snapshot and fee deduction
         if !question.reward_fee_taken {
-            fee = question.reward * 2 / 100;
-            question.reward = question.reward.saturating_sub(fee + min_balance);
+            let available_reward = vault_balance.saturating_sub(min_balance);
+            let fee = available_reward * 2 / 100;
+            let snapshot = available_reward.saturating_sub(fee);
+    
+            question.original_reward = available_reward;
+            question.snapshot_reward = snapshot;
             question.reward_fee_taken = true;
+    
+            question.snapshot_total_weight = voter_list
+                .voters
+                .iter()
+                .map(|v| v.reputation as u64)
+                .sum();
+    
+            question.total_distributed = 0;
+            question.claimed_voters_count = 0;
+    
+            require!(
+                vault_balance >= fee + min_balance,
+                VotingError::InsufficientFunds
+            );
+    
+            **vault_info.lamports.borrow_mut() -= fee;
+            **fee_receiver_info.lamports.borrow_mut() += fee;
+    
+            msg!(
+                "2% fee ({}) sent to fee receiver: {}",
+                fee,
+                fee_receiver_info.key()
+            );
         }
     
+        let total_snapshot_reward = question.snapshot_reward;
+        let total_weight = question.snapshot_total_weight;
+        require!(total_weight > 0, VotingError::NoEligibleVoters);
+    
+        let voter_index = voter_list
+            .voters
+            .iter()
+            .position(|v| v.address == voter_pubkey)
+            .ok_or(VotingError::NotJoined)?;
+    
+        let voter = &mut voter_list.voters[voter_index];
+        let voter_weight = voter.reputation as u64;
+    
+        // Calculate base share
+        let base_share = (total_snapshot_reward * voter_weight) / total_weight;
+        let global_remainder = total_snapshot_reward % total_weight;
+    
+        let mut voter_share = base_share;
+        if question.claimed_remainder_count < global_remainder {
+            voter_share += 1;
+            question.claimed_remainder_count += 1;
+        }
+    
+        if question.claimed_voters_count + 1 == total_weight {
+            // Last claimer gets the remainder
+            let remaining = total_snapshot_reward.saturating_sub(question.total_distributed);
+            voter_share = remaining;
+            msg!("Final claimer detected. Assigning remaining {} lamports", remaining);
+        }
+    
+        // Distribute reward
         require!(
-            vault_balance >= fee + min_balance,
+            question.total_distributed + voter_share <= total_snapshot_reward,
             VotingError::InsufficientFunds
         );
     
-        **vault_info.lamports.borrow_mut() -= fee;
-        **fee_receiver_info.lamports.borrow_mut() += fee;
-    
-        msg!(
-            "2% fee ({}) sent to fee receiver: {}",
-            fee,
-            fee_receiver_info.key()
-        );
-    
-        // Snapshot the total reward for fair distribution
-        let initial_reward = question.reward;
-        let mut voter_share = initial_reward / winning_votes;
-        let remainder = initial_reward % winning_votes;
-    
-        if remainder > 0 {
-            voter_share += 1; // Distribute remainder fairly
-        }
-    
+        question.total_distributed += voter_share;
+        question.claimed_voters_count += 1;
         voter_record.claimed = true;
-    
-        // Ensure enough lamports remain
-        require!(
-            vault_balance >= voter_share + min_balance,
-            VotingError::InsufficientFunds
-        );
     
         **vault_info.lamports.borrow_mut() -= voter_share;
         **voter_info.lamports.borrow_mut() += voter_share;
@@ -473,13 +502,17 @@ pub mod truth_network {
             voter_record.claim_tx_id[i] = 0;
         }
     
-        if let Some(voter) = voter_list.voters.iter_mut().find(|v| v.address == voter_pubkey) {
-            voter.total_earnings += voter_share;
-            voter.total_revealed_votes += 1;
-            if voter_record.selected_option == winning_option && !is_tie {
-                voter.total_correct_votes += 1;
-            }
+        // Update stats
+        voter.total_earnings += voter_share;
+        voter.total_revealed_votes += 1;
+        if voter_record.selected_option == winning_option && !is_tie {
+            voter.total_correct_votes += 1;
         }
+    
+        voter.reputation = calculate_reputation(
+            voter.total_revealed_votes,
+            voter.total_correct_votes,
+        );
     
         msg!(
             "Reward Claimed! {} lamports sent to voter: {}",
@@ -488,9 +521,34 @@ pub mod truth_network {
         );
     
         Ok(())
-    }
-                           
+    }                                         
         
+}
+
+fn calculate_reputation(revealed: u64, correct: u64) -> u8 {
+    let sum = revealed + correct;
+
+    match sum {
+        0 | 1 => 1,
+        2 => 2,
+        3 => 3,
+        4 => 4,
+        5 => 5,
+        6 => 6,
+        7..=9 => 7,
+        10..=12 => 8,
+        13..=17 => 9,
+        18..=25 => 10,
+        26..=34 => 11,
+        35..=46 => 12,
+        47..=62 => 13,
+        63..=87 => 14,
+        88..=118 => 15,
+        119..=163 => 16,
+        164..=224 => 17,
+        225..=308 => 18,
+        _ => 19,
+    }
 }
 
 #[account]
@@ -502,7 +560,6 @@ pub struct Question {
     pub question_text: String,
     pub option_1: String,
     pub option_2: String,
-    pub reward: u64,
     pub commit_end_time: i64,
     pub reveal_end_time: i64,
     pub rent_expiration: i64,
@@ -514,6 +571,12 @@ pub struct Question {
     pub winning_option: u8,
     pub winning_percent: f64,
     pub reward_fee_taken: bool,
+    pub snapshot_reward: u64,
+    pub original_reward: u64,
+    pub claimed_remainder_count: u64,
+    pub snapshot_total_weight: u64,
+    pub total_distributed: u64,
+    pub claimed_voters_count: u64,
     pub bump: u8,
 }
 
@@ -564,16 +627,13 @@ pub struct CreateQuestion<'info> {
 }
 
 
-#[derive(Accounts)]
-pub struct UpdateReward<'info> {
-    #[account(mut)]
-    pub question: Account<'info, Question>,
-    /// CHECK: This account is not required to sign; its authorization is managed by the caller.
-    pub updater: UncheckedAccount<'info>,
-    /// CHECK: Vault to check for actual balance. Authority checks should be enforced elsewhere.
-    #[account(mut)]
-    pub vault: UncheckedAccount<'info>,
-}
+// #[derive(Accounts)]
+// pub struct UpdateReward<'info> {
+//     #[account(mut)]
+//     pub question: Account<'info, Question>,
+//     /// CHECK: This account is not required to sign; its authorization is managed by the caller.
+//     pub updater: UncheckedAccount<'info>,
+// }
 
 
 #[derive(Accounts)]
@@ -586,11 +646,19 @@ pub struct DeleteExpiredQuestion<'info> {
     )]
     pub question: Account<'info, Question>,
 
+    #[account(
+        seeds = [b"vault", question.key().as_ref()],
+        bump
+    )]
+    /// CHECK: This is a PDA with no data except discriminator, verified via seeds and bump
+    pub vault: AccountInfo<'info>,
+
     #[account(mut)]
     pub asker: Signer<'info>,
 
     pub system_program: Program<'info, System>,
 }
+
 
 
 #[derive(Accounts)]
@@ -843,5 +911,7 @@ pub enum VotingError {
     RemainingRewardExists,
     #[msg("Question must be at least 10 characters long.")]
     QuestionTooShort,
+    #[msg("Reward must be at least 0.05 SOL.")]
+    RewardTooSmall
 }
 

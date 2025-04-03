@@ -7,7 +7,7 @@ import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import idl from "../idl.json";
 
-const PROGRAM_ID = new PublicKey("FU9yzzBojVdo9oX6nYmB7bE3upgfzSfznHuSCaY5ejmJ");
+const PROGRAM_ID = new PublicKey("5eSEdSRgVcv2rfnAw5iY6dTNUGSSFfUVkUSkN55rmezq");
 const connection = new web3.Connection(web3.clusterApiUrl("devnet"), "confirmed");
 
 const QuestionsList = ({ questions, fetchQuestions }) => {
@@ -108,11 +108,17 @@ const QuestionsList = ({ questions, fetchQuestions }) => {
                             winningPercentage >= 51;
                             const currentTime = new Date().getTime() / 1000;
 
-                            const userCanReveal =
-                                q?.commitEndTime < currentTime && // Commit phase is over
-                                q?.revealEndTime > currentTime && // Reveal phase is still active
-                                q.userVoterRecord?.committed === true && // User has committed a vote
-                                q.userVoterRecord?.revealed === false; // User has NOT revealed the vote
+                        const userCanReveal =
+                            q?.commitEndTime < currentTime && // Commit phase is over
+                            q?.revealEndTime > currentTime && // Reveal phase is still active
+                            q.userVoterRecord?.committed === true && // User has committed a vote
+                            q.userVoterRecord?.revealed === false; // User has NOT revealed the vote
+
+                        const displayRewardLamports = q.originalReward > 0 
+                            ? q.originalReward
+                            : q.reward * web3.LAMPORTS_PER_SOL;
+                        
+                        const displayReward = (displayRewardLamports / web3.LAMPORTS_PER_SOL).toFixed(4);
                         return (
                             <div 
                                 key={q.id} 
@@ -120,7 +126,8 @@ const QuestionsList = ({ questions, fetchQuestions }) => {
                                 onClick={() => navigate(`/question/${q.id}`)}
                             >
                                 <h3 className="text-lg font-semibold mb-2">{q.questionText}</h3>
-                                <p className="text-gray-700"><strong>Reward:</strong> {q.reward} SOL</p>
+                                <p className="text-gray-700"><strong>Reward:</strong> {displayReward} SOL</p>
+                                <p className="text-gray-700"><strong>Voters Committed:</strong> {q.committedVoters}</p>
                                 <p className="text-gray-700"><strong>Commit End Time:</strong> {new Date(q.commitEndTime * 1000).toLocaleString()}</p>
                                 <p className="text-gray-700"><strong>Reveal End Time:</strong> {new Date(q.revealEndTime * 1000).toLocaleString()}</p>
 
@@ -128,7 +135,10 @@ const QuestionsList = ({ questions, fetchQuestions }) => {
                                 {q.revealEnded ? (
                                     <>
                                         <p className="text-red-600 mt-2 font-semibold">Voting Period Ended</p>
-                                        <p className="text-gray-700"><strong>Winning Vote:</strong> {winningOption === 1 ? "Option 1" : "Option 2"}</p>
+                                        <p className="text-gray-700"><strong>Winning Vote:</strong> {winningOption === 1 ? "True" : "False"}</p>
+                                        <p className="text-sm text-gray-700">
+                                            <strong>Votes:</strong> {q.votesOption1} - {q.votesOption2}
+                                        </p>
                                         <p className="text-gray-700"><strong>Winning Percentage:</strong> {winningPercentage.toFixed(2)}%</p>
                                     </>
                                 ) : new Date().getTime() / 1000 < q.commitEndTime ? (
@@ -151,15 +161,9 @@ const QuestionsList = ({ questions, fetchQuestions }) => {
 
                                 {/* Claim Reward Button */}
                                 {isEligibleToClaim && (
-                                    <button 
-                                        onClick={(e) => {
-                                            e.stopPropagation(); // Prevent navigating when clicking the button
-                                            claimReward(q.id);
-                                        }}
-                                        className="mt-3 bg-green-500 text-white px-4 py-2 rounded w-full hover:bg-green-600 transition duration-300"
-                                    >
-                                        Claim Reward
-                                    </button>
+                                    <p className="mt-3 text-green-600 font-semibold text-center">
+                                        You can now claim your reward
+                                    </p>
                                 )}
 
                                 {/* Show "You can reveal your vote" if applicable */}
