@@ -6,7 +6,7 @@ import idl from "../idl.json";
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
-const PROGRAM_ID = new PublicKey("5eSEdSRgVcv2rfnAw5iY6dTNUGSSFfUVkUSkN55rmezq");
+const PROGRAM_ID = new PublicKey("HcSbVsjuJTV1J5DxEsQTrvRuGARZfPboRARLAQvBC52u");
 const connection = new web3.Connection(web3.clusterApiUrl("devnet"), "confirmed");
 
 // toast.configure();

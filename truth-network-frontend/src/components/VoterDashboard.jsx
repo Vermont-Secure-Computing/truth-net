@@ -5,7 +5,7 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 
-const PROGRAM_ID = new web3.PublicKey("5eSEdSRgVcv2rfnAw5iY6dTNUGSSFfUVkUSkN55rmezq");
+const PROGRAM_ID = new web3.PublicKey("HcSbVsjuJTV1J5DxEsQTrvRuGARZfPboRARLAQvBC52u");
 const connection = new web3.Connection(web3.clusterApiUrl("devnet"), "confirmed");
 
 const VoterDashboard = () => {
@@ -47,18 +47,32 @@ const VoterDashboard = () => {
                     questionPubkeys.map(async (pubkey) => {
                         try {
                             const question = await program.account.question.fetch(pubkey);
+                
+                            // Recompute vault PDA from question
+                            const [vaultPDA] = await web3.PublicKey.findProgramAddress(
+                                [Buffer.from("vault"), pubkey.toBuffer()],
+                                PROGRAM_ID
+                            );
+                
+                            const vaultAccountInfo = await connection.getAccountInfo(vaultPDA);
+                            const rentExemption = await connection.getMinimumBalanceForRentExemption(8);
+                            const vaultBalance = vaultAccountInfo?.lamports ?? 0;
+                            const rewardLamports = Math.max(vaultBalance - rentExemption, 0);
+                            const solReward = rewardLamports / web3.LAMPORTS_PER_SOL;
+                
                             return {
-                                idque:pubkey.toBase58(),
+                                idque: pubkey.toBase58(),
                                 ...question,
                                 committedVoters: question.committedVoters?.toNumber?.() || 0,
                                 originalReward: question.originalReward?.toNumber?.() || 0,
+                                reward: parseFloat(solReward.toFixed(4)),
                             };
                         } catch (error) {
                             console.error("Error fetching question:", pubkey.toBase58(), error);
                             return null;
                         }
                     })
-                );
+                );                
                 
                 setQuestions(questionsData.filter(q => q !== null));                               
             } catch (error) {
@@ -193,6 +207,7 @@ const VoterDashboard = () => {
                             : q.reward * web3.LAMPORTS_PER_SOL;
                         
                         const displayReward = (displayRewardLamports / web3.LAMPORTS_PER_SOL).toFixed(4);
+                        
                         return (
                             <div 
                                 key={index} 

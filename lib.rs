@@ -6,7 +6,7 @@ use anchor_lang::solana_program::rent::Rent;
 pub const FEE_RECEIVER_ADDRESS: &str = "7qfdvYGEKnM2zrMYATbwtAdzagRGQUUCXxU3hhgG3V2u";
 
 
-declare_id!("5eSEdSRgVcv2rfnAw5iY6dTNUGSSFfUVkUSkN55rmezq");
+declare_id!("HcSbVsjuJTV1J5DxEsQTrvRuGARZfPboRARLAQvBC52u");
 
 
 /// An empty account for the vault.
@@ -48,10 +48,11 @@ pub mod truth_network {
         let voter_list = &mut ctx.accounts.voter_list;
         let new_voter = Voter {
             address: *ctx.accounts.user.key,
-            reputation: 1, // Default reputation.
+            reputation: 0, // Default reputation.
             total_earnings: 0,
             total_revealed_votes: 0,
             total_correct_votes: 0,
+            selected_option: 255,
         };        
     
         require!(
@@ -69,7 +70,7 @@ pub mod truth_network {
     
         // Find and reset the voter's data if they exist
         if let Some(voter) = voter_list.voters.iter_mut().find(|v| v.address == user_pubkey) {
-            voter.reputation = 1;
+            voter.reputation = 0;
             voter.total_earnings = 0;
             voter.total_revealed_votes = 0;
             voter.total_correct_votes = 0;
@@ -143,6 +144,7 @@ pub mod truth_network {
         question.finalized = false;
         question.committed_voters = 0;
         question.question_key = question_key;
+        question.winning_option = 255;
         // For clarity, store the vault address in a dedicated field.
         question.vault_address = ctx.accounts.vault.key();
         
@@ -360,11 +362,20 @@ pub mod truth_network {
         // If no valid vote is found, return an error.
         let vote = valid_vote.ok_or(VotingError::InvalidReveal)?;
     
-        // Count the vote.
+        let reputation = voter_list
+            .voters
+            .iter()
+            .find(|v| v.address == voter_pubkey)
+            .map(|v| v.reputation as u64)
+            .unwrap_or(0);
+
+        let vote_weight = 1 + reputation;
+
+        // Count the vote with weighted value
         if vote == 1 {
-            question.votes_option_1 += 1;
+            question.votes_option_1 += vote_weight;
         } else {
-            question.votes_option_2 += 1;
+            question.votes_option_2 += vote_weight;
         }
     
         // Mark vote as revealed.
@@ -373,10 +384,15 @@ pub mod truth_network {
         // **Set the revealed vote in plaintext.**
         voter_record.selected_option = vote;
 
-        // **Increase voter reputation by 1**
-        // if let Some(voter) = voter_list.voters.iter_mut().find(|v| v.address == voter_pubkey) {
-        //     voter.reputation += 1;
-        // }
+        if let Some(voter) = voter_list.voters.iter_mut().find(|v| v.address == voter_pubkey) {
+            voter.total_revealed_votes += 1;
+            voter.selected_option = vote;
+            voter.reputation = calculate_reputation(
+                voter.total_revealed_votes,
+                voter.total_correct_votes,
+            );
+        }
+        
     
         msg!("Vote Revealed Successfully! Option {}", vote);
         Ok(())
@@ -391,14 +407,26 @@ pub mod truth_network {
         let total_votes = question.votes_option_1 + question.votes_option_2;
         require!(total_votes > 0, VotingError::NoEligibleVoters);
     
-        let is_tie = question.votes_option_1 == question.votes_option_2;
-        let winning_option = if is_tie {
-            0
-        } else if question.votes_option_1 > question.votes_option_2 {
-            1
-        } else {
-            2
-        };
+        // Lock in the winning option if not yet set (255 = unset)
+        if question.winning_option == 255 {
+            require!(
+                Clock::get()?.unix_timestamp > question.reveal_end_time,
+                VotingError::RevealPhaseNotOver
+            );
+    
+            if question.votes_option_1 == question.votes_option_2 {
+                question.winning_option = 0; // Tie
+            } else if question.votes_option_1 > question.votes_option_2 {
+                question.winning_option = 1;
+            } else {
+                question.winning_option = 2;
+            }
+    
+            msg!("Winning option locked at {}", question.winning_option);
+        }
+    
+        let winning_option = question.winning_option;
+        let is_tie = winning_option == 0;
     
         require!(!voter_record.claimed, VotingError::AlreadyClaimed);
     
@@ -417,7 +445,7 @@ pub mod truth_network {
         let min_balance = rent.minimum_balance(vault_info.data_len());
         let vault_balance = **vault_info.lamports.borrow();
     
-        // One-time snapshot and fee deduction
+        // One-time reward snapshot and fee deduction
         if !question.reward_fee_taken {
             let available_reward = vault_balance.saturating_sub(min_balance);
             let fee = available_reward * 2 / 100;
@@ -430,6 +458,7 @@ pub mod truth_network {
             question.snapshot_total_weight = voter_list
                 .voters
                 .iter()
+                .filter(|v| is_tie || v.selected_option == question.winning_option)
                 .map(|v| v.reputation as u64)
                 .sum();
     
@@ -475,17 +504,28 @@ pub mod truth_network {
         }
     
         if question.claimed_voters_count + 1 == total_weight {
-            // Last claimer gets the remainder
-            let remaining = total_snapshot_reward.saturating_sub(question.total_distributed);
+            // Last claimer gets all remaining lamports (snapshot_reward - distributed + any leftover in vault)
+            let current_vault_balance = **vault_info.lamports.borrow();
+            let rent = Rent::get()?.minimum_balance(vault_info.data_len());
+            let remaining = current_vault_balance.saturating_sub(rent);
+            
             voter_share = remaining;
-            msg!("Final claimer detected. Assigning remaining {} lamports", remaining);
-        }
+            msg!(
+                "Final claimer detected. Vault will retain only rent: {}. Assigning remaining {} lamports to voter.",
+                rent,
+                remaining
+            );
+        }        
     
         // Distribute reward
-        require!(
-            question.total_distributed + voter_share <= total_snapshot_reward,
-            VotingError::InsufficientFunds
-        );
+        let is_last_claimer = question.claimed_voters_count + 1 == total_weight;
+
+        if !is_last_claimer {
+            require!(
+                question.total_distributed + voter_share <= total_snapshot_reward,
+                VotingError::InsufficientFunds
+            );
+        }
     
         question.total_distributed += voter_share;
         question.claimed_voters_count += 1;
@@ -504,7 +544,6 @@ pub mod truth_network {
     
         // Update stats
         voter.total_earnings += voter_share;
-        voter.total_revealed_votes += 1;
         if voter_record.selected_option == winning_option && !is_tie {
             voter.total_correct_votes += 1;
         }
@@ -521,7 +560,8 @@ pub mod truth_network {
         );
     
         Ok(())
-    }                                         
+    }
+                                             
         
 }
 
@@ -763,6 +803,7 @@ pub struct Voter {
     pub total_earnings: u64,
     pub total_revealed_votes: u64,
     pub total_correct_votes: u64,
+    pub selected_option: u8,
 }
 
 
@@ -912,6 +953,8 @@ pub enum VotingError {
     #[msg("Question must be at least 10 characters long.")]
     QuestionTooShort,
     #[msg("Reward must be at least 0.05 SOL.")]
-    RewardTooSmall
+    RewardTooSmall,
+    #[msg("Reveal phase is not yet over.")]
+    RevealPhaseNotOver
 }
 
