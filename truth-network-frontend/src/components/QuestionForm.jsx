@@ -9,7 +9,7 @@ import "react-datepicker/dist/react-datepicker.css";
 import idl from "../idl.json"; // Import the IDL file
 
 const RENT_COST = 50_000_000;
-const PROGRAM_ID = new web3.PublicKey("5eSEdSRgVcv2rfnAw5iY6dTNUGSSFfUVkUSkN55rmezq");
+const PROGRAM_ID = new web3.PublicKey("HcSbVsjuJTV1J5DxEsQTrvRuGARZfPboRARLAQvBC52u");
 const connection = new Connection(clusterApiUrl("devnet"), "confirmed");
 
 const QuestionForm = ({ fetchQuestions }) => {

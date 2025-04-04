@@ -7,7 +7,7 @@ import "react-toastify/dist/ReactToastify.css";
 import idl from "../idl.json";
 import { keccak256 } from "js-sha3";
 
-const PROGRAM_ID = new PublicKey("5eSEdSRgVcv2rfnAw5iY6dTNUGSSFfUVkUSkN55rmezq");
+const PROGRAM_ID = new PublicKey("HcSbVsjuJTV1J5DxEsQTrvRuGARZfPboRARLAQvBC52u");
 const connection = new web3.Connection(web3.clusterApiUrl("devnet"), "confirmed");
 
 const CommitReveal = ({ question, onClose, refreshQuestions }) => {

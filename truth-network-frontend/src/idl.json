@@ -1,5 +1,5 @@
 {
-  "address": "5eSEdSRgVcv2rfnAw5iY6dTNUGSSFfUVkUSkN55rmezq",
+  "address": "HcSbVsjuJTV1J5DxEsQTrvRuGARZfPboRARLAQvBC52u",
   "metadata": {
     "name": "truth_network",
     "version": "0.1.0",
@@ -917,6 +917,11 @@
       "code": 6025,
       "name": "RewardTooSmall",
       "msg": "Reward must be at least 0.05 SOL."
+    },
+    {
+      "code": 6026,
+      "name": "RevealPhaseNotOver",
+      "msg": "Reveal phase is not yet over."
     }
   ],
   "types": [
@@ -1079,6 +1084,10 @@
           {
             "name": "total_correct_votes",
             "type": "u64"
+          },
+          {
+            "name": "selected_option",
+            "type": "u8"
           }
         ]
       }

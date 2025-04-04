@@ -9,7 +9,7 @@ import "react-toastify/dist/ReactToastify.css";
 import CommitReveal from "./CommitReveal";
 import idl from "../idl.json";
 
-const PROGRAM_ID = new PublicKey("5eSEdSRgVcv2rfnAw5iY6dTNUGSSFfUVkUSkN55rmezq");
+const PROGRAM_ID = new PublicKey("HcSbVsjuJTV1J5DxEsQTrvRuGARZfPboRARLAQvBC52u");
 const connection = new web3.Connection(web3.clusterApiUrl("devnet"), "confirmed");
 
 const QuestionDetail = () => {
@@ -68,6 +68,7 @@ const QuestionDetail = () => {
             const rewardLamports = Math.max(vaultBalance - rentExemption, 0);
             const solReward = (rewardLamports / web3.LAMPORTS_PER_SOL).toFixed(4);
             const revealEnded = account.revealEndTime.toNumber() <= Date.now() / 1000;
+            console.log("[QuestionDetail] Vault Balance:", vaultBalance, "Reward (SOL):", solReward);
 
             const newQuestion = {
                 id,
