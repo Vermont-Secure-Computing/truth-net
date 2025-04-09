@@ -1,5 +1,5 @@
 {
-  "address": "HcSbVsjuJTV1J5DxEsQTrvRuGARZfPboRARLAQvBC52u",
+  "address": "6rhAjrHzyQtqjGHDcUuHoSQAA9Roe9QAZMfHSLhR26wU",
   "metadata": {
     "name": "truth_network",
     "version": "0.1.0",
@@ -404,6 +404,7 @@
         },
         {
           "name": "vault",
+          "writable": true,
           "pda": {
             "seeds": [
               {
@@ -436,6 +437,84 @@
       "args": []
     },
     {
+      "name": "drain_unclaimed_reward",
+      "discriminator": [
+        185,
+        238,
+        4,
+        146,
+        102,
+        99,
+        214,
+        222
+      ],
+      "accounts": [
+        {
+          "name": "question",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  113,
+                  117,
+                  101,
+                  115,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "question.asker",
+                "account": "Question"
+              },
+              {
+                "kind": "account",
+                "path": "question.id",
+                "account": "Question"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "question"
+              }
+            ]
+          }
+        },
+        {
+          "name": "fee_receiver",
+          "writable": true,
+          "address": "7qfdvYGEKnM2zrMYATbwtAdzagRGQUUCXxU3hhgG3V2u"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "finalize_voting",
       "discriminator": [
         195,
@@ -451,6 +530,33 @@
         {
           "name": "question",
           "writable": true
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "question"
+              }
+            ]
+          }
+        },
+        {
+          "name": "fee_receiver",
+          "writable": true,
+          "address": "7qfdvYGEKnM2zrMYATbwtAdzagRGQUUCXxU3hhgG3V2u"
         }
       ],
       "args": [
@@ -661,6 +767,83 @@
       "args": []
     },
     {
+      "name": "reclaim_commit_or_loser_rent",
+      "discriminator": [
+        218,
+        246,
+        190,
+        77,
+        197,
+        21,
+        178,
+        159
+      ],
+      "accounts": [
+        {
+          "name": "voter_record",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  111,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "voter"
+              },
+              {
+                "kind": "account",
+                "path": "question"
+              }
+            ]
+          }
+        },
+        {
+          "name": "voter",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "question",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  113,
+                  117,
+                  101,
+                  115,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "question.asker",
+                "account": "Question"
+              },
+              {
+                "kind": "account",
+                "path": "question.id",
+                "account": "Question"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "reveal_vote",
       "discriminator": [
         100,
@@ -835,8 +1018,8 @@
     },
     {
       "code": 6009,
-      "name": "RentNotExpired",
-      "msg": "Rent period has not expired yet."
+      "name": "RentNotExpiredOrVotesExist",
+      "msg": "Rent period has not expired or votes have been committed."
     },
     {
       "code": 6010,
@@ -922,6 +1105,26 @@
       "code": 6026,
       "name": "RevealPhaseNotOver",
       "msg": "Reveal phase is not yet over."
+    },
+    {
+      "code": 6027,
+      "name": "CannotDrainReward",
+      "msg": "Cannot drain: commits or reveals exist or phases not ended."
+    },
+    {
+      "code": 6028,
+      "name": "CannotDeleteQuestion",
+      "msg": "Cannot delete: question still has active or unclaimed participation."
+    },
+    {
+      "code": 6029,
+      "name": "RentNotExpired",
+      "msg": "Rent has not yet expired."
+    },
+    {
+      "code": 6030,
+      "name": "AlreadyEligibleOrWinner",
+      "msg": "You were a winner or already eligible for reward."
     }
   ],
   "types": [
@@ -1024,6 +1227,18 @@
           },
           {
             "name": "claimed_voters_count",
+            "type": "u64"
+          },
+          {
+            "name": "claimed_weight",
+            "type": "u64"
+          },
+          {
+            "name": "voter_records_count",
+            "type": "u64"
+          },
+          {
+            "name": "voter_records_closed",
             "type": "u64"
           },
           {

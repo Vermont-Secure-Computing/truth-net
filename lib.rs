@@ -6,7 +6,7 @@ use anchor_lang::solana_program::rent::Rent;
 pub const FEE_RECEIVER_ADDRESS: &str = "7qfdvYGEKnM2zrMYATbwtAdzagRGQUUCXxU3hhgG3V2u";
 
 
-declare_id!("HcSbVsjuJTV1J5DxEsQTrvRuGARZfPboRARLAQvBC52u");
+declare_id!("6rhAjrHzyQtqjGHDcUuHoSQAA9Roe9QAZMfHSLhR26wU");
 
 
 /// An empty account for the vault.
@@ -138,7 +138,7 @@ pub mod truth_network {
         // question.reward = total_transfer;
         question.commit_end_time = commit_end_time;
         question.reveal_end_time = reveal_end_time;
-        question.rent_expiration = Clock::get()?.unix_timestamp + 86400;
+        question.rent_expiration = Clock::get()?.unix_timestamp; //+ 86400;
         question.votes_option_1 = 0;
         question.votes_option_2 = 0;
         question.finalized = false;
@@ -147,6 +147,7 @@ pub mod truth_network {
         question.winning_option = 255;
         // For clarity, store the vault address in a dedicated field.
         question.vault_address = ctx.accounts.vault.key();
+        question.claimed_weight = 0;
         
         // Derive the bump for the question PDA.
         let (_derived_pubkey, bump) = Pubkey::find_program_address(
@@ -190,13 +191,29 @@ pub mod truth_network {
         let min_balance = rent.minimum_balance(vault_info.data_len());
         let vault_balance = **vault_info.lamports.borrow();
     
-        // Ensure the rent period has expired
+        let now = Clock::get()?.unix_timestamp;
+
+        // Rent must have expired
         require!(
-            Clock::get()?.unix_timestamp >= question.rent_expiration,
+            now >= question.rent_expiration,
             VotingError::RentNotExpired
         );
+
+        // Case 1: No one committed and commit phase is over
+        let no_one_committed = question.committed_voters == 0 && now >= question.commit_end_time;
+
+        // Case 2: Reveal is over, but no one revealed or claimed
+        let reveal_over = now >= question.reveal_end_time;
+        let no_votes_revealed = question.votes_option_1 == 0 && question.votes_option_2 == 0;
+        let all_rewards_claimed = question.total_distributed == question.original_reward;
+        let all_rent_reclaimed = question.voter_records_closed == question.voter_records_count;
+
+        let can_delete = no_one_committed || (reveal_over && no_votes_revealed) || (reveal_over && all_rewards_claimed && all_rent_reclaimed);
+
+
+        require!(can_delete, VotingError::CannotDeleteQuestion);       
     
-        // ✅ Prevent deletion if there is still any reward left in the vault (besides rent exemption)
+        // Prevent deletion if there is still any reward left in the vault (besides rent exemption)
         require!(
             vault_balance <= min_balance,
             VotingError::RemainingRewardExists
@@ -223,8 +240,26 @@ pub mod truth_network {
             VotingError::VotingStillActive
         );
         require!(!question.finalized, VotingError::AlreadyFinalized);
+
+        if question.committed_voters == 0 {
+            let vault = &ctx.accounts.vault;
+            let fee_receiver = &ctx.accounts.fee_receiver;
+    
+            let vault_balance = vault.lamports();
+    
+            **vault.try_borrow_mut_lamports()? -= vault_balance;
+            **fee_receiver.try_borrow_mut_lamports()? += vault_balance;
+    
+            question.finalized = true;
+    
+            msg!(
+                "No voters committed. {} lamports sent to fee receiver.",
+                vault_balance
+            );
+    
+            return Ok(());
+        }
         
-        question.finalized = true;
         
         let total_votes = question.votes_option_1 + question.votes_option_2;
         
@@ -260,6 +295,7 @@ pub mod truth_network {
         // Store winning_option and winning_percent in the Question struct
         question.winning_option = winning_option;
         question.winning_percent = winning_percent;
+        question.finalized = true;
     
         
         msg!(
@@ -325,6 +361,7 @@ pub mod truth_network {
     
         // Increment the committed voters count.
         question.committed_voters += 1;
+        question.voter_records_count += 1;
     
         msg!(
             "Vote committed with hash: {:?}. Total committed voters: {}",
@@ -407,7 +444,6 @@ pub mod truth_network {
         let total_votes = question.votes_option_1 + question.votes_option_2;
         require!(total_votes > 0, VotingError::NoEligibleVoters);
     
-        // Lock in the winning option if not yet set (255 = unset)
         if question.winning_option == 255 {
             require!(
                 Clock::get()?.unix_timestamp > question.reveal_end_time,
@@ -415,7 +451,7 @@ pub mod truth_network {
             );
     
             if question.votes_option_1 == question.votes_option_2 {
-                question.winning_option = 0; // Tie
+                question.winning_option = 0;
             } else if question.votes_option_1 > question.votes_option_2 {
                 question.winning_option = 1;
             } else {
@@ -451,19 +487,48 @@ pub mod truth_network {
             let fee = available_reward * 2 / 100;
             let snapshot = available_reward.saturating_sub(fee);
     
-            question.original_reward = available_reward;
-            question.snapshot_reward = snapshot;
-            question.reward_fee_taken = true;
+            let any_revealed = voter_list.voters.iter().any(|v| v.total_revealed_votes > 0);
+
+            if !any_revealed {
+                // No one revealed: send entire reward to fee receiver
+                require!(
+                    vault_balance >= available_reward,
+                    VotingError::InsufficientFunds
+                );
     
-            question.snapshot_total_weight = voter_list
+                **vault_info.lamports.borrow_mut() -= available_reward;
+                **fee_receiver_info.lamports.borrow_mut() += available_reward;
+    
+                question.reward_fee_taken = true;
+                question.original_reward = available_reward;
+                question.snapshot_reward = 0;
+                question.snapshot_total_weight = 0;
+                question.claimed_voters_count = 0;
+                question.claimed_weight = 0;
+    
+                msg!(
+                    "No voters revealed. {} lamports sent to fee receiver: {}",
+                    available_reward,
+                    fee_receiver_info.key()
+                );
+    
+                return Err(VotingError::NoEligibleVoters.into());
+            }
+    
+            let eligible_weight: u64 = voter_list
                 .voters
                 .iter()
                 .filter(|v| is_tie || v.selected_option == question.winning_option)
                 .map(|v| v.reputation as u64)
                 .sum();
     
+            question.original_reward = available_reward;
+            question.snapshot_reward = snapshot;
+            question.snapshot_total_weight = eligible_weight;
             question.total_distributed = 0;
             question.claimed_voters_count = 0;
+            question.claimed_weight = 0;
+            question.reward_fee_taken = true;
     
             require!(
                 vault_balance >= fee + min_balance,
@@ -493,7 +558,6 @@ pub mod truth_network {
         let voter = &mut voter_list.voters[voter_index];
         let voter_weight = voter.reputation as u64;
     
-        // Calculate base share
         let base_share = (total_snapshot_reward * voter_weight) / total_weight;
         let global_remainder = total_snapshot_reward % total_weight;
     
@@ -503,23 +567,21 @@ pub mod truth_network {
             question.claimed_remainder_count += 1;
         }
     
-        if question.claimed_voters_count + 1 == total_weight {
-            // Last claimer gets all remaining lamports (snapshot_reward - distributed + any leftover in vault)
+        let is_last_claimer = question.claimed_weight + voter_weight == total_weight;
+        if is_last_claimer {
             let current_vault_balance = **vault_info.lamports.borrow();
             let rent = Rent::get()?.minimum_balance(vault_info.data_len());
             let remaining = current_vault_balance.saturating_sub(rent);
-            
+    
             voter_share = remaining;
+            
             msg!(
                 "Final claimer detected. Vault will retain only rent: {}. Assigning remaining {} lamports to voter.",
                 rent,
                 remaining
             );
-        }        
+        }
     
-        // Distribute reward
-        let is_last_claimer = question.claimed_voters_count + 1 == total_weight;
-
         if !is_last_claimer {
             require!(
                 question.total_distributed + voter_share <= total_snapshot_reward,
@@ -527,6 +589,7 @@ pub mod truth_network {
             );
         }
     
+        question.claimed_weight += voter_weight;
         question.total_distributed += voter_share;
         question.claimed_voters_count += 1;
         voter_record.claimed = true;
@@ -534,7 +597,6 @@ pub mod truth_network {
         **vault_info.lamports.borrow_mut() -= voter_share;
         **voter_info.lamports.borrow_mut() += voter_share;
     
-        // Store tx_id
         let tx_id_bytes = tx_id.as_bytes();
         let len = tx_id_bytes.len().min(64);
         voter_record.claim_tx_id[..len].copy_from_slice(&tx_id_bytes[..len]);
@@ -542,7 +604,6 @@ pub mod truth_network {
             voter_record.claim_tx_id[i] = 0;
         }
     
-        // Update stats
         voter.total_earnings += voter_share;
         if voter_record.selected_option == winning_option && !is_tie {
             voter.total_correct_votes += 1;
@@ -552,6 +613,8 @@ pub mod truth_network {
             voter.total_revealed_votes,
             voter.total_correct_votes,
         );
+
+        question.voter_records_closed += 1;
     
         msg!(
             "Reward Claimed! {} lamports sent to voter: {}",
@@ -561,7 +624,77 @@ pub mod truth_network {
     
         Ok(())
     }
-                                             
+
+    pub fn drain_unclaimed_reward(ctx: Context<DrainUnclaimedReward>) -> Result<()> {
+        let question = &ctx.accounts.question;
+        let vault = &ctx.accounts.vault;
+        let fee_receiver = &ctx.accounts.fee_receiver;
+    
+        let now = Clock::get()?.unix_timestamp;
+    
+        // Allow draining if commit phase ended and no commits
+        let can_drain_due_to_no_commit = now >= question.commit_end_time && question.committed_voters == 0;
+    
+        // Or if reveal phase ended and no one revealed
+        let no_votes_revealed = question.votes_option_1 == 0 && question.votes_option_2 == 0;
+        let can_drain_due_to_no_reveal = now >= question.reveal_end_time && no_votes_revealed;
+    
+        require!(
+            can_drain_due_to_no_commit || can_drain_due_to_no_reveal,
+            VotingError::CannotDrainReward
+        );
+    
+        let rent = Rent::get()?.minimum_balance(vault.to_account_info().data_len());
+        let vault_balance = **vault.to_account_info().lamports.borrow();
+        let transferable = vault_balance.saturating_sub(rent);
+        require!(transferable > 0, VotingError::InsufficientFunds);
+    
+        **vault.to_account_info().try_borrow_mut_lamports()? -= transferable;
+        **fee_receiver.to_account_info().try_borrow_mut_lamports()? += transferable;
+    
+        msg!(
+            "Unclaimed reward of {} lamports sent to fee receiver: {}",
+            transferable,
+            fee_receiver.key()
+        );
+    
+        Ok(())
+    }
+
+    pub fn reclaim_commit_or_loser_rent(ctx: Context<ReclaimCommitOrLoserRent>) -> Result<()> {
+        let question = &mut ctx.accounts.question;
+        let voter_record = &ctx.accounts.voter_record;
+
+        let now = Clock::get()?.unix_timestamp;
+
+        // Must be after reveal phase
+        require!(now >= question.reveal_end_time, VotingError::RevealPhaseNotOver);
+
+        // Must not have claimed
+        require!(!voter_record.claimed, VotingError::AlreadyClaimed);
+
+        let winning_option = question.winning_option;
+        let selected_option = voter_record.selected_option;
+        let revealed = voter_record.revealed;
+
+        // Either: not revealed, or revealed but voted incorrectly or tie
+        let can_reclaim = 
+            !revealed ||
+            winning_option == 0 || // tie case
+            selected_option != winning_option;
+
+        require!(can_reclaim, VotingError::AlreadyEligibleOrWinner);
+
+        question.voter_records_closed += 1;
+
+        msg!(
+            "Voter {} reclaiming rent due to unrevealed or incorrect vote.",
+            ctx.accounts.voter.key()
+        );
+
+        Ok(())
+    }
+                                           
         
 }
 
@@ -617,6 +750,9 @@ pub struct Question {
     pub snapshot_total_weight: u64,
     pub total_distributed: u64,
     pub claimed_voters_count: u64,
+    pub claimed_weight: u64,
+    pub voter_records_count: u64,
+    pub voter_records_closed: u64,
     pub bump: u8,
 }
 
@@ -666,6 +802,30 @@ pub struct CreateQuestion<'info> {
     pub system_program: Program<'info, System>,
 }
 
+#[derive(Accounts)]
+pub struct DrainUnclaimedReward<'info> {
+    #[account(
+        mut,
+        seeds = [b"question", question.asker.as_ref(), &question.id.to_le_bytes()],
+        bump = question.bump
+    )]
+    pub question: Account<'info, Question>,
+
+    #[account(
+        mut,
+        seeds = [b"vault", question.key().as_ref()],
+        bump
+    )]
+    pub vault: Account<'info, Vault>,
+
+    /// CHECK: Constant public key
+    #[account(mut, address = FEE_RECEIVER_ADDRESS.parse::<Pubkey>().unwrap())]
+    pub fee_receiver: AccountInfo<'info>,
+
+    pub system_program: Program<'info, System>,
+}
+
+
 
 // #[derive(Accounts)]
 // pub struct UpdateReward<'info> {
@@ -687,11 +847,13 @@ pub struct DeleteExpiredQuestion<'info> {
     pub question: Account<'info, Question>,
 
     #[account(
+        mut,
         seeds = [b"vault", question.key().as_ref()],
-        bump
+        bump,
+        close = asker
     )]
     /// CHECK: This is a PDA with no data except discriminator, verified via seeds and bump
-    pub vault: AccountInfo<'info>,
+    pub vault: Account<'info, Vault>,
 
     #[account(mut)]
     pub asker: Signer<'info>,
@@ -864,13 +1026,26 @@ pub struct RevealVote<'info> {
 pub struct FinalizeVoting<'info> {
     #[account(mut)]
     pub question: Account<'info, Question>,
+
+    /// CHECK: vault PDA holding reward, derived from question
+    #[account(
+        mut,
+        seeds = [b"vault", question.key().as_ref()],
+        bump
+    )]
+    pub vault: AccountInfo<'info>,
+
+    /// CHECK: hardcoded fee receiver
+    #[account(mut, address = FEE_RECEIVER_ADDRESS.parse::<Pubkey>().unwrap())]
+    pub fee_receiver: AccountInfo<'info>,
 }
+
 
 #[derive(Accounts)]
 pub struct ClaimReward<'info> {
     #[account(mut)]
     pub voter: Signer<'info>,
-    #[account(mut, has_one = voter)]
+    #[account(mut, has_one = voter, close = voter)]
     pub voter_record: Account<'info, VoterRecord>,
     #[account(
         mut,
@@ -900,6 +1075,28 @@ pub struct HelloWorld<'info> {
     pub user: Signer<'info>,
 }
 
+#[derive(Accounts)]
+pub struct ReclaimCommitOrLoserRent<'info> {
+    #[account(
+        mut,
+        seeds = [b"vote", voter.key().as_ref(), question.key().as_ref()],
+        bump,
+        close = voter
+    )]
+    pub voter_record: Account<'info, VoterRecord>,
+
+    #[account(mut)]
+    pub voter: Signer<'info>,
+
+    #[account(
+        mut,
+        seeds = [b"question", question.asker.as_ref(), &question.id.to_le_bytes()],
+        bump = question.bump
+    )]
+    pub question: Account<'info, Question>,
+}
+
+
 #[error_code]
 pub enum VotingError {
     #[msg("Voting period has ended.")]
@@ -920,8 +1117,8 @@ pub enum VotingError {
     InvalidReveal,
     #[msg("You have already leaved the network.")]
     NotJoined,
-    #[msg("Rent period has not expired yet.")]
-    RentNotExpired,
+    #[msg("Rent period has not expired or votes have been committed.")]
+    RentNotExpiredOrVotesExist,
     #[msg("Invalid timeframe.")]
     InvalidTimeframe,
     #[msg("Commit phase ended.")]
@@ -955,6 +1152,14 @@ pub enum VotingError {
     #[msg("Reward must be at least 0.05 SOL.")]
     RewardTooSmall,
     #[msg("Reveal phase is not yet over.")]
-    RevealPhaseNotOver
+    RevealPhaseNotOver,
+    #[msg("Cannot drain: commits or reveals exist or phases not ended.")]
+    CannotDrainReward,
+    #[msg("Cannot delete: question still has active or unclaimed participation.")]
+    CannotDeleteQuestion,
+    #[msg("Rent has not yet expired.")]
+    RentNotExpired,
+    #[msg("You were a winner or already eligible for reward.")]
+    AlreadyEligibleOrWinner,
 }
 

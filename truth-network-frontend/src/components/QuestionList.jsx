@@ -6,8 +6,8 @@ import { Program, AnchorProvider, web3 } from "@coral-xyz/anchor";
 import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import idl from "../idl.json";
+import { PROGRAM_ID } from "../constant";
 
-const PROGRAM_ID = new PublicKey("HcSbVsjuJTV1J5DxEsQTrvRuGARZfPboRARLAQvBC52u");
 const connection = new web3.Connection(web3.clusterApiUrl("devnet"), "confirmed");
 
 const QuestionsList = ({ questions, fetchQuestions }) => {
@@ -28,7 +28,7 @@ const QuestionsList = ({ questions, fetchQuestions }) => {
 
     useEffect(() => {
         fetchQuestions();
-    }, [publicKey]);
+    }, [publicKey, location]);
     
 
     const claimReward = async (questionId) => {

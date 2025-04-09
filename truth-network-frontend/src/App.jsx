@@ -14,8 +14,8 @@ import JoinNetwork from "./components/JoinNetwork";
 import VoterDashboard from "./components/VoterDashboard";
 import VotersList from "./components/VotersList";
 import idl from "./idl.json";
+import { PROGRAM_ID } from "./constant";
 
-const PROGRAM_ID = new web3.PublicKey("HcSbVsjuJTV1J5DxEsQTrvRuGARZfPboRARLAQvBC52u");
 const connection = new web3.Connection(web3.clusterApiUrl("devnet"), "confirmed");
 
 const App = () => {
