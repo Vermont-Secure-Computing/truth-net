@@ -7,9 +7,8 @@ import "react-toastify/dist/ReactToastify.css"; // Import styles
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import idl from "../idl.json"; // Import the IDL file
+import { PROGRAM_ID } from "../constant";
 
-const RENT_COST = 50_000_000;
-const PROGRAM_ID = new web3.PublicKey("HcSbVsjuJTV1J5DxEsQTrvRuGARZfPboRARLAQvBC52u");
 const connection = new Connection(clusterApiUrl("devnet"), "confirmed");
 
 const QuestionForm = ({ fetchQuestions }) => {
@@ -84,7 +83,6 @@ const QuestionForm = ({ fetchQuestions }) => {
         PROGRAM_ID
       );
 
-      const totalTransferLamports = Number(RENT_COST) + Number(rewardLamports.toString());
 
       const tx = await program.methods
         .createQuestion(questionText, rewardLamports, commitEndTimeTimestamp, revealEndTimeTimestamp)

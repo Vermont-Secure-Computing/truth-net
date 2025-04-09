@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
-import idl from "../idl.json";
 import { Program, AnchorProvider, web3 } from "@coral-xyz/anchor";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
+import idl from "../idl.json";
+import { PROGRAM_ID } from "../constant";
 
-const PROGRAM_ID = new web3.PublicKey("HcSbVsjuJTV1J5DxEsQTrvRuGARZfPboRARLAQvBC52u");
 const connection = new web3.Connection(web3.clusterApiUrl("devnet"), "confirmed");
 
 const VoterDashboard = () => {
@@ -162,6 +162,7 @@ const VoterDashboard = () => {
             toast.error(`Error claiming reward: ${error.message}`, { position: "top-center", autoClose: 5000 });
         }
     };
+    
 
     return (
         <div className="container mx-auto px-6 py-6">

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { PublicKey } from "@solana/web3.js";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { Program, AnchorProvider, web3 } from "@coral-xyz/anchor";
@@ -8,8 +8,8 @@ import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import CommitReveal from "./CommitReveal";
 import idl from "../idl.json";
+import { FEE_RECEIVER, PROGRAM_ID } from "../constant";
 
-const PROGRAM_ID = new PublicKey("HcSbVsjuJTV1J5DxEsQTrvRuGARZfPboRARLAQvBC52u");
 const connection = new web3.Connection(web3.clusterApiUrl("devnet"), "confirmed");
 
 const QuestionDetail = () => {
@@ -23,10 +23,18 @@ const QuestionDetail = () => {
     const [isEligibleToClaim, setIsEligibleToClaim] = useState(false);
     const [claiming, setClaiming] = useState(false);
     const [isMember, setIsMember] = useState(false);
+    const [deleting, setDeleting] = useState(false);
+    const [draining, setDraining] = useState(false);
+    const [hasDrained, setHasDrained] = useState(false);
+    const [hasReclaimed, setHasReclaimed] = useState(false);
+    const [reclaiming, setReclaiming] = useState(false);
+    
 
     const wallet = { publicKey, signTransaction, signAllTransactions };
     const provider = new AnchorProvider(connection, wallet, { preflightCommitment: "processed" });
     const program = new Program(idl, provider);
+    const navigate = useNavigate();
+    const now = Math.floor(Date.now() / 1000);
 
     const checkMembership = async () => {
         try {
@@ -68,7 +76,37 @@ const QuestionDetail = () => {
             const rewardLamports = Math.max(vaultBalance - rentExemption, 0);
             const solReward = (rewardLamports / web3.LAMPORTS_PER_SOL).toFixed(4);
             const revealEnded = account.revealEndTime.toNumber() <= Date.now() / 1000;
-            console.log("[QuestionDetail] Vault Balance:", vaultBalance, "Reward (SOL):", solReward);
+            const noOneCommitted = account.committedVoters.toNumber() === 0;
+            const commitPhaseOver = account.commitEndTime.toNumber() <= now;
+            
+            const noOneRevealed =
+                account.votesOption1.toNumber() === 0 &&
+                account.votesOption2.toNumber() === 0;
+            const revealPhaseOver = account.revealEndTime.toNumber() <= now;
+
+            const canDrainReward =
+                vaultBalance > rentExemption &&
+                (
+                    (commitPhaseOver && noOneCommitted) ||
+                    (revealPhaseOver && noOneRevealed)
+                );
+
+            const vaultOnlyHasRent = (vaultBalance - rentExemption) < 1000;
+
+            const rentExpired = account.rentExpiration.toNumber() <= now;
+
+            console.log("hasDrained?", hasDrained);
+
+            console.log({
+                canDrainReward,
+                vaultBalance,
+                rentExemption,
+                rewardLamports,
+                noOneCommitted,
+                noOneRevealed,
+                commitPhaseOver,
+                revealPhaseOver
+            });
 
             const newQuestion = {
                 id,
@@ -82,8 +120,16 @@ const QuestionDetail = () => {
                 option1: account.option1,
                 option2: account.option2,
                 originalReward: account.originalReward?.toNumber?.() || 0,
+                totalDistributed: account.totalDistributed?.toNumber?.() || 0,
                 revealEnded,
                 vaultAddress: account.vaultAddress.toString(),
+                asker: account.asker.toString(),
+                idNumber: account.id.toNumber(),
+                canDrainReward,
+                vaultOnlyHasRent,
+                rentExpired,
+                voterRecordsCount: account.voterRecordsCount?.toNumber?.() || 0,
+                voterRecordsClosed: account.voterRecordsClosed?.toNumber?.() || 0,
             };
 
             setQuestion(newQuestion);
@@ -139,7 +185,13 @@ const QuestionDetail = () => {
 
             setIsEligibleToClaim(eligibleToClaim);
         } catch (error) {
-            console.log("No voter record found.");
+            if (error.message.includes("Account does not exist")) {
+                console.log("Voter record was closed. Marking as reclaimed.");
+                setUserVoterRecord(null);
+                setHasReclaimed(true); // ✅ voter record gone = reclaimed
+            } else {
+                console.log("Error loading voter record:", error);
+            }
         }
     };
 
@@ -159,7 +211,7 @@ const QuestionDetail = () => {
                 [Buffer.from("vote"), publicKey.toBuffer(), questionPublicKey.toBuffer()],
                 PROGRAM_ID
             );
-
+    
             const [voterListPDA] = web3.PublicKey.findProgramAddressSync(
                 [Buffer.from("voter_list")],
                 PROGRAM_ID
@@ -171,7 +223,7 @@ const QuestionDetail = () => {
             );
     
             const txSig = web3.Keypair.generate().publicKey.toBase58();
-
+    
             const tx = await program.methods
                 .claimReward(txSig)
                 .accounts({
@@ -192,10 +244,18 @@ const QuestionDetail = () => {
                     window.open(`https://explorer.solana.com/tx/${tx}?cluster=devnet`, "_blank"),
             });
     
-            // Persist tx ID to localStorage so we can use it even on reload
+            // Manually update state to avoid waiting for fetch
+            setUserVoterRecord((prev) => ({
+                ...prev,
+                claimed: true,
+            }));
+            setIsEligibleToClaim(false);
+    
+            // Persist tx ID
             localStorage.setItem(`claim_tx_${id}_${publicKey.toString()}`, tx);
     
-            fetchQuestion(); // Refresh UI
+            // Optionally: refresh everything
+            fetchQuestion();
         } catch (error) {
             toast.error(`Error claiming reward: ${error.message}`, {
                 position: "top-center",
@@ -206,6 +266,149 @@ const QuestionDetail = () => {
         }
     };
     
+
+    const handleDeleteQuestion = async () => {
+        try {
+            if (!publicKey) {
+                toast.warning("Connect wallet first.");
+                return;
+            }
+    
+            setDeleting(true);
+    
+            const questionPublicKey = new PublicKey(id);
+            const [vaultPDA] = await PublicKey.findProgramAddress(
+                [Buffer.from("vault"), questionPublicKey.toBuffer()],
+                PROGRAM_ID
+            );
+            const questionIdNumber = question.idNumber;
+            const questionIdBuffer = Buffer.alloc(8);
+            questionIdBuffer.writeBigUInt64LE(BigInt(questionIdNumber));
+            const [questionPDA] = await PublicKey.findProgramAddress(
+                [Buffer.from("question"), publicKey.toBuffer(), questionIdBuffer],
+                PROGRAM_ID
+            );
+    
+            const tx = await program.methods
+                .deleteExpiredQuestion()
+                .accounts({
+                    question: questionPDA,
+                    vault: vaultPDA,
+                    asker: publicKey,
+                    systemProgram: web3.SystemProgram.programId,
+                })
+                .rpc();
+    
+            toast.success(`Question deleted! Tx: ${tx.slice(0, 6)}...${tx.slice(-6)}`, {
+                onClick: () =>
+                    window.open(`https://explorer.solana.com/tx/${tx}?cluster=devnet`, "_blank"),
+            });
+    
+            // Redirect after a short delay
+            setTimeout(() => {
+                navigate("/");
+            }, 2000);
+        } catch (error) {
+            console.error("Delete failed:", error);
+            toast.error(`Delete failed: ${error.message}`);
+        } finally {
+            setDeleting(false);
+        }
+    };
+    
+    const handleDrainUnclaimedReward = async () => {
+        try {
+            setDraining(true);
+            const questionPublicKey = new PublicKey(id);
+            const questionIdBuffer = Buffer.alloc(8);
+            questionIdBuffer.writeBigUInt64LE(BigInt(question.idNumber));
+    
+            const [questionPDA] = await PublicKey.findProgramAddress(
+                [Buffer.from("question"), new PublicKey(question.asker).toBuffer(), questionIdBuffer],
+                PROGRAM_ID
+            );
+    
+            const [vaultPDA] = await PublicKey.findProgramAddress(
+                [Buffer.from("vault"), questionPublicKey.toBuffer()],
+                PROGRAM_ID
+            );
+    
+            const tx = await program.methods
+                .drainUnclaimedReward()
+                .accounts({
+                    question: questionPDA,
+                    vault: vaultPDA,
+                    feeReceiver: FEE_RECEIVER,
+                    systemProgram: web3.SystemProgram.programId,
+                })
+                .rpc();
+    
+            toast.success(`Reward drained! Tx: ${tx.slice(0, 6)}...${tx.slice(-6)}`, {
+                onClick: () => window.open(`https://explorer.solana.com/tx/${tx}?cluster=devnet`, "_blank"),
+            });
+            setHasDrained(true);
+            fetchQuestion();
+        } catch (error) {
+            console.error("Drain failed:", error);
+            toast.error(`Drain failed: ${error.message}`);
+        } finally {
+            setDraining(false);
+        }
+    };
+    
+    const handleReclaimRent = async () => {
+        try {
+            if (!publicKey) {
+                toast.warn("Please connect your wallet.");
+                return;
+            }
+    
+            setReclaiming(true);
+    
+            const questionPublicKey = new PublicKey(id);
+            const [voterRecordPDA] = await PublicKey.findProgramAddress(
+                [Buffer.from("vote"), publicKey.toBuffer(), questionPublicKey.toBuffer()],
+                PROGRAM_ID
+            );
+    
+            const questionIdBuffer = Buffer.alloc(8);
+            questionIdBuffer.writeBigUInt64LE(BigInt(question.idNumber));
+            const [questionPDA] = await PublicKey.findProgramAddress(
+                [Buffer.from("question"), new PublicKey(question.asker).toBuffer(), questionIdBuffer],
+                PROGRAM_ID
+            );
+    
+            const tx = await program.methods
+                .reclaimCommitOrLoserRent()
+                .accounts({
+                    voter: publicKey,
+                    voterRecord: voterRecordPDA,
+                    question: questionPDA,
+                })
+                .rpc();
+    
+            toast.success(`Rent reclaimed! Tx: ${tx.slice(0, 6)}...${tx.slice(-6)}`, {
+                onClick: () =>
+                    window.open(`https://explorer.solana.com/tx/${tx}?cluster=devnet`, "_blank"),
+            });
+    
+            // ⏳ Optional: Wait for confirmation before refresh
+            await connection.confirmTransaction(tx, "confirmed");
+    
+            // ✅ Delay state refresh just slightly to give chain time to update
+            setTimeout(() => {
+                fetchQuestion(); // properly refetch after confirmed reclaim
+            }, 500); // You can tweak this delay if needed
+    
+        } catch (error) {
+            console.error("Reclaim failed:", error);
+            toast.error(`Reclaim failed: ${error.message}`);
+        } finally {
+            setReclaiming(false);
+        }
+    };    
+        
+    
     const copyToClipboard = () => {
         navigator.clipboard.writeText(question.vaultAddress);
         toast.info("Vault Address copied to clipboard!", { position: "top-center" });
@@ -213,6 +416,14 @@ const QuestionDetail = () => {
 
     if (loading) return <p className="text-center text-gray-600">Loading...</p>;
 
+    console.log("Connected wallet:", publicKey?.toString());
+    console.log("Asker:", question.asker);
+    console.log("showCommitReveal:", showCommitReveal);
+    console.log("isMember:", isMember);
+    console.log("RevealEnd:", new Date(question.revealEndTime * 1000));
+    console.log("Now:", new Date(now * 1000));
+    console.log("question distributed reward: ", question.totalDistributed)
+    
     const txId = publicKey
         ? localStorage.getItem(`claim_tx_${id}_${publicKey.toString()}`)
         : null;
@@ -272,7 +483,40 @@ const QuestionDetail = () => {
                         )}
                     </button>
                 )}
-                
+
+                {userVoterRecord &&
+                    question.revealEnded &&
+                    !userVoterRecord.claimed &&
+                    (!hasReclaimed || reclaiming) &&
+                    (
+                        (!userVoterRecord.revealed) ||
+                        (
+                            userVoterRecord.revealed &&
+                            (
+                                question.votesOption1 !== question.votesOption2 &&
+                                userVoterRecord.selectedOption !==
+                                (question.votesOption1 >= question.votesOption2 ? 1 : 2)
+                            )
+                        )
+                    ) && (
+                        <button
+                            onClick={handleReclaimRent}
+                            disabled={reclaiming}
+                            className="mt-3 bg-yellow-500 text-white px-4 py-2 rounded w-full hover:bg-yellow-600 transition duration-300 disabled:bg-gray-400"
+                        >
+                            {reclaiming ? (
+                                <span className="flex items-center justify-center">
+                                    Reclaiming<span className="dot-animate">.</span>
+                                    <span className="dot-animate dot2">.</span>
+                                    <span className="dot-animate dot3">.</span>
+                                </span>
+                            ) : (
+                                "Reclaim Rent"
+                            )}
+                        </button>
+                    )
+                }
+
                 {txId && (
                     <p className="text-green-700 font-semibold mt-4">
                         Rewards claimed!{" "}
@@ -286,6 +530,76 @@ const QuestionDetail = () => {
                         </a>
                     </p>
                 )}
+                {question.canDrainReward && !hasDrained && (
+                    <button
+                        onClick={handleDrainUnclaimedReward}
+                        disabled={draining}
+                        className="mt-3 bg-yellow-500 text-white px-4 py-2 rounded w-full hover:bg-yellow-600 transition duration-300 disabled:bg-gray-400"
+                    >
+                        {draining ? (
+                            <span className="flex items-center justify-center">
+                                Draining<span className="dot-animate">.</span>
+                                <span className="dot-animate dot2">.</span>
+                                <span className="dot-animate dot3">.</span>
+                            </span>
+                        ) : (
+                            "Send Unclaimed Reward to Fee Receiver"
+                        )}
+                    </button>
+                )}
+
+                {publicKey &&
+                question.revealEnded &&
+                question.vaultOnlyHasRent &&
+                question.rentExpired &&
+                publicKey.toString() === question.asker &&
+                (
+                // ✅ Allow delete if either:
+                // A: no one committed
+                question.committedVoters === 0 ||
+                // B: all rent + rewards are cleaned
+                (
+                    (question.voterRecordsCount === 0 || question.voterRecordsClosed === question.voterRecordsCount) &&
+                    (question.totalDistributed === question.originalReward || question.originalReward === 0)
+                )
+                ) && (
+                <button
+                    onClick={handleDeleteQuestion}
+                    disabled={deleting}
+                    className="mt-3 bg-red-500 text-white px-4 py-2 rounded w-full hover:bg-red-600 transition duration-300 disabled:bg-gray-400"
+                >
+                    {deleting ? (
+                    <span className="flex items-center justify-center">
+                        Deleting<span className="dot-animate">.</span>
+                        <span className="dot-animate dot2">.</span>
+                        <span className="dot-animate dot3">.</span>
+                    </span>
+                    ) : (
+                    "Delete Question"
+                    )}
+                </button>
+                )}
+
+
+<pre className="text-left text-sm text-gray-600">
+{JSON.stringify({
+  vaultOnlyHasRent: question.vaultOnlyHasRent,
+  rentExpired: question.rentExpired,
+  voterRecordsCount: question.voterRecordsCount,
+  voterRecordsClosed: question.voterRecordsClosed,
+  totalDistributed: question.totalDistributed,
+  originalReward: question.originalReward,
+  canDelete: (
+    question.revealEnded &&
+    question.vaultOnlyHasRent &&
+    question.rentExpired &&
+    publicKey.toString() === question.asker &&
+    (question.voterRecordsCount === 0 || question.voterRecordsClosed === question.voterRecordsCount) &&
+    (question.totalDistributed === question.originalReward || question.originalReward === 0)
+  )
+}, null, 2)}
+</pre>
+
             </div>
             {showModal && (
                 <div className="fixed inset-0 flex items-center justify-center z-50" style={{ backgroundColor: "rgba(0, 0, 0, 0.4)" }}>
