@@ -1,5 +1,5 @@
 {
-  "address": "6rhAjrHzyQtqjGHDcUuHoSQAA9Roe9QAZMfHSLhR26wU",
+  "address": "4YJdjqejHUL99JUi7YJPtZQsQAyqbaYEpGdwNWTfAWq9",
   "metadata": {
     "name": "truth_network",
     "version": "0.1.0",
@@ -530,33 +530,6 @@
         {
           "name": "question",
           "writable": true
-        },
-        {
-          "name": "vault",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  118,
-                  97,
-                  117,
-                  108,
-                  116
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "question"
-              }
-            ]
-          }
-        },
-        {
-          "name": "fee_receiver",
-          "writable": true,
-          "address": "7qfdvYGEKnM2zrMYATbwtAdzagRGQUUCXxU3hhgG3V2u"
         }
       ],
       "args": [

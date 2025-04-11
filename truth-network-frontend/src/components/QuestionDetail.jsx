@@ -130,6 +130,7 @@ const QuestionDetail = () => {
                 rentExpired,
                 voterRecordsCount: account.voterRecordsCount?.toNumber?.() || 0,
                 voterRecordsClosed: account.voterRecordsClosed?.toNumber?.() || 0,
+                snapshotReward: account.snapshotReward?.toNumber?.() || 0,
             };
 
             setQuestion(newQuestion);
@@ -423,6 +424,7 @@ const QuestionDetail = () => {
     console.log("RevealEnd:", new Date(question.revealEndTime * 1000));
     console.log("Now:", new Date(now * 1000));
     console.log("question distributed reward: ", question.totalDistributed)
+    console.log("question snapshot reward: ", question.snapshotReward)
     
     const txId = publicKey
         ? localStorage.getItem(`claim_tx_${id}_${publicKey.toString()}`)
@@ -554,14 +556,16 @@ const QuestionDetail = () => {
                 question.rentExpired &&
                 publicKey.toString() === question.asker &&
                 (
-                // ✅ Allow delete if either:
-                // A: no one committed
+                // Allow delete if either:
+                // no one committed
                 question.committedVoters === 0 ||
-                // B: all rent + rewards are cleaned
+                // all rent + rewards are cleaned
                 (
-                    (question.voterRecordsCount === 0 || question.voterRecordsClosed === question.voterRecordsCount) &&
-                    (question.totalDistributed === question.originalReward || question.originalReward === 0)
-                )
+                    question.voterRecordsCount === 0 || question.voterRecordsClosed === question.voterRecordsCount
+                ) &&
+                (
+                    question.totalDistributed >= question.snapshotReward || question.originalReward === 0
+                )                
                 ) && (
                 <button
                     onClick={handleDeleteQuestion}
@@ -596,7 +600,8 @@ const QuestionDetail = () => {
     publicKey.toString() === question.asker &&
     (question.voterRecordsCount === 0 || question.voterRecordsClosed === question.voterRecordsCount) &&
     (question.totalDistributed === question.originalReward || question.originalReward === 0)
-  )
+  ),
+  snapshotReward: question.snapshotReward
 }, null, 2)}
 </pre>
 
