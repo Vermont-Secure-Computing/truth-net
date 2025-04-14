@@ -131,6 +131,11 @@ const QuestionDetail = () => {
                 voterRecordsCount: account.voterRecordsCount?.toNumber?.() || 0,
                 voterRecordsClosed: account.voterRecordsClosed?.toNumber?.() || 0,
                 snapshotReward: account.snapshotReward?.toNumber?.() || 0,
+                revealedCorrectVoters: account.revealedCorrectVoters?.toNumber?.() || 0,
+                snapshotTotalWeight: account.snapshotTotalWeight?.toNumber?.() || 0,
+                claimedWeight: account.claimedWeight?.toNumber?.() || 0,
+                claimedVotersCount: account.claimedVotersCount?.toNumber?.() || 0,
+                claimedRemainderCount: account.claimedRemainderCount?.toNumber?.() || 0,
             };
 
             setQuestion(newQuestion);
@@ -189,7 +194,7 @@ const QuestionDetail = () => {
             if (error.message.includes("Account does not exist")) {
                 console.log("Voter record was closed. Marking as reclaimed.");
                 setUserVoterRecord(null);
-                setHasReclaimed(true); // ✅ voter record gone = reclaimed
+                setHasReclaimed(true);
             } else {
                 console.log("Error loading voter record:", error);
             }
@@ -393,10 +398,10 @@ const QuestionDetail = () => {
                     window.open(`https://explorer.solana.com/tx/${tx}?cluster=devnet`, "_blank"),
             });
     
-            // ⏳ Optional: Wait for confirmation before refresh
+            // Wait for confirmation before refresh
             await connection.confirmTransaction(tx, "confirmed");
     
-            // ✅ Delay state refresh just slightly to give chain time to update
+            // Delay state refresh just slightly to give chain time to update
             setTimeout(() => {
                 fetchQuestion(); // properly refetch after confirmed reclaim
             }, 500); // You can tweak this delay if needed
@@ -433,6 +438,9 @@ const QuestionDetail = () => {
     const displayRewardLamports = question.originalReward > 0 
         ? question.originalReward
         : question.reward * web3.LAMPORTS_PER_SOL;
+
+    console.log("🔍 Revealed Correct Voters:", question.revealedCorrectVoters);
+
     
     const displayReward = (displayRewardLamports / web3.LAMPORTS_PER_SOL).toFixed(4);
     return (
@@ -593,6 +601,11 @@ const QuestionDetail = () => {
   voterRecordsClosed: question.voterRecordsClosed,
   totalDistributed: question.totalDistributed,
   originalReward: question.originalReward,
+  revealedCorrectVoters: question.revealed_correct_voters,
+  snapshotTotalWeight: question.snapshotTotalWeight,
+  claimedWeight: question.claimedWeight,
+  claimedVotersCount: question.claimedVotersCount,
+  claimedRemainderCount: question.claimedRemainderCount,
   canDelete: (
     question.revealEnded &&
     question.vaultOnlyHasRent &&

@@ -2,11 +2,12 @@ use anchor_lang::{prelude::*, solana_program::clock::Clock};
 use anchor_lang::solana_program::keccak::hash;
 use anchor_lang::solana_program::{system_instruction, program::invoke};
 use anchor_lang::solana_program::rent::Rent;
+use anchor_lang::AccountDeserialize;
 
 pub const FEE_RECEIVER_ADDRESS: &str = "7qfdvYGEKnM2zrMYATbwtAdzagRGQUUCXxU3hhgG3V2u";
 
 
-declare_id!("6rhAjrHzyQtqjGHDcUuHoSQAA9Roe9QAZMfHSLhR26wU");
+declare_id!("7JE57i5fbS4qNhEdW9EQAo2GamPqioTQSbCBJqtY2Wsc");
 
 
 /// An empty account for the vault.
@@ -205,7 +206,7 @@ pub mod truth_network {
         // Case 2: Reveal is over, but no one revealed or claimed
         let reveal_over = now >= question.reveal_end_time;
         let no_votes_revealed = question.votes_option_1 == 0 && question.votes_option_2 == 0;
-        let all_rewards_claimed = question.total_distributed == question.original_reward;
+        let all_rewards_claimed = question.total_distributed >= question.snapshot_reward;
         let all_rent_reclaimed = question.voter_records_closed == question.voter_records_count;
 
         let can_delete = no_one_committed || (reveal_over && no_votes_revealed) || (reveal_over && all_rewards_claimed && all_rent_reclaimed);
@@ -240,25 +241,6 @@ pub mod truth_network {
             VotingError::VotingStillActive
         );
         require!(!question.finalized, VotingError::AlreadyFinalized);
-
-        if question.committed_voters == 0 {
-            let vault = &ctx.accounts.vault;
-            let fee_receiver = &ctx.accounts.fee_receiver;
-    
-            let vault_balance = vault.lamports();
-    
-            **vault.try_borrow_mut_lamports()? -= vault_balance;
-            **fee_receiver.try_borrow_mut_lamports()? += vault_balance;
-    
-            question.finalized = true;
-    
-            msg!(
-                "No voters committed. {} lamports sent to fee receiver.",
-                vault_balance
-            );
-    
-            return Ok(());
-        }
         
         
         let total_votes = question.votes_option_1 + question.votes_option_2;
@@ -406,7 +388,12 @@ pub mod truth_network {
             .map(|v| v.reputation as u64)
             .unwrap_or(0);
 
-        let vote_weight = 1 + reputation;
+        let vote_weight = if reputation == 0 {
+            1
+        } else {
+            reputation
+        };
+            
 
         // Count the vote with weighted value
         if vote == 1 {
@@ -420,6 +407,10 @@ pub mod truth_network {
 
         // **Set the revealed vote in plaintext.**
         voter_record.selected_option = vote;
+
+        let vote_weight = if reputation == 0 { 1 } else { reputation };
+
+        voter_record.vote_weight = vote_weight;
 
         if let Some(voter) = voter_list.voters.iter_mut().find(|v| v.address == voter_pubkey) {
             voter.total_revealed_votes += 1;
@@ -435,14 +426,16 @@ pub mod truth_network {
         Ok(())
     }
 
+    
+
     pub fn claim_reward(ctx: Context<ClaimReward>, tx_id: String) -> Result<()> {
         let question = &mut ctx.accounts.question;
-        let voter_list = &mut ctx.accounts.voter_list;
-        let voter_pubkey = ctx.accounts.voter.key();
         let voter_record = &mut ctx.accounts.voter_record;
+        let voter_info = ctx.accounts.voter.to_account_info();
+        let vault_info = ctx.accounts.vault.to_account_info();
+        let fee_receiver_info = ctx.accounts.fee_receiver.to_account_info();
     
-        let total_votes = question.votes_option_1 + question.votes_option_2;
-        require!(total_votes > 0, VotingError::NoEligibleVoters);
+        require!(!voter_record.claimed, VotingError::AlreadyClaimed);
     
         if question.winning_option == 255 {
             require!(
@@ -450,21 +443,17 @@ pub mod truth_network {
                 VotingError::RevealPhaseNotOver
             );
     
-            if question.votes_option_1 == question.votes_option_2 {
-                question.winning_option = 0;
+            question.winning_option = if question.votes_option_1 == question.votes_option_2 {
+                0
             } else if question.votes_option_1 > question.votes_option_2 {
-                question.winning_option = 1;
+                1
             } else {
-                question.winning_option = 2;
-            }
-    
-            msg!("Winning option locked at {}", question.winning_option);
+                2
+            };
         }
     
         let winning_option = question.winning_option;
         let is_tie = winning_option == 0;
-    
-        require!(!voter_record.claimed, VotingError::AlreadyClaimed);
     
         if !is_tie {
             require!(
@@ -473,129 +462,94 @@ pub mod truth_network {
             );
         }
     
-        let vault_info = ctx.accounts.vault.to_account_info();
-        let fee_receiver_info = ctx.accounts.fee_receiver.to_account_info();
-        let voter_info = ctx.accounts.voter.to_account_info();
+        if question.revealed_correct_voters == 0 {
+            let mut count = 0u64;
+    
+            for acc_info in ctx.remaining_accounts.iter() {
+                let mut data: &[u8] = &acc_info.data.borrow();
+                if let Ok(record) = VoterRecord::try_deserialize(&mut data) {
+                    if record.revealed && (is_tie || record.selected_option == winning_option) {
+                        count += 1;
+                    }
+                }
+            }
+    
+            question.revealed_correct_voters = count;
+    
+            msg!(
+                "Snapshot: {} revealed and picked winning option",
+                question.revealed_correct_voters
+            );
+        }
     
         let rent = Rent::get()?;
         let min_balance = rent.minimum_balance(vault_info.data_len());
         let vault_balance = **vault_info.lamports.borrow();
     
-        // One-time reward snapshot and fee deduction
         if !question.reward_fee_taken {
             let available_reward = vault_balance.saturating_sub(min_balance);
             let fee = available_reward * 2 / 100;
             let snapshot = available_reward.saturating_sub(fee);
     
-            let any_revealed = voter_list.voters.iter().any(|v| v.total_revealed_votes > 0);
-
-            if !any_revealed {
-                // No one revealed: send entire reward to fee receiver
-                require!(
-                    vault_balance >= available_reward,
-                    VotingError::InsufficientFunds
-                );
-    
-                **vault_info.lamports.borrow_mut() -= available_reward;
-                **fee_receiver_info.lamports.borrow_mut() += available_reward;
-    
-                question.reward_fee_taken = true;
-                question.original_reward = available_reward;
-                question.snapshot_reward = 0;
-                question.snapshot_total_weight = 0;
-                question.claimed_voters_count = 0;
-                question.claimed_weight = 0;
-    
-                msg!(
-                    "No voters revealed. {} lamports sent to fee receiver: {}",
-                    available_reward,
-                    fee_receiver_info.key()
-                );
-    
-                return Err(VotingError::NoEligibleVoters.into());
-            }
-    
-            let eligible_weight: u64 = voter_list
-                .voters
-                .iter()
-                .filter(|v| is_tie || v.selected_option == question.winning_option)
-                .map(|v| v.reputation as u64)
-                .sum();
+            **vault_info.try_borrow_mut_lamports()? -= fee;
+            **fee_receiver_info.try_borrow_mut_lamports()? += fee;
     
             question.original_reward = available_reward;
             question.snapshot_reward = snapshot;
-            question.snapshot_total_weight = eligible_weight;
-            question.total_distributed = 0;
-            question.claimed_voters_count = 0;
+            question.snapshot_total_weight = if is_tie {
+                question.votes_option_1 + question.votes_option_2
+            } else if winning_option == 1 {
+                question.votes_option_1
+            } else {
+                question.votes_option_2
+            };
+    
             question.claimed_weight = 0;
+            question.claimed_voters_count = 0;
+            question.claimed_remainder_count = 0;
+            question.total_distributed = 0;
             question.reward_fee_taken = true;
     
-            require!(
-                vault_balance >= fee + min_balance,
-                VotingError::InsufficientFunds
-            );
-    
-            **vault_info.lamports.borrow_mut() -= fee;
-            **fee_receiver_info.lamports.borrow_mut() += fee;
-    
             msg!(
-                "2% fee ({}) sent to fee receiver: {}",
-                fee,
-                fee_receiver_info.key()
+                "Snapshot taken. Total weight: {}",
+                question.snapshot_total_weight
             );
         }
+    
+        let voter_weight = voter_record.vote_weight;
     
         let total_snapshot_reward = question.snapshot_reward;
         let total_weight = question.snapshot_total_weight;
+    
         require!(total_weight > 0, VotingError::NoEligibleVoters);
     
-        let voter_index = voter_list
-            .voters
-            .iter()
-            .position(|v| v.address == voter_pubkey)
-            .ok_or(VotingError::NotJoined)?;
-    
-        let voter = &mut voter_list.voters[voter_index];
-        let voter_weight = voter.reputation as u64;
+        let is_last_claimer = question.claimed_weight + voter_weight == total_weight;
     
         let base_share = (total_snapshot_reward * voter_weight) / total_weight;
-        let global_remainder = total_snapshot_reward % total_weight;
     
         let mut voter_share = base_share;
-        if question.claimed_remainder_count < global_remainder {
-            voter_share += 1;
-            question.claimed_remainder_count += 1;
-        }
-    
-        let is_last_claimer = question.claimed_weight + voter_weight == total_weight;
+        
+        let available = vault_balance.saturating_sub(min_balance);
         if is_last_claimer {
-            let current_vault_balance = **vault_info.lamports.borrow();
-            let rent = Rent::get()?.minimum_balance(vault_info.data_len());
-            let remaining = current_vault_balance.saturating_sub(rent);
-    
-            voter_share = remaining;
-            
-            msg!(
-                "Final claimer detected. Vault will retain only rent: {}. Assigning remaining {} lamports to voter.",
-                rent,
-                remaining
-            );
-        }
-    
-        if !is_last_claimer {
+            let remaining = total_snapshot_reward.saturating_sub(question.total_distributed);
+            voter_share = remaining.min(available);
+        } else {
             require!(
                 question.total_distributed + voter_share <= total_snapshot_reward,
                 VotingError::InsufficientFunds
             );
+            voter_share = voter_share.min(available);
         }
     
-        question.claimed_weight += voter_weight;
         question.total_distributed += voter_share;
+        question.claimed_weight += voter_weight;
         question.claimed_voters_count += 1;
+        question.voter_records_closed += 1;
+    
         voter_record.claimed = true;
     
-        **vault_info.lamports.borrow_mut() -= voter_share;
-        **voter_info.lamports.borrow_mut() += voter_share;
+        **vault_info.try_borrow_mut_lamports()? -= voter_share;
+        **voter_info.try_borrow_mut_lamports()? += voter_share;
     
         let tx_id_bytes = tx_id.as_bytes();
         let len = tx_id_bytes.len().min(64);
@@ -604,26 +558,8 @@ pub mod truth_network {
             voter_record.claim_tx_id[i] = 0;
         }
     
-        voter.total_earnings += voter_share;
-        if voter_record.selected_option == winning_option && !is_tie {
-            voter.total_correct_votes += 1;
-        }
-    
-        voter.reputation = calculate_reputation(
-            voter.total_revealed_votes,
-            voter.total_correct_votes,
-        );
-
-        question.voter_records_closed += 1;
-    
-        msg!(
-            "Reward Claimed! {} lamports sent to voter: {}",
-            voter_share,
-            voter_pubkey
-        );
-    
         Ok(())
-    }
+    }      
 
     pub fn drain_unclaimed_reward(ctx: Context<DrainUnclaimedReward>) -> Result<()> {
         let question = &ctx.accounts.question;
@@ -753,6 +689,7 @@ pub struct Question {
     pub claimed_weight: u64,
     pub voter_records_count: u64,
     pub voter_records_closed: u64,
+    pub revealed_correct_voters: u64,
     pub bump: u8,
 }
 
@@ -978,6 +915,7 @@ pub struct VoterRecord {
     pub revealed: bool,
     pub claimed: bool,
     pub claim_tx_id: [u8; 64],
+    pub vote_weight: u64,
 }
 
 #[derive(Accounts)]
@@ -1026,18 +964,6 @@ pub struct RevealVote<'info> {
 pub struct FinalizeVoting<'info> {
     #[account(mut)]
     pub question: Account<'info, Question>,
-
-    /// CHECK: vault PDA holding reward, derived from question
-    #[account(
-        mut,
-        seeds = [b"vault", question.key().as_ref()],
-        bump
-    )]
-    pub vault: AccountInfo<'info>,
-
-    /// CHECK: hardcoded fee receiver
-    #[account(mut, address = FEE_RECEIVER_ADDRESS.parse::<Pubkey>().unwrap())]
-    pub fee_receiver: AccountInfo<'info>,
 }
 
 
