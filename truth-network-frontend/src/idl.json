@@ -1,5 +1,5 @@
 {
-  "address": "4YJdjqejHUL99JUi7YJPtZQsQAyqbaYEpGdwNWTfAWq9",
+  "address": "7JE57i5fbS4qNhEdW9EQAo2GamPqioTQSbCBJqtY2Wsc",
   "metadata": {
     "name": "truth_network",
     "version": "0.1.0",
@@ -1215,6 +1215,10 @@
             "type": "u64"
           },
           {
+            "name": "revealed_correct_voters",
+            "type": "u64"
+          },
+          {
             "name": "bump",
             "type": "u8"
           }
@@ -1340,6 +1344,10 @@
                 64
               ]
             }
+          },
+          {
+            "name": "vote_weight",
+            "type": "u64"
           }
         ]
       }
