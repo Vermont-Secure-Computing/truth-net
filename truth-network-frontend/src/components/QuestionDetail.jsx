@@ -548,7 +548,7 @@ const QuestionDetail = () => {
                     >
                         {draining ? (
                             <span className="flex items-center justify-center">
-                                Draining<span className="dot-animate">.</span>
+                                Sending<span className="dot-animate">.</span>
                                 <span className="dot-animate dot2">.</span>
                                 <span className="dot-animate dot3">.</span>
                             </span>

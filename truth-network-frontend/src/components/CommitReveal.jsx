@@ -48,12 +48,17 @@ const CommitReveal = ({ question, onClose, refreshQuestions }) => {
             const voterRecordAccount = await program.account.voterRecord.fetch(voterRecordPDA).catch(() => null);
 
             if (voterRecordAccount) {
-                toast.info("You have already committed your vote.", { position: "top-center" });
                 setHasCommitted(true);
                 setCanReveal(!voterRecordAccount.revealed);
+    
+                if (voterRecordAccount.revealed) {
+                    toast.info("You have already revealed your vote.", { position: "top-center" });
+                } else {
+                    toast.info("You have committed your vote. You can reveal it during the reveal phase.", { position: "top-center" });
+                }
             } else {
-                toast.info("You have not committed a vote yet.", { position: "top-center" });
                 setHasCommitted(false);
+                toast.info("You have not committed a vote yet.", { position: "top-center" });
             }
         } catch (error) {
             toast.error(`Error checking commitment: ${error.message}`, { position: "top-center", autoClose: 5000 });
