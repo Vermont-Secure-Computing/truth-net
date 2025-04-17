@@ -23,6 +23,7 @@
     "buffer": "^6.0.3",
     "date-fns": "^4.1.0",
     "js-sha3": "^0.9.3",
+    "lucide-react": "^0.488.0",
     "postcss": "^8.5.3",
     "qrcode.react": "^4.2.0",
     "react": "^19.0.0",

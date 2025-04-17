@@ -7,7 +7,7 @@ use anchor_lang::AccountDeserialize;
 pub const FEE_RECEIVER_ADDRESS: &str = "7qfdvYGEKnM2zrMYATbwtAdzagRGQUUCXxU3hhgG3V2u";
 
 
-declare_id!("7JE57i5fbS4qNhEdW9EQAo2GamPqioTQSbCBJqtY2Wsc");
+declare_id!("3c1dWoc2AegksbJegy3hsiikJowZFfKkXWfwxidDxWyD");
 
 
 /// An empty account for the vault.
@@ -557,6 +557,20 @@ pub mod truth_network {
         for i in len..64 {
             voter_record.claim_tx_id[i] = 0;
         }
+
+        if let Some(voter) = ctx.accounts.voter_list.voters.iter_mut().find(|v| v.address == *voter_info.key) {
+            // Update total earnings
+            voter.total_earnings = voter
+                .total_earnings
+                .checked_add(voter_share)
+                .ok_or(VotingError::Overflow)?;
+        
+            // Only increment correct vote count if not a tie and voter picked the winning option
+            if !is_tie && voter_record.selected_option == winning_option {
+                voter.total_correct_votes += 1;
+            }
+        
+        }        
     
         Ok(())
     }      

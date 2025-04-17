@@ -33,9 +33,15 @@ const VoterDashboard = () => {
                 setVoterReputation(stats.voterReputation);
 
                 const voterRecords = await program.account.voterRecord.all();
+                const voterRecordMap = {};
                 const userVoterRecords = voterRecords.filter(
                     record => record.account.voter.toBase58() === publicKey.toBase58()
                 );
+
+                userVoterRecords.forEach(record => {
+                    const questionKey = record.account.question.toBase58();
+                    voterRecordMap[questionKey] = record.account;
+                });
 
                 if (userVoterRecords.length === 0) {
                     setQuestions([]);
@@ -66,6 +72,7 @@ const VoterDashboard = () => {
                                 committedVoters: question.committedVoters?.toNumber?.() || 0,
                                 originalReward: question.originalReward?.toNumber?.() || 0,
                                 reward: parseFloat(solReward.toFixed(4)),
+                                userVoterRecord: voterRecordMap[pubkey.toBase58()] || null,
                             };
                         } catch (error) {
                             console.error("Error fetching question:", pubkey.toBase58(), error);
@@ -185,29 +192,49 @@ const VoterDashboard = () => {
                         const winningOption = q.votesOption1.toNumber() > q.votesOption2.toNumber() ? 1 : 2;
                         const winningPercentage = (Math.max(q.votesOption1.toNumber(), q.votesOption2.toNumber()) / totalVotes) * 100;
                         
+                        
+                        const currentTime = new Date().getTime() / 1000;
+
+                        const commitEnd = q.commitEndTime?.toNumber?.() || 0;
+                        const revealEnd = q.revealEndTime?.toNumber?.() || 0;
+
                         const isEligibleToClaim =
-                            q.revealEnded &&
+                            revealEnd < currentTime &&
                             q.userVoterRecord &&
-                            q.userVoterRecord.selectedOption !== undefined && // Ensure selectedOption exists
-                            q.userVoterRecord.selectedOption === winningOption && // Compare correctly
-                            !q.userVoterRecord.claimed && // Ensure not already claimed
+                            q.userVoterRecord.selectedOption !== undefined &&
+                            q.userVoterRecord.selectedOption === winningOption &&
+                            !q.userVoterRecord.claimed &&
                             totalVotes > 0 &&
                             winningPercentage >= 51;
 
 
-                        const currentTime = new Date().getTime() / 1000;
-
                         const userCanReveal =
-                            q?.commitEndTime < currentTime && // Commit phase is over
-                            q?.revealEndTime > currentTime && // Reveal phase is still active
-                            q.userVoterRecord?.committed === true && // User has committed a vote
-                            q.userVoterRecord?.revealed === false; // User has NOT revealed the vote
+                            commitEnd < currentTime &&
+                            revealEnd > currentTime &&
+                            Array.isArray(q.userVoterRecord?.commitment) &&
+                            q.userVoterRecord?.commitment.length > 0 &&
+                            q.userVoterRecord?.revealed === false;
+
+                        const selectedOption = q.userVoterRecord?.selectedOption;
+                        const revealed = q.userVoterRecord?.revealed;
+                        const claimed = q.userVoterRecord?.claimed;
+                        const isTie = q.votesOption1.toNumber() === q.votesOption2.toNumber();
+                        
+                        const userCanReclaimRent =
+                            revealEnd < currentTime &&
+                            !claimed &&
+                            (
+                                revealed === false || 
+                                (!isTie && revealed === true && selectedOption !== winningOption)
+                            );
+
 
                         const displayRewardLamports = q.originalReward > 0 
                             ? q.originalReward
                             : q.reward * web3.LAMPORTS_PER_SOL;
                         
                         const displayReward = (displayRewardLamports / web3.LAMPORTS_PER_SOL).toFixed(4);
+
                         
                         return (
                             <div 
@@ -233,10 +260,19 @@ const VoterDashboard = () => {
                                 <p className="text-sm text-gray-700">
                                     <strong>Votes:</strong> {q.votesOption1.toNumber()} - {q.votesOption2.toNumber()}
                                 </p>
+                                
+                                {isEligibleToClaim && (
+                                    <p className="mt-3 text-green-600 font-semibold">
+                                        You can now claim your reward
+                                    </p>
+                                )}
 
+                                {userCanReclaimRent && (
+                                    <p className="text-yellow-600 font-semibold mt-2">You can now reclaim your rent</p>
+                                )}
 
                                 {userCanReveal && (
-                                    <p className="text-green-600 font-semibold mt-2">You can reveal your vote</p>
+                                    <p className="text-green-600 font-semibold mt-2">You can now reveal your vote</p>
                                 )}
                             </div>
                         );
