@@ -4,6 +4,7 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { Program, AnchorProvider, web3, BN } from "@coral-xyz/anchor";
 import { toast } from "react-toastify"; // Import toast
 import "react-toastify/dist/ReactToastify.css"; // Import styles
+import { useNavigate } from "react-router-dom";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import idl from "../idl.json"; // Import the IDL file
@@ -11,7 +12,7 @@ import { PROGRAM_ID } from "../constant";
 
 const connection = new Connection(clusterApiUrl("devnet"), "confirmed");
 
-const QuestionForm = ({ fetchQuestions }) => {
+const QuestionForm = ({ fetchQuestions, onClose }) => {
   const { publicKey, signTransaction, signAllTransactions } = useWallet();
   const [questionText, setQuestionText] = useState("");
   const [reward, setReward] = useState("");
@@ -26,6 +27,7 @@ const QuestionForm = ({ fetchQuestions }) => {
     preflightCommitment: "processed",
   });
   const program = new Program(idl, provider);
+  const navigate = useNavigate();
 
   const createQuestion = async () => {
     if (!publicKey) {
@@ -110,6 +112,8 @@ const QuestionForm = ({ fetchQuestions }) => {
       setReward("");
       setCommitEndTime("");
       setRevealEndTime("");
+      onClose?.();
+      navigate("/");
     } catch (error) {
       toast.error(`Failed to create event: ${error.message}`, {
         position: "top-center",
@@ -156,15 +160,14 @@ const QuestionForm = ({ fetchQuestions }) => {
   
         
     <div className="max-w-7xl mx-auto px-6 py-6">
-      <div className="flex flex-wrap items-center gap-4 space-x-4">
-
+      <div className="flex flex-col gap-4">
         {/* Question Input */}
         <input 
           type="text" 
           placeholder="Enter your event statement" 
           value={questionText} 
           onChange={(e) => setQuestionText(e.target.value)} 
-          className="p-3 border rounded-lg w-84 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="p-3 border rounded-lg w-full focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
 
         {/* Reward Input */}
@@ -173,11 +176,11 @@ const QuestionForm = ({ fetchQuestions }) => {
           placeholder="Reward (SOL)" 
           value={reward} 
           onChange={(e) => setReward(e.target.value)} 
-          className="p-3 border rounded-lg w-40 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="p-3 border rounded-lg w-full focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
 
         {/* Commit End Time */}
-        <div className="relative z-20 w-64">
+        <div className="relative z-20 w-full">
           <DatePicker
             selected={commitEndTime}
             onChange={(date) => setCommitEndTime(date)}
@@ -189,6 +192,7 @@ const QuestionForm = ({ fetchQuestions }) => {
             timeCaption="Time"
             dateFormat="yyyy-MM-dd HH:mm"
             placeholderText="Select commit end time."
+            wrapperClassName="w-full"
             className="p-3 border rounded-lg w-full focus:outline-none focus:ring-2 focus:ring-blue-500"
             popperPlacement="bottom-start"
             popperClassName="z-50"
@@ -197,7 +201,7 @@ const QuestionForm = ({ fetchQuestions }) => {
         </div>
 
         {/* Reveal End Time */}
-        <div className="relative z-10 w-64">
+        <div className="relative z-20 w-full">
           <DatePicker
             selected={revealEndTime}
             onChange={(date) => setRevealEndTime(date)}
@@ -209,6 +213,7 @@ const QuestionForm = ({ fetchQuestions }) => {
             timeCaption="Time"
             dateFormat="yyyy-MM-dd HH:mm"
             placeholderText="Select reveal end time."
+            wrapperClassName="w-full"
             className="p-3 border rounded-lg w-full focus:outline-none focus:ring-2 focus:ring-blue-500"
             popperPlacement="bottom-start"
             popperClassName="z-50"
