@@ -1,5 +1,5 @@
 {
-  "address": "3c1dWoc2AegksbJegy3hsiikJowZFfKkXWfwxidDxWyD",
+  "address": "3QE4hfmAMHPSqcfqimYzyuXU8HyYn7tHBR6mfSuVWZQG",
   "metadata": {
     "name": "truth_network",
     "version": "0.1.0",
@@ -64,31 +64,36 @@
           }
         },
         {
-          "name": "vault",
-          "writable": true
-        },
-        {
-          "name": "voter_list",
+          "name": "user_record",
           "writable": true,
           "pda": {
             "seeds": [
               {
                 "kind": "const",
                 "value": [
-                  118,
-                  111,
-                  116,
+                  117,
+                  115,
                   101,
                   114,
                   95,
-                  108,
-                  105,
-                  115,
-                  116
+                  114,
+                  101,
+                  99,
+                  111,
+                  114,
+                  100
                 ]
+              },
+              {
+                "kind": "account",
+                "path": "voter"
               }
             ]
           }
+        },
+        {
+          "name": "vault",
+          "writable": true
         },
         {
           "name": "fee_receiver",
@@ -150,8 +155,31 @@
           }
         },
         {
-          "name": "voter_list",
-          "writable": true
+          "name": "user_record",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  117,
+                  115,
+                  101,
+                  114,
+                  95,
+                  114,
+                  101,
+                  99,
+                  111,
+                  114,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "voter"
+              }
+            ]
+          }
         },
         {
           "name": "voter",
@@ -632,24 +660,29 @@
       ],
       "accounts": [
         {
-          "name": "voter_list",
+          "name": "user_record",
           "writable": true,
           "pda": {
             "seeds": [
               {
                 "kind": "const",
                 "value": [
-                  118,
-                  111,
-                  116,
+                  117,
+                  115,
                   101,
                   114,
                   95,
-                  108,
-                  105,
-                  115,
-                  116
+                  114,
+                  101,
+                  99,
+                  111,
+                  114,
+                  100
                 ]
+              },
+              {
+                "kind": "account",
+                "path": "user"
               }
             ]
           }
@@ -724,13 +757,37 @@
           }
         },
         {
+          "name": "user_record",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  117,
+                  115,
+                  101,
+                  114,
+                  95,
+                  114,
+                  101,
+                  99,
+                  111,
+                  114,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
           "name": "user",
           "writable": true,
           "signer": true
-        },
-        {
-          "name": "voter_list",
-          "writable": true
         },
         {
           "name": "system_program",
@@ -859,13 +916,37 @@
           }
         },
         {
+          "name": "user_record",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  117,
+                  115,
+                  101,
+                  114,
+                  95,
+                  114,
+                  101,
+                  99,
+                  111,
+                  114,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "voter"
+              }
+            ]
+          }
+        },
+        {
           "name": "voter",
           "writable": true,
           "signer": true
-        },
-        {
-          "name": "voter_list",
-          "writable": true
         }
       ],
       "args": [
@@ -874,6 +955,53 @@
           "type": "string"
         }
       ]
+    },
+    {
+      "name": "snapshot_winning_option",
+      "discriminator": [
+        222,
+        88,
+        124,
+        196,
+        0,
+        41,
+        203,
+        133
+      ],
+      "accounts": [
+        {
+          "name": "question",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  113,
+                  117,
+                  101,
+                  115,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "question.asker",
+                "account": "Question"
+              },
+              {
+                "kind": "account",
+                "path": "question.id",
+                "account": "Question"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
     }
   ],
   "accounts": [
@@ -904,6 +1032,19 @@
       ]
     },
     {
+      "name": "UserRecord",
+      "discriminator": [
+        210,
+        252,
+        132,
+        218,
+        191,
+        85,
+        173,
+        167
+      ]
+    },
+    {
       "name": "Vault",
       "discriminator": [
         211,
@@ -914,19 +1055,6 @@
         152,
         117,
         119
-      ]
-    },
-    {
-      "name": "VoterList",
-      "discriminator": [
-        27,
-        237,
-        57,
-        2,
-        134,
-        241,
-        248,
-        106
       ]
     },
     {
@@ -1098,6 +1226,11 @@
       "code": 6030,
       "name": "AlreadyEligibleOrWinner",
       "msg": "You were a winner or already eligible for reward."
+    },
+    {
+      "code": 6031,
+      "name": "AlreadyDrained",
+      "msg": "Vault is already drained."
     }
   ],
   "types": [
@@ -1219,6 +1352,10 @@
             "type": "u64"
           },
           {
+            "name": "reward_drained",
+            "type": "bool"
+          },
+          {
             "name": "bump",
             "type": "u8"
           }
@@ -1242,23 +1379,12 @@
       }
     },
     {
-      "name": "Vault",
-      "docs": [
-        "An empty account for the vault.",
-        "This account will only hold lamports and no other data."
-      ],
-      "type": {
-        "kind": "struct",
-        "fields": []
-      }
-    },
-    {
-      "name": "Voter",
+      "name": "UserRecord",
       "type": {
         "kind": "struct",
         "fields": [
           {
-            "name": "address",
+            "name": "user",
             "type": "pubkey"
           },
           {
@@ -1276,30 +1402,19 @@
           {
             "name": "total_correct_votes",
             "type": "u64"
-          },
-          {
-            "name": "selected_option",
-            "type": "u8"
           }
         ]
       }
     },
     {
-      "name": "VoterList",
+      "name": "Vault",
+      "docs": [
+        "An empty account for the vault.",
+        "This account will only hold lamports and no other data."
+      ],
       "type": {
         "kind": "struct",
-        "fields": [
-          {
-            "name": "voters",
-            "type": {
-              "vec": {
-                "defined": {
-                  "name": "Voter"
-                }
-              }
-            }
-          }
-        ]
+        "fields": []
       }
     },
     {

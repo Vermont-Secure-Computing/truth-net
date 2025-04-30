@@ -23,21 +23,26 @@ const JoinNetwork = ({ compact = false, updateIsMember }) => {
 
   const fetchMembership = async () => {
     try {
-      const [voterListPDA] = await PublicKey.findProgramAddress(
-        [Buffer.from("voter_list")],
+      const [userRecordPDA] = await PublicKey.findProgramAddress(
+        [Buffer.from("user_record"), publicKey.toBuffer()],
         PROGRAM_ID
       );
-
-      const voterListAccount = await program.account.voterList.fetch(voterListPDA);
-      const member = voterListAccount.voters.some(
-        (voter) => voter.address.toString() === publicKey.toString()
-      );
+  
+      const userRecordAccount = await program.account.userRecord.fetch(userRecordPDA);
+      const member = !!userRecordAccount; // If account exists, user is a member
       setIsMember(member);
       updateIsMember?.(member);
     } catch (error) {
       setIsMember(false);
+      updateIsMember?.(false);
+      if (error.message.includes("Account does not exist")) {
+        console.log("User has not joined yet.");
+      } else {
+        console.error("Unexpected error while checking membership:", error);
+      }
     }
   };
+  
 
   useEffect(() => {
     if (program && publicKey) {
@@ -48,31 +53,31 @@ const JoinNetwork = ({ compact = false, updateIsMember }) => {
   const joinNetworkHandler = async () => {
     try {
       setLoading(true);
-
-      const [voterListPDA] = await PublicKey.findProgramAddressSync(
-        [Buffer.from("voter_list")],
-        PROGRAM_ID
-      );
-
+  
       const [vaultPDA] = await PublicKey.findProgramAddressSync(
         [Buffer.from("vault"), publicKey.toBuffer()],
         PROGRAM_ID
       );
-
+  
+      const [userRecordPDA] = await PublicKey.findProgramAddressSync(
+        [Buffer.from("user_record"), publicKey.toBuffer()],
+        PROGRAM_ID
+      );
+  
       const tx = await program.methods.joinNetwork().accounts({
         user: publicKey,
-        voterList: voterListPDA,
         vault: vaultPDA,
+        userRecord: userRecordPDA,
         systemProgram: web3.SystemProgram.programId,
       }).rpc();
-
+  
       toast.success(`Joined the network! Tx: ${tx.slice(0, 6)}...${tx.slice(-6)}`, {
         position: "top-center",
         autoClose: 6000,
         onClick: () =>
           window.open(`https://explorer.solana.com/tx/${tx}?cluster=devnet`, "_blank"),
       });
-
+  
       await fetchMembership();
     } catch (error) {
       toast.error(`Failed to join: ${error.message}`, { position: "top-center" });
@@ -81,35 +86,36 @@ const JoinNetwork = ({ compact = false, updateIsMember }) => {
       setLoading(false);
     }
   };
+  
 
   const leaveNetworkHandler = async () => {
     try {
       setLoading(true);
-
+  
       const [vaultPDA] = await PublicKey.findProgramAddressSync(
         [Buffer.from("vault"), publicKey.toBuffer()],
         PROGRAM_ID
       );
-
-      const [voterListPDA] = await PublicKey.findProgramAddressSync(
-        [Buffer.from("voter_list")],
+  
+      const [userRecordPDA] = await PublicKey.findProgramAddressSync(
+        [Buffer.from("user_record"), publicKey.toBuffer()],
         PROGRAM_ID
       );
-
+  
       const tx = await program.methods.leaveNetwork().accounts({
         user: publicKey,
         vault: vaultPDA,
-        voterList: voterListPDA,
+        userRecord: userRecordPDA,
         systemProgram: web3.SystemProgram.programId,
       }).rpc();
-
+  
       toast.success(`Left the network. Tx: ${tx.slice(0, 6)}...${tx.slice(-6)}`, {
         position: "top-center",
         autoClose: 6000,
         onClick: () =>
           window.open(`https://explorer.solana.com/tx/${tx}?cluster=devnet`, "_blank"),
       });
-
+  
       await fetchMembership();
     } catch (error) {
       toast.error(`Failed to leave: ${error.message}`, { position: "top-center" });
@@ -118,7 +124,7 @@ const JoinNetwork = ({ compact = false, updateIsMember }) => {
       setLoading(false);
     }
   };
-
+  
 
   const renderButton = () =>
     isMember ? (

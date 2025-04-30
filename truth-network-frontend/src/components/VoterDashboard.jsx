@@ -17,173 +17,113 @@ const VoterDashboard = () => {
     const [totalCorrectVotes, setTotalCorrectVotes] = useState(0);
     const [voterReputation, setVoterReputation] = useState(0);
 
-    useEffect(() => {
-        if (!publicKey) return;
-
-        const fetchData = async () => {
-            try {
-                const walletAdapter = { publicKey, signTransaction, signAllTransactions: wallet?.signAllTransactions };
-                const provider = new AnchorProvider(connection, walletAdapter, { preflightCommitment: "processed" });
-                const program = new Program(idl, provider);
-
-                const stats = await getVoterStats(program, publicKey);
-                setTotalEarnings(stats.totalEarnings);
-                setTotalRevealedVotes(stats.totalRevealedVotes);
-                setTotalCorrectVotes(stats.totalCorrectVotes);
-                setVoterReputation(stats.voterReputation);
-
-                const voterRecords = await program.account.voterRecord.all();
-                const voterRecordMap = {};
-                const userVoterRecords = voterRecords.filter(
-                    record => record.account.voter.toBase58() === publicKey.toBase58()
-                );
-
-                userVoterRecords.forEach(record => {
-                    const questionKey = record.account.question.toBase58();
-                    voterRecordMap[questionKey] = record.account;
-                });
-
-                if (userVoterRecords.length === 0) {
-                    setQuestions([]);
-                    return;
-                }
-
-                const questionPubkeys = userVoterRecords.map(record => record.account.question);
-                const questionsData = await Promise.all(
-                    questionPubkeys.map(async (pubkey) => {
-                        try {
-                            const question = await program.account.question.fetch(pubkey);
-                
-                            // Recompute vault PDA from question
-                            const [vaultPDA] = await web3.PublicKey.findProgramAddress(
-                                [Buffer.from("vault"), pubkey.toBuffer()],
-                                PROGRAM_ID
-                            );
-                
-                            const vaultAccountInfo = await connection.getAccountInfo(vaultPDA);
-                            const rentExemption = await connection.getMinimumBalanceForRentExemption(8);
-                            const vaultBalance = vaultAccountInfo?.lamports ?? 0;
-                            const rewardLamports = Math.max(vaultBalance - rentExemption, 0);
-                            const solReward = rewardLamports / web3.LAMPORTS_PER_SOL;
-                
-                            return {
-                                idque: pubkey.toBase58(),
-                                ...question,
-                                committedVoters: question.committedVoters?.toNumber?.() || 0,
-                                originalReward: question.originalReward?.toNumber?.() || 0,
-                                reward: parseFloat(solReward.toFixed(4)),
-                                userVoterRecord: voterRecordMap[pubkey.toBase58()] || null,
-                            };
-                        } catch (error) {
-                            console.error("Error fetching question:", pubkey.toBase58(), error);
-                            return null;
-                        }
-                    })
-                );                
-                
-                setQuestions(questionsData.filter(q => q !== null));                               
-            } catch (error) {
-                console.error("Error fetching voter data:", error);
-            }
-        };
-
-        fetchData();
-    }, [publicKey, wallet]);
-
-    async function getVoterStats(program, voterPubkey) {
-        console.log("Fetching voter reputation...");
-    
-        const [voterListPDA] = web3.PublicKey.findProgramAddressSync(
-            [Buffer.from("voter_list")],
-            PROGRAM_ID
-        );
-
+    const fetchData = async () => {
         try {
-            const voterList = await program.account.voterList.fetch(voterListPDA);
-            console.log("Voter List:", voterList);
-
-            // Find the voter inside the list
-            const voter = voterList.voters.find(v => v.address.toBase58() === voterPubkey.toBase58());
-
-            if (!voter) {
-                console.log("Voter not found in the network.");
-                return { totalEarnings: 0, totalRevealedVotes: 0, totalCorrectVotes: 0, voterReputation: 0 };
-            }
-
-            return {
-                totalEarnings: (voter.totalEarnings?.toNumber() || 0) / web3.LAMPORTS_PER_SOL,
-                totalRevealedVotes: voter.totalRevealedVotes?.toNumber() || 0,
-                totalCorrectVotes: voter.totalCorrectVotes?.toNumber() || 0,
-                voterReputation: voter.reputation || 0,
-            };
-        } catch (error) {
-            console.error("Error fetching voter reputation:", error);
-            return { totalEarnings: 0, totalRevealedVotes: 0, totalCorrectVotes: 0, voterReputation: 0 };
-        }
-    }
-
-    const claimReward = async (questionId) => {
-        if (!publicKey) {
-            toast.warn("Please connect your wallet.", { position: "top-center" });
-            return;
-        }
-
-        try {
-            toast.info("Processing reward claim...", { position: "top-center" });
-
-            const questionPublicKey = new web3.PublicKey(questionId);
-
-            const [voterRecordPDA] = await web3.PublicKey.findProgramAddress(
-                [Buffer.from("vote"), publicKey.toBuffer(), questionPublicKey.toBuffer()],
-                PROGRAM_ID
-            );
-
-            const [vaultPDA] = await web3.PublicKey.findProgramAddress(
-                [Buffer.from("vault"), questionPublicKey.toBuffer()],
-                PROGRAM_ID
-            );
-
             const walletAdapter = { publicKey, signTransaction, signAllTransactions: wallet?.signAllTransactions };
             const provider = new AnchorProvider(connection, walletAdapter, { preflightCommitment: "processed" });
             const program = new Program(idl, provider);
 
-            const tx = await program.methods
-                .claimReward()
-                .accounts({
-                    question: questionPublicKey,
-                    voter: publicKey,
-                    voterRecord: voterRecordPDA,
-                    vault: vaultPDA,
-                    systemProgram: web3.SystemProgram.programId,
-                })
-                .rpc();
+            const stats = await getVoterStats(program, publicKey);
+            setTotalEarnings(stats.totalEarnings);
+            setTotalRevealedVotes(stats.totalRevealedVotes);
+            setTotalCorrectVotes(stats.totalCorrectVotes);
+            setVoterReputation(stats.voterReputation);
 
-            toast.success(`Reward claimed! Tx: ${tx.slice(0, 6)}...${tx.slice(-6)}`, {
-                position: "top-center",
-                autoClose: 5000,
-                onClick: () => window.open(`https://explorer.solana.com/tx/${tx}?cluster=devnet`, "_blank"),
+            const voterRecords = await program.account.voterRecord.all();
+            const voterRecordMap = {};
+            const userVoterRecords = voterRecords.filter(
+                record => record.account.voter.toBase58() === publicKey.toBase58()
+            );
+
+            userVoterRecords.forEach(record => {
+                const questionKey = record.account.question.toBase58();
+                voterRecordMap[questionKey] = record.account;
             });
 
-            fetchData(); // Refresh the list
+            if (userVoterRecords.length === 0) {
+                setQuestions([]);
+                return;
+            }
+
+            const questionPubkeys = userVoterRecords.map(record => record.account.question);
+            const questionsData = await Promise.all(
+                questionPubkeys.map(async (pubkey) => {
+                    try {
+                        const question = await program.account.question.fetch(pubkey);
+                        const [vaultPDA] = await web3.PublicKey.findProgramAddress(
+                            [Buffer.from("vault"), pubkey.toBuffer()],
+                            PROGRAM_ID
+                        );
+
+                        const vaultAccountInfo = await connection.getAccountInfo(vaultPDA);
+                        const rentExemption = await connection.getMinimumBalanceForRentExemption(8);
+                        const vaultBalance = vaultAccountInfo?.lamports ?? 0;
+                        const rewardLamports = Math.max(vaultBalance - rentExemption, 0);
+                        const solReward = rewardLamports / web3.LAMPORTS_PER_SOL;
+
+                        return {
+                            idque: pubkey.toBase58(),
+                            ...question,
+                            committedVoters: question.committedVoters?.toNumber?.() || 0,
+                            originalReward: question.originalReward?.toNumber?.() || 0,
+                            reward: parseFloat(solReward.toFixed(4)),
+                            userVoterRecord: voterRecordMap[pubkey.toBase58()] || null,
+                        };
+                    } catch (error) {
+                        console.error("Error fetching question:", pubkey.toBase58(), error);
+                        return null;
+                    }
+                })
+            );
+
+            setQuestions(questionsData.filter(q => q !== null));
         } catch (error) {
-            toast.error(`Error claiming reward: ${error.message}`, { position: "top-center", autoClose: 5000 });
+            console.error("Error fetching voter data:", error);
         }
     };
+
+    useEffect(() => {
+        if (!publicKey) return;
+        fetchData();
+    }, [publicKey, wallet]);
+
+    async function getVoterStats(program, voterPubkey) {
+        const [userRecordPDA] = web3.PublicKey.findProgramAddressSync(
+            [Buffer.from("user_record"), voterPubkey.toBuffer()],
+            PROGRAM_ID
+        );
+
+        try {
+            const record = await program.account.userRecord.fetch(userRecordPDA);
     
+            return {
+                totalEarnings: (record.totalEarnings?.toNumber() || 0) / web3.LAMPORTS_PER_SOL,
+                totalRevealedVotes: record.totalRevealedVotes?.toNumber() || 0,
+                totalCorrectVotes: record.totalCorrectVotes?.toNumber() || 0,
+                voterReputation: record.reputation || 0,
+            };
+        } catch (err) {
+            console.warn("UserRecord not found. Defaulting to 0 stats.");
+            return {
+                totalEarnings: 0,
+                totalRevealedVotes: 0,
+                totalCorrectVotes: 0,
+                voterReputation: 0,
+            };
+        }
+    }
 
     return (
         <div className="container mx-auto px-6 py-6">
             <h2 className="text-2xl font-semibold mb-4 text-center border-b border-gray-300 pb-2">
-            Truth Provider Dashboard
+                Truth Provider Dashboard
             </h2>
             <div className="mb-6">
                 <h3 className="text-lg">Total Earnings: <span className="font-bold">{totalEarnings} SOL</span></h3>
                 <h3 className="text-lg">Total Revealed Votes: <span className="font-bold">{totalRevealedVotes}</span></h3>
                 <h3 className="text-lg">Total Correct Votes: <span className="font-bold">{totalCorrectVotes}</span></h3>
+                <h3 className="text-green-600 font-semibold mt-2">Reputation: {voterReputation}</h3>
             </div>
-
-            <h3 className="text-green-600 font-semibold mt-2">Truth Provider Reputation: {voterReputation}</h3>
-
             <h3 className="text-xl font-semibold mb-4">Voted Events:</h3>
             {questions.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -257,9 +197,9 @@ const VoterDashboard = () => {
                                 <p className="text-gray-700"><strong>Voters Committed:</strong> {q.committedVoters}</p>
                                 <p className="text-gray-700"><strong>Commit End Time:</strong> {new Date(q.commitEndTime * 1000).toLocaleString()}</p>
                                 <p className="text-gray-700"><strong>Reveal End Time:</strong> {new Date(q.revealEndTime * 1000).toLocaleString()}</p>
-                                <p className="text-sm text-gray-700">
+                                {/* <p className="text-sm text-gray-700">
                                     <strong>Votes:</strong> {q.votesOption1.toNumber()} - {q.votesOption2.toNumber()}
-                                </p>
+                                </p> */}
                                 
                                 {isEligibleToClaim && (
                                     <p className="mt-3 text-green-600 font-semibold">

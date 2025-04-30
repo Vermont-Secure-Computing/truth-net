@@ -4,10 +4,14 @@ use anchor_lang::solana_program::{system_instruction, program::invoke};
 use anchor_lang::solana_program::rent::Rent;
 use anchor_lang::AccountDeserialize;
 
-pub const FEE_RECEIVER_ADDRESS: &str = "7qfdvYGEKnM2zrMYATbwtAdzagRGQUUCXxU3hhgG3V2u";
+pub const FEE_RECEIVER_PUBKEY: Pubkey = Pubkey::new_from_array([
+    101, 157, 175, 219, 113, 146, 20, 41,
+    2, 2, 144, 246, 0, 99, 211, 231,
+    60, 27, 160, 55, 23, 245, 118, 143,
+    55, 143, 23, 23, 160, 231, 45, 254
+]);
 
-
-declare_id!("3c1dWoc2AegksbJegy3hsiikJowZFfKkXWfwxidDxWyD");
+declare_id!("3QE4hfmAMHPSqcfqimYzyuXU8HyYn7tHBR6mfSuVWZQG");
 
 
 /// An empty account for the vault.
@@ -26,67 +30,43 @@ pub mod truth_network {
     }
 
     pub fn join_network(ctx: Context<JoinNetwork>) -> Result<()> {
-        // Define deposit amount: 0.5 SOL in lamports.
-        let deposit_amount: u64 = 500_000_000;
+        let user_record = &mut ctx.accounts.user_record;
+        let user = &ctx.accounts.user;
+
+        require!(user_record.user == Pubkey::default(), VotingError::AlreadyJoined);
     
-        // Transfer 0.5 SOL from the user's account to the vault.
-        // (The user's account is system owned, so this transfer is allowed even if
-        // the vault is program-owned.)
+        // Transfer 0.5 SOL to vault
+        let deposit_amount: u64 = 500_000_000;
         invoke(
             &system_instruction::transfer(
-                &ctx.accounts.user.key,
-                &ctx.accounts.vault.to_account_info().key,
+                &user.key,
+                &ctx.accounts.vault.key(),
                 deposit_amount,
             ),
             &[
-                ctx.accounts.user.to_account_info(),
+                user.to_account_info(),
                 ctx.accounts.vault.to_account_info(),
                 ctx.accounts.system_program.to_account_info(),
             ],
         )?;
     
-        // After deposit, add the user to the voter list.
-        let voter_list = &mut ctx.accounts.voter_list;
-        let new_voter = Voter {
-            address: *ctx.accounts.user.key,
-            reputation: 0, // Default reputation.
-            total_earnings: 0,
-            total_revealed_votes: 0,
-            total_correct_votes: 0,
-            selected_option: 255,
-        };        
+        // Initialize UserRecord
+        user_record.user = *user.key;
+        user_record.reputation = 0;
+        user_record.total_earnings = 0;
+        user_record.total_revealed_votes = 0;
+        user_record.total_correct_votes = 0;
     
-        require!(
-            !voter_list.voters.contains(&new_voter),
-            VotingError::AlreadyJoined
-        );
+        msg!("User joined: {}", user.key());
     
-        voter_list.voters.push(new_voter);
         Ok(())
     }
     
-    pub fn leave_network(ctx: Context<LeaveNetwork>) -> Result<()> {
-        let voter_list = &mut ctx.accounts.voter_list;
-        let user_pubkey = *ctx.accounts.user.key;
-    
-        // Find and reset the voter's data if they exist
-        if let Some(voter) = voter_list.voters.iter_mut().find(|v| v.address == user_pubkey) {
-            voter.reputation = 0;
-            voter.total_earnings = 0;
-            voter.total_revealed_votes = 0;
-            voter.total_correct_votes = 0;
-
-            msg!("Voter data for user {} has been reset.", user_pubkey);
-        } else {
-            return Err(VotingError::NotJoined.into());
-        }
-
-        // Remove the voter from the voter list using retain
-        voter_list.voters.retain(|v| v.address != user_pubkey);
-        msg!("User {} has been removed from the voter list.", user_pubkey);
-    
+    pub fn leave_network(_ctx: Context<LeaveNetwork>) -> Result<()> {
+        msg!("Vault and UserRecord closed successfully. Goodbye, {}!", _ctx.accounts.user.key());
         Ok(())
-    }       
+    }
+           
 
     pub fn create_question(
         ctx: Context<CreateQuestion>,
@@ -149,6 +129,7 @@ pub mod truth_network {
         // For clarity, store the vault address in a dedicated field.
         question.vault_address = ctx.accounts.vault.key();
         question.claimed_weight = 0;
+        question.reward_drained = false;
         
         // Derive the bump for the question PDA.
         let (_derived_pubkey, bump) = Pubkey::find_program_address(
@@ -273,8 +254,6 @@ pub mod truth_network {
         };
     
         
-
-        // Store winning_option and winning_percent in the Question struct
         question.winning_option = winning_option;
         question.winning_percent = winning_percent;
         question.finalized = true;
@@ -320,56 +299,33 @@ pub mod truth_network {
     }
 
     pub fn commit_vote(ctx: Context<CommitVote>, commitment: [u8; 32]) -> Result<()> {
-        let question_key = ctx.accounts.question.key(); // Clone the key before borrowing.
-    
-        let voter_record = &mut ctx.accounts.voter_record;
         let question = &mut ctx.accounts.question;
-        let voter_list = &ctx.accounts.voter_list;
-
-        // Check if the voter is in the voter list
-        require!(
-            voter_list.voters.iter().any(|v| v.address == *ctx.accounts.voter.key),
-            VotingError::NotPartOfVoterList
-        );
-
-        require!(!voter_record.revealed, VotingError::AlreadyRevealed);
-
+        let voter_record = &mut ctx.accounts.voter_record;
+    
         require!(Clock::get()?.unix_timestamp < question.commit_end_time, VotingError::CommitPhaseEnded);
     
-        // Store precomputed hash from frontend.
         voter_record.commitment = commitment;
         voter_record.voter = *ctx.accounts.voter.key;
-        voter_record.question = question_key; // Use the stored key.
+        voter_record.question = question.key();
     
-        // Increment the committed voters count.
         question.committed_voters += 1;
         question.voter_records_count += 1;
     
-        msg!(
-            "Vote committed with hash: {:?}. Total committed voters: {}",
-            commitment,
-            question.committed_voters
-        );
-    
+        msg!("Vote committed by {}", voter_record.voter);
         Ok(())
     }
     
     pub fn reveal_vote(ctx: Context<RevealVote>, password: String) -> Result<()> {
-        let voter_record = &mut ctx.accounts.voter_record;
         let question = &mut ctx.accounts.question;
-        let voter_list = &mut ctx.accounts.voter_list;
-        let voter_pubkey = ctx.accounts.voter.key();
+        let voter_record = &mut ctx.accounts.voter_record;
+        let user_record = &mut ctx.accounts.user_record;
     
         require!(!voter_record.revealed, VotingError::AlreadyRevealed);
-
         require!(Clock::get()?.unix_timestamp < question.reveal_end_time, VotingError::RevealPhaseEnded);
     
-        // Try both vote options (1 and 2) to reconstruct the hash.
         let mut valid_vote: Option<u8> = None;
-    
         for vote in 1..=2 {
-            let vote_string = vote.to_string();
-            let input_data = format!("{}{}", vote_string, password);
+            let input_data = format!("{}{}", vote, password);
             let computed_hash = hash(input_data.as_bytes());
     
             if computed_hash.0 == voter_record.commitment {
@@ -378,83 +334,59 @@ pub mod truth_network {
             }
         }
     
-        // If no valid vote is found, return an error.
         let vote = valid_vote.ok_or(VotingError::InvalidReveal)?;
     
-        let reputation = voter_list
-            .voters
-            .iter()
-            .find(|v| v.address == voter_pubkey)
-            .map(|v| v.reputation as u64)
-            .unwrap_or(0);
-
-        let vote_weight = if reputation == 0 {
-            1
-        } else {
-            reputation
-        };
-            
-
-        // Count the vote with weighted value
+        voter_record.revealed = true;
+        voter_record.selected_option = vote;
+        voter_record.vote_weight = if user_record.reputation == 0 { 1 } else { user_record.reputation as u64 };
+    
         if vote == 1 {
-            question.votes_option_1 += vote_weight;
+            question.votes_option_1 += voter_record.vote_weight;
         } else {
-            question.votes_option_2 += vote_weight;
+            question.votes_option_2 += voter_record.vote_weight;
         }
     
-        // Mark vote as revealed.
-        voter_record.revealed = true;
-
-        // **Set the revealed vote in plaintext.**
-        voter_record.selected_option = vote;
-
-        let vote_weight = if reputation == 0 { 1 } else { reputation };
-
-        voter_record.vote_weight = vote_weight;
-
-        if let Some(voter) = voter_list.voters.iter_mut().find(|v| v.address == voter_pubkey) {
-            voter.total_revealed_votes += 1;
-            voter.selected_option = vote;
-            voter.reputation = calculate_reputation(
-                voter.total_revealed_votes,
-                voter.total_correct_votes,
-            );
-        }
-        
+        // Update user revealed votes
+        user_record.total_revealed_votes += 1;
+    
+        // Recalculate reputation based on new revealed/correct votes
+        user_record.reputation = calculate_reputation(
+            user_record.total_revealed_votes,
+            user_record.total_correct_votes,
+        );
     
         msg!("Vote Revealed Successfully! Option {}", vote);
+        msg!("New reputation: {}", user_record.reputation);
+    
         Ok(())
     }
-
+    
     
 
     pub fn claim_reward(ctx: Context<ClaimReward>, tx_id: String) -> Result<()> {
-        let question = &mut ctx.accounts.question;
         let voter_record = &mut ctx.accounts.voter_record;
+        let question = &mut ctx.accounts.question;
+        let user_record = &mut ctx.accounts.user_record;
         let voter_info = ctx.accounts.voter.to_account_info();
         let vault_info = ctx.accounts.vault.to_account_info();
         let fee_receiver_info = ctx.accounts.fee_receiver.to_account_info();
-    
+        
+        // Ensure reward hasn't been claimed already
         require!(!voter_record.claimed, VotingError::AlreadyClaimed);
+
+        // Extra protection (in addition to #[account(has_one = voter)])
+        require!(ctx.accounts.voter.key() == voter_record.voter, VotingError::NotEligible);
     
-        if question.winning_option == 255 {
-            require!(
-                Clock::get()?.unix_timestamp > question.reveal_end_time,
-                VotingError::RevealPhaseNotOver
-            );
-    
-            question.winning_option = if question.votes_option_1 == question.votes_option_2 {
-                0
-            } else if question.votes_option_1 > question.votes_option_2 {
-                1
-            } else {
-                2
-            };
-        }
+        // Ensure question is finalized and winning option is known
+        require!(
+            question.winning_option != 255,
+            VotingError::VotingNotFinalized
+        );
     
         let winning_option = question.winning_option;
         let is_tie = winning_option == 0;
     
+        // Require that voter is eligible to claim (i.e., voted correctly or it's a tie)
         if !is_tie {
             require!(
                 voter_record.selected_option == winning_option,
@@ -462,30 +394,17 @@ pub mod truth_network {
             );
         }
     
-        if question.revealed_correct_voters == 0 {
-            let mut count = 0u64;
-    
-            for acc_info in ctx.remaining_accounts.iter() {
-                let mut data: &[u8] = &acc_info.data.borrow();
-                if let Ok(record) = VoterRecord::try_deserialize(&mut data) {
-                    if record.revealed && (is_tie || record.selected_option == winning_option) {
-                        count += 1;
-                    }
-                }
-            }
-    
-            question.revealed_correct_voters = count;
-    
-            msg!(
-                "Snapshot: {} revealed and picked winning option",
-                question.revealed_correct_voters
-            );
-        }
+        // Ensure snapshot has already been taken
+        require!(
+            question.revealed_correct_voters > 0,
+            VotingError::NoEligibleVoters
+        );
     
         let rent = Rent::get()?;
         let min_balance = rent.minimum_balance(vault_info.data_len());
         let vault_balance = **vault_info.lamports.borrow();
     
+        // If fee hasn't been taken yet, initialize reward snapshot
         if !question.reward_fee_taken {
             let available_reward = vault_balance.saturating_sub(min_balance);
             let fee = available_reward * 2 / 100;
@@ -496,6 +415,7 @@ pub mod truth_network {
     
             question.original_reward = available_reward;
             question.snapshot_reward = snapshot;
+    
             question.snapshot_total_weight = if is_tie {
                 question.votes_option_1 + question.votes_option_2
             } else if winning_option == 1 {
@@ -511,25 +431,23 @@ pub mod truth_network {
             question.reward_fee_taken = true;
     
             msg!(
-                "Snapshot taken. Total weight: {}",
+                "Reward snapshot taken. Total weight: {}",
                 question.snapshot_total_weight
             );
         }
     
         let voter_weight = voter_record.vote_weight;
-    
         let total_snapshot_reward = question.snapshot_reward;
         let total_weight = question.snapshot_total_weight;
     
         require!(total_weight > 0, VotingError::NoEligibleVoters);
     
         let is_last_claimer = question.claimed_weight + voter_weight == total_weight;
-    
         let base_share = (total_snapshot_reward * voter_weight) / total_weight;
     
         let mut voter_share = base_share;
-        
         let available = vault_balance.saturating_sub(min_balance);
+    
         if is_last_claimer {
             let remaining = total_snapshot_reward.saturating_sub(question.total_distributed);
             voter_share = remaining.min(available);
@@ -541,44 +459,50 @@ pub mod truth_network {
             voter_share = voter_share.min(available);
         }
     
+        voter_record.claimed = true;
+    
         question.total_distributed += voter_share;
         question.claimed_weight += voter_weight;
         question.claimed_voters_count += 1;
         question.voter_records_closed += 1;
     
-        voter_record.claimed = true;
-    
         **vault_info.try_borrow_mut_lamports()? -= voter_share;
         **voter_info.try_borrow_mut_lamports()? += voter_share;
     
+        // Store claim tx ID
         let tx_id_bytes = tx_id.as_bytes();
         let len = tx_id_bytes.len().min(64);
         voter_record.claim_tx_id[..len].copy_from_slice(&tx_id_bytes[..len]);
         for i in len..64 {
             voter_record.claim_tx_id[i] = 0;
         }
-
-        if let Some(voter) = ctx.accounts.voter_list.voters.iter_mut().find(|v| v.address == *voter_info.key) {
-            // Update total earnings
-            voter.total_earnings = voter
-                .total_earnings
-                .checked_add(voter_share)
-                .ok_or(VotingError::Overflow)?;
-        
-            // Only increment correct vote count if not a tie and voter picked the winning option
-            if !is_tie && voter_record.selected_option == winning_option {
-                voter.total_correct_votes += 1;
-            }
-        
-        }        
+    
+        // Update user stats
+        user_record.total_earnings = user_record
+            .total_earnings
+            .checked_add(voter_share)
+            .ok_or(VotingError::Overflow)?;
+    
+        if !is_tie && voter_record.selected_option == winning_option {
+            user_record.total_correct_votes += 1;
+            user_record.reputation = calculate_reputation(
+                user_record.total_revealed_votes,
+                user_record.total_correct_votes,
+            );
+        }
+    
+        msg!("Reward claimed successfully! Earned: {} lamports", voter_share);
     
         Ok(())
-    }      
+    }
+          
 
     pub fn drain_unclaimed_reward(ctx: Context<DrainUnclaimedReward>) -> Result<()> {
-        let question = &ctx.accounts.question;
+        let question = &mut ctx.accounts.question;
         let vault = &ctx.accounts.vault;
         let fee_receiver = &ctx.accounts.fee_receiver;
+
+        require!(!question.reward_drained, VotingError::AlreadyDrained);
     
         let now = Clock::get()?.unix_timestamp;
     
@@ -601,6 +525,8 @@ pub mod truth_network {
     
         **vault.to_account_info().try_borrow_mut_lamports()? -= transferable;
         **fee_receiver.to_account_info().try_borrow_mut_lamports()? += transferable;
+
+        question.reward_drained = true;
     
         msg!(
             "Unclaimed reward of {} lamports sent to fee receiver: {}",
@@ -644,6 +570,54 @@ pub mod truth_network {
 
         Ok(())
     }
+
+    pub fn snapshot_winning_option(ctx: Context<SnapshotWinningOption>) -> Result<()> {
+        let question = &mut ctx.accounts.question;
+    
+        // Only snapshot if not already set
+        if question.winning_option == 255 {
+            require!(
+                Clock::get()?.unix_timestamp > question.reveal_end_time,
+                VotingError::RevealPhaseNotOver
+            );
+    
+            question.winning_option = if question.votes_option_1 == question.votes_option_2 {
+                0
+            } else if question.votes_option_1 > question.votes_option_2 {
+                1
+            } else {
+                2
+            };
+    
+            msg!("Winning option set to: {}", question.winning_option);
+        }
+    
+        let winning_option = question.winning_option;
+        let is_tie = winning_option == 0;
+    
+        // Only snapshot if not already done
+        if question.revealed_correct_voters == 0 {
+            let mut count = 0u64;
+    
+            for acc_info in ctx.remaining_accounts.iter() {
+                let mut data: &[u8] = &acc_info.data.borrow();
+                if let Ok(record) = VoterRecord::try_deserialize(&mut data) {
+                    if record.revealed && (is_tie || record.selected_option == winning_option) {
+                        count += 1;
+                    }
+                }
+            }
+    
+            question.revealed_correct_voters = count;
+    
+            msg!(
+                "Snapshot taken: {} revealed correct voters",
+                count
+            );
+        }
+    
+        Ok(())
+    }    
                                            
         
 }
@@ -673,6 +647,7 @@ fn calculate_reputation(revealed: u64, correct: u64) -> u8 {
         _ => 19,
     }
 }
+
 
 #[account]
 pub struct Question {
@@ -704,6 +679,7 @@ pub struct Question {
     pub voter_records_count: u64,
     pub voter_records_closed: u64,
     pub revealed_correct_voters: u64,
+    pub reward_drained: bool,
     pub bump: u8,
 }
 
@@ -770,7 +746,7 @@ pub struct DrainUnclaimedReward<'info> {
     pub vault: Account<'info, Vault>,
 
     /// CHECK: Constant public key
-    #[account(mut, address = FEE_RECEIVER_ADDRESS.parse::<Pubkey>().unwrap())]
+    #[account(mut, address = FEE_RECEIVER_PUBKEY)]
     pub fee_receiver: AccountInfo<'info>,
 
     pub system_program: Program<'info, System>,
@@ -817,25 +793,24 @@ pub struct DeleteExpiredQuestion<'info> {
 #[derive(Accounts)]
 pub struct JoinNetwork<'info> {
     #[account(
-        init_if_needed,
+        init,
         payer = user,
-        space = 8 + 2000, // for voter_list
-        seeds = [b"voter_list"],
+        space = 8 + 65,
+        seeds = [b"user_record", user.key().as_ref()],
         bump
     )]
-    pub voter_list: Account<'info, VoterList>,
+    pub user_record: Account<'info, UserRecord>,
 
-    // The vault account is now defined as a typed account.
     #[account(
         init_if_needed,
         payer = user,
-        space = 8,  // Minimal space for Vault (only the 8-byte discriminator).
+        space = 8,
         seeds = [b"vault", user.key().as_ref()],
         bump
     )]
     pub vault: Account<'info, Vault>,
 
-    #[account(mut, signer)]
+    #[account(mut)]
     pub user: Signer<'info>,
 
     pub system_program: Program<'info, System>,
@@ -851,14 +826,20 @@ pub struct LeaveNetwork<'info> {
     )]
     pub vault: Account<'info, Vault>,
 
+    #[account(
+        mut,
+        seeds = [b"user_record", user.key().as_ref()],
+        bump,
+        close = user
+    )]
+    pub user_record: Account<'info, UserRecord>,
+
     #[account(mut, signer)]
     pub user: Signer<'info>,
 
-    #[account(mut)]
-    pub voter_list: Account<'info, VoterList>,
-
     pub system_program: Program<'info, System>,
 }
+
 
 
 #[derive(Accounts)]
@@ -905,19 +886,29 @@ pub struct CreateVoterRecord<'info> {
 }
 
 #[account]
-pub struct VoterList {
-    pub voters: Vec<Voter>,
-}
-
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq, Debug)]
-pub struct Voter {
-    pub address: Pubkey,
+pub struct UserRecord {
+    pub user: Pubkey,
     pub reputation: u8,
     pub total_earnings: u64,
     pub total_revealed_votes: u64,
     pub total_correct_votes: u64,
-    pub selected_option: u8,
 }
+
+
+// #[account]
+// pub struct VoterList {
+//     pub voters: Vec<Voter>,
+// }
+
+// #[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq, Debug)]
+// pub struct Voter {
+//     pub address: Pubkey,
+//     pub reputation: u8,
+//     pub total_earnings: u64,
+//     pub total_revealed_votes: u64,
+//     pub total_correct_votes: u64,
+//     pub selected_option: u8,
+// }
 
 
 #[account]
@@ -946,8 +937,11 @@ pub struct CommitVote<'info> {
     )]
     pub voter_record: Account<'info, VoterRecord>,
 
-    #[account(mut)]
-    pub voter_list: Account<'info, VoterList>, 
+    #[account(
+        seeds = [b"user_record", voter.key().as_ref()],
+        bump
+    )]
+    pub user_record: Account<'info, UserRecord>,
 
     #[account(mut)]
     pub voter: Signer<'info>,
@@ -965,13 +959,17 @@ pub struct RevealVote<'info> {
         seeds = [b"vote", voter.key().as_ref(), question.key().as_ref()],
         bump
     )]
-    pub voter_record: Account<'info, VoterRecord>, 
+    pub voter_record: Account<'info, VoterRecord>,
+
+    #[account(
+        mut,
+        seeds = [b"user_record", voter.key().as_ref()],
+        bump
+    )]
+    pub user_record: Account<'info, UserRecord>,
 
     #[account(mut)]
     pub voter: Signer<'info>,
-
-    #[account(mut)]
-    pub voter_list: Account<'info, VoterList>,
 }
 
 #[derive(Accounts)]
@@ -985,25 +983,34 @@ pub struct FinalizeVoting<'info> {
 pub struct ClaimReward<'info> {
     #[account(mut)]
     pub voter: Signer<'info>,
-    #[account(mut, has_one = voter, close = voter)]
+
+    #[account(
+        mut,
+        has_one = voter,
+        close = voter
+    )]
     pub voter_record: Account<'info, VoterRecord>,
+
     #[account(
         mut,
         seeds = [b"question", question.asker.as_ref(), &question.id.to_le_bytes()],
-        bump = question.bump,
-    )]
-    pub question: Account<'info, Question>,
-    #[account(mut)]
-    pub vault: Account<'info, Vault>,
-    #[account(
-        mut,
-        seeds = [b"voter_list"],
         bump
     )]
-    pub voter_list: Account<'info, VoterList>,
+    pub question: Account<'info, Question>,
+
+    #[account(
+        mut,
+        seeds = [b"user_record", voter.key().as_ref()],
+        bump
+    )]
+    pub user_record: Account<'info, UserRecord>,
+
+    #[account(mut)]
+    pub vault: Account<'info, Vault>,
     /// CHECK: This is a fixed known address for the fee receiver, no need for ownership verification.
-    #[account(mut, address = FEE_RECEIVER_ADDRESS.parse::<Pubkey>().unwrap())]
+    #[account(mut, address = FEE_RECEIVER_PUBKEY)]
     pub fee_receiver: AccountInfo<'info>,
+
     pub system_program: Program<'info, System>,
 }
 
@@ -1035,6 +1042,17 @@ pub struct ReclaimCommitOrLoserRent<'info> {
     )]
     pub question: Account<'info, Question>,
 }
+
+#[derive(Accounts)]
+pub struct SnapshotWinningOption<'info> {
+    #[account(
+        mut,
+        seeds = [b"question", question.asker.as_ref(), &question.id.to_le_bytes()],
+        bump = question.bump
+    )]
+    pub question: Account<'info, Question>,
+}
+
 
 
 #[error_code]
@@ -1101,5 +1119,7 @@ pub enum VotingError {
     RentNotExpired,
     #[msg("You were a winner or already eligible for reward.")]
     AlreadyEligibleOrWinner,
+    #[msg("Vault is already drained.")]
+    AlreadyDrained
 }
 
