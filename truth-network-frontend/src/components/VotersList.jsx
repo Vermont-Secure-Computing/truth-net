@@ -1,23 +1,44 @@
 import React, { useState, useEffect } from "react";
-import { PublicKey } from "@solana/web3.js";
-import { useConnection } from "@solana/wallet-adapter-react";
-import { Program, AnchorProvider, web3 } from "@coral-xyz/anchor";
-import { toast } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
-import idl from "../idl.json";
+import { Connection, PublicKey } from "@solana/web3.js";
+import { toast } from "react-toastify";
+import { deserializeUnchecked } from "borsh";
+import BN from "bn.js";
 import { PROGRAM_ID } from "../constant";
+import "react-toastify/dist/ReactToastify.css";
 
-const connection = new web3.Connection(web3.clusterApiUrl("devnet"), "confirmed");
+// Define UserRecord structure
+class UserRecord {
+  constructor(fields) {
+    this.user = fields.user;
+    this.reputation = fields.reputation;
+    this.total_earnings = new BN(fields.total_earnings, 10);
+    this.total_revealed_votes = new BN(fields.total_revealed_votes, 10);
+    this.total_correct_votes = new BN(fields.total_correct_votes, 10);
+  }
+}
 
-// toast.configure();
+const USER_RECORD_SCHEMA = new Map([
+  [
+    UserRecord,
+    {
+      kind: "struct",
+      fields: [
+        ["user", [32]],
+        ["reputation", "u8"],
+        ["total_earnings", "u64"],
+        ["total_revealed_votes", "u64"],
+        ["total_correct_votes", "u64"],
+      ],
+    },
+  ],
+]);
+
+const USER_RECORD_SIZE = 8 + 65; // 8-byte discriminator + 65 bytes of data
 
 const VotersList = () => {
-  const { connection } = useConnection();
   const [voters, setVoters] = useState([]);
-
-  // Setup Provider & Program
-  const provider = new AnchorProvider(connection, { publicKey: null }, { preflightCommitment: "processed" });
-  const program = new Program(idl, provider);
+  const [currentPage, setCurrentPage] = useState(1);
+  const votersPerPage = 50;
 
   useEffect(() => {
     fetchVoters();
@@ -27,28 +48,44 @@ const VotersList = () => {
     try {
       toast.info("Fetching registered voters...");
 
-      const [voterListPDA] = await PublicKey.findProgramAddressSync(
-        [Buffer.from("voter_list")],
-        PROGRAM_ID
-      );
+      const connection = new Connection("https://api.devnet.solana.com", "confirmed");
 
-      const voterListAccount = await program.account.voterList.fetch(voterListPDA);
+      const accounts = await connection.getProgramAccounts(PROGRAM_ID, {
+        filters: [{ dataSize: USER_RECORD_SIZE }],
+      });
 
-      const parsedVoters = voterListAccount.voters.map((voter, index) => ({
-        index: index + 1,
-        address: voter.address.toString(),
-        reputation: voter.reputation,
-        totalEarnings: voter.totalEarnings.toString(),
-        totalRevealedVotes: voter.totalRevealedVotes.toString(),
-        totalCorrectVotes: voter.totalCorrectVotes.toString(),
-      }));
+      const parsedVoters = accounts.map((account, index) => {
+        const data = account.account.data.slice(8); // skip 8-byte discriminator
+        const userRecord = deserializeUnchecked(
+          USER_RECORD_SCHEMA,
+          UserRecord,
+          data
+        );
 
-      toast.success("Voters fetched successfully!");
+        return {
+          index: index + 1,
+          address: new PublicKey(userRecord.user).toBase58(),
+          reputation: userRecord.reputation,
+          totalEarnings: userRecord.total_earnings.toString(),
+          totalRevealedVotes: userRecord.total_revealed_votes.toString(),
+          totalCorrectVotes: userRecord.total_correct_votes.toString(),
+        };
+      });
+
       setVoters(parsedVoters);
+      setCurrentPage(1);
+      toast.success("Voters fetched successfully!");
     } catch (error) {
+      console.error(error);
       toast.error("Error fetching voters: " + error.message);
     }
   };
+
+  const indexOfLastVoter = currentPage * votersPerPage;
+  const indexOfFirstVoter = indexOfLastVoter - votersPerPage;
+  const currentVoters = voters.slice(indexOfFirstVoter, indexOfLastVoter);
+
+  const totalPages = Math.ceil(voters.length / votersPerPage);
 
   return (
     <div className="container mx-auto p-4">
@@ -73,7 +110,7 @@ const VotersList = () => {
                 </tr>
               </thead>
               <tbody>
-                {voters.map((voter) => (
+                {currentVoters.map((voter) => (
                   <tr key={voter.address} className="hover:bg-gray-50">
                     <td className="p-2 border">{voter.index}</td>
                     <td className="p-2 border">{voter.address}</td>
@@ -102,7 +139,9 @@ const VotersList = () => {
             {voters.map((voter) => (
               <div key={voter.address} className="border rounded-md p-4 shadow-sm bg-white">
                 <p><span className="font-semibold">#</span> {voter.index}</p>
-                <p><span className="font-semibold">Address:</span> {voter.address}</p>
+                <p className="break-all">
+                  <span className="font-semibold">Address:</span> {voter.address}
+                </p>
                 <p><span className="font-semibold">Reputation:</span> {voter.reputation}</p>
                 <p><span className="font-semibold">Total Earnings:</span> {voter.totalEarnings}</p>
                 <p><span className="font-semibold">Revealed Votes:</span> {voter.totalRevealedVotes}</p>
@@ -118,11 +157,26 @@ const VotersList = () => {
               </div>
             ))}
           </div>
+          <div className="flex justify-center mt-4 space-x-2">
+            <button
+              onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+              disabled={currentPage === 1}
+              className="px-3 py-1 bg-gray-200 rounded disabled:opacity-50"
+            >
+              Prev
+            </button>
+            <span className="px-3 py-1">{currentPage} / {totalPages}</span>
+            <button
+              onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+              disabled={currentPage === totalPages}
+              className="px-3 py-1 bg-gray-200 rounded disabled:opacity-50"
+            >
+              Next
+            </button>
+          </div>
         </div>
       )}
     </div>
-
-
   );
 };
 

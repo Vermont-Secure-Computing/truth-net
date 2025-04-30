@@ -28,6 +28,7 @@ const QuestionDetail = () => {
     const [hasDrained, setHasDrained] = useState(false);
     const [hasReclaimed, setHasReclaimed] = useState(false);
     const [reclaiming, setReclaiming] = useState(false);
+    const [snapshotTriggered, setSnapshotTriggered] = useState(false);
     
 
     const wallet = { publicKey, signTransaction, signAllTransactions };
@@ -38,22 +39,18 @@ const QuestionDetail = () => {
 
     const checkMembership = async () => {
         try {
-            const [voterListPDA] = await PublicKey.findProgramAddress(
-                [Buffer.from("voter_list")],
-                PROGRAM_ID
-            );
-    
-            const voterListAccount = await program.account.voterList.fetch(voterListPDA);
-            const member = voterListAccount.voters.some(
-                (voter) => voter.address.toString() === publicKey.toString()
-            );
-    
-            setIsMember(member);
+          const [userRecordPDA] = await PublicKey.findProgramAddress(
+            [Buffer.from("user_record"), publicKey.toBuffer()],
+            PROGRAM_ID
+          );
+          const record = await program.account.userRecord.fetch(userRecordPDA);
+          setIsMember(!!record); // if record exists, user is a member
         } catch (error) {
-            console.warn("Membership check failed or voter list not initialized");
-            setIsMember(false);
+          console.warn("User is not a member of the network.");
+          setIsMember(false);
         }
-    };
+      };
+      
 
     useEffect(() => {
         fetchQuestion();
@@ -108,6 +105,8 @@ const QuestionDetail = () => {
                 revealPhaseOver
             });
 
+            
+
             const newQuestion = {
                 id,
                 questionText: account.questionText,
@@ -136,7 +135,10 @@ const QuestionDetail = () => {
                 claimedWeight: account.claimedWeight?.toNumber?.() || 0,
                 claimedVotersCount: account.claimedVotersCount?.toNumber?.() || 0,
                 claimedRemainderCount: account.claimedRemainderCount?.toNumber?.() || 0,
+                snapshotTaken: account.revealedCorrectVoters?.toNumber?.() > 0,
             };
+
+            console.log("Snapshot Taken?", newQuestion.snapshotTaken);
 
             setQuestion(newQuestion);
 
@@ -238,7 +240,7 @@ const QuestionDetail = () => {
                     voterRecord: voterRecordPDA,
                     vault: vaultPDA,
                     voterList: voterListPDA,
-                    feeReceiver: new PublicKey("7qfdvYGEKnM2zrMYATbwtAdzagRGQUUCXxU3hhgG3V2u"),
+                    feeReceiver: FEE_RECEIVER,
                     systemProgram: web3.SystemProgram.programId,
                 })
                 .rpc();
@@ -338,6 +340,8 @@ const QuestionDetail = () => {
                 [Buffer.from("vault"), questionPublicKey.toBuffer()],
                 PROGRAM_ID
             );
+
+            console.log("FEE_RECEIVER passed in:", FEE_RECEIVER.toBase58());
     
             const tx = await program.methods
                 .drainUnclaimedReward()
@@ -412,7 +416,39 @@ const QuestionDetail = () => {
         } finally {
             setReclaiming(false);
         }
-    };    
+    };
+    
+    const triggerSnapshot = async () => {
+        if (!publicKey) return;
+        try {
+          const questionPublicKey = new PublicKey(id);
+          const questionIdBuffer = Buffer.alloc(8);
+          questionIdBuffer.writeBigUInt64LE(BigInt(question.idNumber));
+          const [questionPDA] = await PublicKey.findProgramAddress(
+            [Buffer.from("question"), new PublicKey(question.asker).toBuffer(), questionIdBuffer],
+            PROGRAM_ID
+          );
+          const voterRecords = await program.account.voterRecord.all();
+          const voterAccounts = voterRecords
+            .filter(v => v.account.question.toBase58() === questionPublicKey.toBase58())
+            .map(v => ({ pubkey: v.publicKey }));
+    
+          const remainingAccounts = voterAccounts.map((v) => ({ pubkey: v.pubkey, isSigner: false, isWritable: false }));
+    
+          await program.methods
+            .snapshotWinningOption()
+            .accounts({ question: questionPDA })
+            .remainingAccounts(remainingAccounts)
+            .rpc();
+    
+          toast.success("Snapshot updated successfully");
+          setSnapshotTriggered(true);
+          fetchQuestion();
+        } catch (err) {
+          toast.error("Snapshot failed");
+          console.error(err);
+        }
+      };
         
     
     const copyToClipboard = () => {
@@ -422,14 +458,14 @@ const QuestionDetail = () => {
 
     if (loading) return <p className="text-center text-gray-600">Loading...</p>;
 
-    console.log("Connected wallet:", publicKey?.toString());
-    console.log("Asker:", question.asker);
-    console.log("showCommitReveal:", showCommitReveal);
-    console.log("isMember:", isMember);
-    console.log("RevealEnd:", new Date(question.revealEndTime * 1000));
-    console.log("Now:", new Date(now * 1000));
-    console.log("question distributed reward: ", question.totalDistributed)
-    console.log("question snapshot reward: ", question.snapshotReward)
+    // console.log("Connected wallet:", publicKey?.toString());
+    // console.log("Asker:", question.asker);
+    // console.log("showCommitReveal:", showCommitReveal);
+    // console.log("isMember:", isMember);
+    // console.log("RevealEnd:", new Date(question.revealEndTime * 1000));
+    // console.log("Now:", new Date(now * 1000));
+    // console.log("question distributed reward: ", question.totalDistributed)
+    // console.log("question snapshot reward: ", question.snapshotReward)
     
     const txId = publicKey
         ? localStorage.getItem(`claim_tx_${id}_${publicKey.toString()}`)
@@ -439,10 +475,19 @@ const QuestionDetail = () => {
         ? question.originalReward
         : question.reward * web3.LAMPORTS_PER_SOL;
 
-    console.log("🔍 Revealed Correct Voters:", question.revealedCorrectVoters);
+    // console.log("Revealed Correct Voters:", question.revealedCorrectVoters);
 
-    
     const displayReward = (displayRewardLamports / web3.LAMPORTS_PER_SOL).toFixed(4);
+    // console.log("Reclaim Rent Debug:");
+    // console.log("userVoterRecord:", userVoterRecord);
+    // console.log("question.revealEnded:", question.revealEnded);
+    // console.log("userVoterRecord.claimed:", userVoterRecord?.claimed);
+    // console.log("hasReclaimed:", hasReclaimed);
+    // console.log("reclaiming:", reclaiming);
+    // console.log("userVoterRecord.revealed:", userVoterRecord?.revealed);
+    // console.log("votesOption1:", question.votesOption1);
+    // console.log("votesOption2:", question.votesOption2);
+    // console.log("selectedOption:", userVoterRecord?.selectedOption);
     return (
         <div className="container mx-auto px-6 py-6 flex justify-center">
             <div className="bg-white shadow-lg rounded-lg p-6 border border-gray-200 max-w-lg w-full text-center">
@@ -476,7 +521,7 @@ const QuestionDetail = () => {
                 )}
 
                 {/* Claim Reward Button */}
-                {isEligibleToClaim && (
+                {isEligibleToClaim && question.snapshotTaken && (
                     <button
                         onClick={claimReward}
                         disabled={claiming}
@@ -495,37 +540,36 @@ const QuestionDetail = () => {
                 )}
 
                 {userVoterRecord &&
-                    question.revealEnded &&
-                    !userVoterRecord.claimed &&
-                    (!hasReclaimed || reclaiming) &&
+                question.revealEnded &&
+                !userVoterRecord.claimed &&
+                (!hasReclaimed || reclaiming) &&
+                (
+                    !userVoterRecord.revealed ||
                     (
-                        (!userVoterRecord.revealed) ||
-                        (
-                            userVoterRecord.revealed &&
-                            (
-                                question.votesOption1 !== question.votesOption2 &&
-                                userVoterRecord.selectedOption !==
-                                (question.votesOption1 >= question.votesOption2 ? 1 : 2)
-                            )
+                        userVoterRecord.revealed &&
+                        question.votesOption1 !== question.votesOption2 &&
+                        userVoterRecord.selectedOption !== (
+                            question.votesOption1 > question.votesOption2 ? 1 : 2
                         )
-                    ) && (
-                        <button
-                            onClick={handleReclaimRent}
-                            disabled={reclaiming}
-                            className="mt-3 bg-yellow-500 text-white px-4 py-2 rounded w-full hover:bg-yellow-600 transition duration-300 disabled:bg-gray-400"
-                        >
-                            {reclaiming ? (
-                                <span className="flex items-center justify-center">
-                                    Reclaiming<span className="dot-animate">.</span>
-                                    <span className="dot-animate dot2">.</span>
-                                    <span className="dot-animate dot3">.</span>
-                                </span>
-                            ) : (
-                                "Reclaim Rent"
-                            )}
-                        </button>
                     )
-                }
+                ) && (
+                    <button
+                        onClick={handleReclaimRent}
+                        disabled={reclaiming}
+                        className="mt-3 bg-yellow-500 text-white px-4 py-2 rounded w-full hover:bg-yellow-600 transition duration-300 disabled:bg-gray-400"
+                    >
+                        {reclaiming ? (
+                            <span className="flex items-center justify-center">
+                                Reclaiming<span className="dot-animate">.</span>
+                                <span className="dot-animate dot2">.</span>
+                                <span className="dot-animate dot3">.</span>
+                            </span>
+                        ) : (
+                            "Reclaim Rent"
+                        )}
+                    </button>
+                )}
+
 
                 {txId && (
                     <p className="text-green-700 font-semibold mt-4">
@@ -540,7 +584,7 @@ const QuestionDetail = () => {
                         </a>
                     </p>
                 )}
-                {question.canDrainReward && !hasDrained && (
+                {question.canDrainReward && !hasDrained ? (
                     <button
                         onClick={handleDrainUnclaimedReward}
                         disabled={draining}
@@ -556,7 +600,22 @@ const QuestionDetail = () => {
                             "Send Unclaimed Reward to Fee Receiver"
                         )}
                     </button>
+                ) : (
+                    question.revealEnded &&
+                    (question.votesOption1 + question.votesOption2 > 0) &&
+                    !question.snapshotTaken && (
+                        <>
+                            <button
+                                onClick={triggerSnapshot}
+                                className="mt-4 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+                            >
+                                Finalize
+                            </button>
+                            <p className="text-green-600 font-medium mt-4">Unlock claim reward</p>
+                        </>
+                    )
                 )}
+
 
                 {publicKey &&
                 question.revealEnded &&
@@ -593,7 +652,7 @@ const QuestionDetail = () => {
                 )}
 
 
-<pre className="text-left text-sm text-gray-600">
+{/* <pre className="text-left text-sm text-gray-600">
 {JSON.stringify({
   vaultOnlyHasRent: question.vaultOnlyHasRent,
   rentExpired: question.rentExpired,
@@ -616,7 +675,7 @@ const QuestionDetail = () => {
   ),
   snapshotReward: question.snapshotReward
 }, null, 2)}
-</pre>
+</pre> */}
 
             </div>
             {showModal && (
