@@ -63,101 +63,78 @@ const QuestionDetail = () => {
     // Fetch Question Details & User Voter Record
     const fetchQuestion = async () => {
         try {
-            const questionPublicKey = new PublicKey(id);
-            const account = await program.account.question.fetch(questionPublicKey);
-
-            const vaultPubkey = new PublicKey(account.vaultAddress);
-            const vaultAccountInfo = await connection.getAccountInfo(vaultPubkey);
-            const rentExemption = await connection.getMinimumBalanceForRentExemption(8);
-            const vaultBalance = vaultAccountInfo?.lamports ?? 0;
-            const rewardLamports = Math.max(vaultBalance - rentExemption, 0);
-            const solReward = (rewardLamports / web3.LAMPORTS_PER_SOL).toFixed(4);
-            const revealEnded = account.revealEndTime.toNumber() <= Date.now() / 1000;
-            const noOneCommitted = account.committedVoters.toNumber() === 0;
-            const commitPhaseOver = account.commitEndTime.toNumber() <= now;
-            
-            const noOneRevealed =
-                account.votesOption1.toNumber() === 0 &&
-                account.votesOption2.toNumber() === 0;
-            const revealPhaseOver = account.revealEndTime.toNumber() <= now;
-
-            const canDrainReward =
-                vaultBalance > rentExemption &&
-                (
-                    (commitPhaseOver && noOneCommitted) ||
-                    (revealPhaseOver && noOneRevealed)
-                );
-
-            const vaultOnlyHasRent = (vaultBalance - rentExemption) < 1000;
-
-            const rentExpired = account.rentExpiration.toNumber() <= now;
-
-            console.log("hasDrained?", hasDrained);
-
-            console.log({
-                canDrainReward,
-                vaultBalance,
-                rentExemption,
-                rewardLamports,
-                noOneCommitted,
-                noOneRevealed,
-                commitPhaseOver,
-                revealPhaseOver
-            });
-
-            
-
-            const newQuestion = {
-                id,
-                questionText: account.questionText,
-                reward: parseFloat(solReward),
-                commitEndTime: account.commitEndTime.toNumber(),
-                revealEndTime: account.revealEndTime.toNumber(),
-                votesOption1: account.votesOption1.toNumber(),
-                votesOption2: account.votesOption2.toNumber(),
-                committedVoters: account.committedVoters?.toNumber?.() || 0,
-                option1: account.option1,
-                option2: account.option2,
-                originalReward: account.originalReward?.toNumber?.() || 0,
-                totalDistributed: account.totalDistributed?.toNumber?.() || 0,
-                revealEnded,
-                vaultAddress: account.vaultAddress.toString(),
-                asker: account.asker.toString(),
-                idNumber: account.id.toNumber(),
-                canDrainReward,
-                vaultOnlyHasRent,
-                rentExpired,
-                voterRecordsCount: account.voterRecordsCount?.toNumber?.() || 0,
-                voterRecordsClosed: account.voterRecordsClosed?.toNumber?.() || 0,
-                snapshotReward: account.snapshotReward?.toNumber?.() || 0,
-                revealedCorrectVoters: account.revealedCorrectVoters?.toNumber?.() || 0,
-                snapshotTotalWeight: account.snapshotTotalWeight?.toNumber?.() || 0,
-                claimedWeight: account.claimedWeight?.toNumber?.() || 0,
-                claimedVotersCount: account.claimedVotersCount?.toNumber?.() || 0,
-                claimedRemainderCount: account.claimedRemainderCount?.toNumber?.() || 0,
-                snapshotTaken: account.revealedCorrectVoters?.toNumber?.() > 0,
-            };
-
-            console.log("Snapshot Taken?", newQuestion.snapshotTaken);
-
-            setQuestion(newQuestion);
-
-            if (publicKey) {
-                await fetchUserVoterRecord(questionPublicKey, newQuestion);
-            }
-
-            setShowCommitReveal(!newQuestion.revealEnded);
-            setLoading(false);
+          const questionPublicKey = new PublicKey(id);
+          const account = await program.account.question.fetch(questionPublicKey);
+    
+          const vaultPubkey = new PublicKey(account.vaultAddress);
+          const vaultAccountInfo = await connection.getAccountInfo(vaultPubkey);
+          const rentExemption = await connection.getMinimumBalanceForRentExemption(8);
+          const vaultBalance = vaultAccountInfo?.lamports ?? 0;
+          const rewardLamports = Math.max(vaultBalance - rentExemption, 0);
+          const solReward = (rewardLamports / web3.LAMPORTS_PER_SOL).toFixed(4);
+    
+          const revealEnded = account.revealEndTime.toNumber() <= Date.now() / 1000;
+          const noOneCommitted = account.committedVoters.toNumber() === 0;
+          const commitPhaseOver = account.commitEndTime.toNumber() <= now;
+          const noOneRevealed =
+            account.votesOption1.toNumber() === 0 &&
+            account.votesOption2.toNumber() === 0;
+          const revealPhaseOver = account.revealEndTime.toNumber() <= now;
+          const canDrainReward =
+            vaultBalance > rentExemption &&
+            ((commitPhaseOver && noOneCommitted) || (revealPhaseOver && noOneRevealed));
+          const vaultOnlyHasRent = (vaultBalance - rentExemption) < 1000;
+          const rentExpired = account.rentExpiration.toNumber() <= now;
+    
+          const newQuestion = {
+            id,
+            questionText: account.questionText,
+            reward: parseFloat(solReward),
+            commitEndTime: account.commitEndTime.toNumber(),
+            revealEndTime: account.revealEndTime.toNumber(),
+            votesOption1: account.votesOption1.toNumber(),
+            votesOption2: account.votesOption2.toNumber(),
+            committedVoters: account.committedVoters?.toNumber?.() || 0,
+            option1: account.option1,
+            option2: account.option2,
+            originalReward: account.originalReward?.toNumber?.() || 0,
+            totalDistributed: account.totalDistributed?.toNumber?.() || 0,
+            revealEnded,
+            vaultAddress: account.vaultAddress.toString(),
+            asker: account.asker.toString(),
+            idNumber: account.id.toNumber(),
+            canDrainReward,
+            vaultOnlyHasRent,
+            rentExpired,
+            voterRecordsCount: account.voterRecordsCount?.toNumber?.() || 0,
+            voterRecordsClosed: account.voterRecordsClosed?.toNumber?.() || 0,
+            snapshotReward: account.snapshotReward?.toNumber?.() || 0,
+            revealedCorrectVoters: account.revealedCorrectVoters?.toNumber?.() || 0,
+            snapshotTotalWeight: account.snapshotTotalWeight?.toNumber?.() || 0,
+            claimedWeight: account.claimedWeight?.toNumber?.() || 0,
+            claimedVotersCount: account.claimedVotersCount?.toNumber?.() || 0,
+            claimedRemainderCount: account.claimedRemainderCount?.toNumber?.() || 0,
+            snapshotTaken: account.rewardFeeTaken || false,
+          };
+    
+          setQuestion(newQuestion);
+    
+          if (publicKey) {
+            await fetchUserVoterRecord(questionPublicKey, newQuestion);
+          }
+    
+          setShowCommitReveal(!newQuestion.revealEnded);
+          setLoading(false);
         } catch (error) {
-            console.error("Error fetching question:", error);
-            if (error.message.includes("Account does not exist")) {
-                if (publicKey) {
-                  localStorage.removeItem(`claim_tx_${id}_${publicKey.toString()}`);
-                }
-                setQuestionDeleted(true);
-              }
+          console.error("Error fetching question:", error);
+          if (error.message.includes("Account does not exist")) {
+            if (publicKey) {
+              localStorage.removeItem(`claim_tx_${id}_${publicKey.toString()}`);
+            }
+            setQuestionDeleted(true);
+          }
         }
-    };
+      };
 
     // Fetch User's Voter Record
     const fetchUserVoterRecord = async (questionPublicKey, questionData) => {
@@ -417,38 +394,6 @@ const QuestionDetail = () => {
             setReclaiming(false);
         }
     };
-    
-    const triggerSnapshot = async () => {
-        if (!publicKey) return;
-        try {
-          const questionPublicKey = new PublicKey(id);
-          const questionIdBuffer = Buffer.alloc(8);
-          questionIdBuffer.writeBigUInt64LE(BigInt(question.idNumber));
-          const [questionPDA] = await PublicKey.findProgramAddress(
-            [Buffer.from("question"), new PublicKey(question.asker).toBuffer(), questionIdBuffer],
-            PROGRAM_ID
-          );
-          const voterRecords = await program.account.voterRecord.all();
-          const voterAccounts = voterRecords
-            .filter(v => v.account.question.toBase58() === questionPublicKey.toBase58())
-            .map(v => ({ pubkey: v.publicKey }));
-    
-          const remainingAccounts = voterAccounts.map((v) => ({ pubkey: v.pubkey, isSigner: false, isWritable: false }));
-    
-          await program.methods
-            .snapshotWinningOption()
-            .accounts({ question: questionPDA })
-            .remainingAccounts(remainingAccounts)
-            .rpc();
-    
-          toast.success("Snapshot updated successfully");
-          setSnapshotTriggered(true);
-          fetchQuestion();
-        } catch (err) {
-          toast.error("Snapshot failed");
-          console.error(err);
-        }
-      };
         
     
     const copyToClipboard = () => {
@@ -521,7 +466,7 @@ const QuestionDetail = () => {
                 )}
 
                 {/* Claim Reward Button */}
-                {isEligibleToClaim && question.snapshotTaken && (
+                {isEligibleToClaim && (
                     <button
                         onClick={claimReward}
                         disabled={claiming}
@@ -584,7 +529,7 @@ const QuestionDetail = () => {
                         </a>
                     </p>
                 )}
-                {question.canDrainReward && !hasDrained ? (
+                {question.canDrainReward && !hasDrained && (
                     <button
                         onClick={handleDrainUnclaimedReward}
                         disabled={draining}
@@ -600,21 +545,8 @@ const QuestionDetail = () => {
                             "Send Unclaimed Reward to Fee Receiver"
                         )}
                     </button>
-                ) : (
-                    question.revealEnded &&
-                    (question.votesOption1 + question.votesOption2 > 0) &&
-                    !question.snapshotTaken && (
-                        <>
-                            <button
-                                onClick={triggerSnapshot}
-                                className="mt-4 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-                            >
-                                Finalize
-                            </button>
-                            <p className="text-green-600 font-medium mt-4">Unlock claim reward</p>
-                        </>
-                    )
                 )}
+
 
 
                 {publicKey &&

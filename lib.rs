@@ -11,7 +11,7 @@ pub const FEE_RECEIVER_PUBKEY: Pubkey = Pubkey::new_from_array([
     55, 143, 23, 23, 160, 231, 45, 254
 ]);
 
-declare_id!("3QE4hfmAMHPSqcfqimYzyuXU8HyYn7tHBR6mfSuVWZQG");
+declare_id!("6JWjb73VpTRtq2Dq8iS5W3TbFJxjhgrJtdeyrcFtf9QB");
 
 
 /// An empty account for the vault.
@@ -23,11 +23,6 @@ pub struct Vault {}
 #[program]
 pub mod truth_network {
     use super::*;
-
-    pub fn hello_world(_ctx: Context<HelloWorld>) -> Result<()> {
-        msg!("Hello, World!");
-        Ok(())
-    }
 
     pub fn join_network(ctx: Context<JoinNetwork>) -> Result<()> {
         let user_record = &mut ctx.accounts.user_record;
@@ -82,6 +77,12 @@ pub mod truth_network {
         require!(
             question_text.len() >= 10,
             VotingError::QuestionTooShort
+        );
+
+        // Maximum length check for question text
+        require!(
+            question_text.len() <= 150,
+            VotingError::QuestionTooLong
         );
         
         // Ensure commit and reveal times are valid.
@@ -370,23 +371,24 @@ pub mod truth_network {
         let voter_info = ctx.accounts.voter.to_account_info();
         let vault_info = ctx.accounts.vault.to_account_info();
         let fee_receiver_info = ctx.accounts.fee_receiver.to_account_info();
-        
-        // Ensure reward hasn't been claimed already
-        require!(!voter_record.claimed, VotingError::AlreadyClaimed);
-
-        // Extra protection (in addition to #[account(has_one = voter)])
-        require!(ctx.accounts.voter.key() == voter_record.voter, VotingError::NotEligible);
     
-        // Ensure question is finalized and winning option is known
-        require!(
-            question.winning_option != 255,
-            VotingError::VotingNotFinalized
-        );
+        require!(!voter_record.claimed, VotingError::AlreadyClaimed);
+        require!(ctx.accounts.voter.key() == voter_record.voter, VotingError::NotEligible);
+
+        if question.winning_option == 255 {
+            question.winning_option = if question.votes_option_1 == question.votes_option_2 {
+                0
+            } else if question.votes_option_1 > question.votes_option_2 {
+                1
+            } else {
+                2
+            };
+        }
     
         let winning_option = question.winning_option;
         let is_tie = winning_option == 0;
     
-        // Require that voter is eligible to claim (i.e., voted correctly or it's a tie)
+        // Determine if this voter is eligible (tie or correct vote)
         if !is_tie {
             require!(
                 voter_record.selected_option == winning_option,
@@ -394,17 +396,11 @@ pub mod truth_network {
             );
         }
     
-        // Ensure snapshot has already been taken
-        require!(
-            question.revealed_correct_voters > 0,
-            VotingError::NoEligibleVoters
-        );
-    
         let rent = Rent::get()?;
         let min_balance = rent.minimum_balance(vault_info.data_len());
         let vault_balance = **vault_info.lamports.borrow();
     
-        // If fee hasn't been taken yet, initialize reward snapshot
+        // Initialize reward snapshot if not taken
         if !question.reward_fee_taken {
             let available_reward = vault_balance.saturating_sub(min_balance);
             let fee = available_reward * 2 / 100;
@@ -431,7 +427,7 @@ pub mod truth_network {
             question.reward_fee_taken = true;
     
             msg!(
-                "Reward snapshot taken. Total weight: {}",
+                "Reward snapshot initialized. Total weight: {}",
                 question.snapshot_total_weight
             );
         }
@@ -460,7 +456,6 @@ pub mod truth_network {
         }
     
         voter_record.claimed = true;
-    
         question.total_distributed += voter_share;
         question.claimed_weight += voter_weight;
         question.claimed_voters_count += 1;
@@ -477,7 +472,6 @@ pub mod truth_network {
             voter_record.claim_tx_id[i] = 0;
         }
     
-        // Update user stats
         user_record.total_earnings = user_record
             .total_earnings
             .checked_add(voter_share)
@@ -495,6 +489,7 @@ pub mod truth_network {
     
         Ok(())
     }
+    
           
 
     pub fn drain_unclaimed_reward(ctx: Context<DrainUnclaimedReward>) -> Result<()> {
@@ -569,54 +564,6 @@ pub mod truth_network {
         );
 
         Ok(())
-    }
-
-    pub fn snapshot_winning_option(ctx: Context<SnapshotWinningOption>) -> Result<()> {
-        let question = &mut ctx.accounts.question;
-    
-        // Only snapshot if not already set
-        if question.winning_option == 255 {
-            require!(
-                Clock::get()?.unix_timestamp > question.reveal_end_time,
-                VotingError::RevealPhaseNotOver
-            );
-    
-            question.winning_option = if question.votes_option_1 == question.votes_option_2 {
-                0
-            } else if question.votes_option_1 > question.votes_option_2 {
-                1
-            } else {
-                2
-            };
-    
-            msg!("Winning option set to: {}", question.winning_option);
-        }
-    
-        let winning_option = question.winning_option;
-        let is_tie = winning_option == 0;
-    
-        // Only snapshot if not already done
-        if question.revealed_correct_voters == 0 {
-            let mut count = 0u64;
-    
-            for acc_info in ctx.remaining_accounts.iter() {
-                let mut data: &[u8] = &acc_info.data.borrow();
-                if let Ok(record) = VoterRecord::try_deserialize(&mut data) {
-                    if record.revealed && (is_tie || record.selected_option == winning_option) {
-                        count += 1;
-                    }
-                }
-            }
-    
-            question.revealed_correct_voters = count;
-    
-            msg!(
-                "Snapshot taken: {} revealed correct voters",
-                count
-            );
-        }
-    
-        Ok(())
     }    
                                            
         
@@ -678,7 +625,6 @@ pub struct Question {
     pub claimed_weight: u64,
     pub voter_records_count: u64,
     pub voter_records_closed: u64,
-    pub revealed_correct_voters: u64,
     pub reward_drained: bool,
     pub bump: u8,
 }
@@ -1017,12 +963,6 @@ pub struct ClaimReward<'info> {
 
 
 #[derive(Accounts)]
-pub struct HelloWorld<'info> {
-    #[account(mut)]
-    pub user: Signer<'info>,
-}
-
-#[derive(Accounts)]
 pub struct ReclaimCommitOrLoserRent<'info> {
     #[account(
         mut,
@@ -1083,8 +1023,6 @@ pub enum VotingError {
     CommitPhaseEnded,
     #[msg("Reveal phase ended.")]
     RevealPhaseEnded,
-    #[msg("Voting is not finalize yet.")]
-    VotingNotFinalized,
     #[msg("You're not eligible")]
     NotEligible,
     #[msg("Already claimed.")]
@@ -1120,6 +1058,8 @@ pub enum VotingError {
     #[msg("You were a winner or already eligible for reward.")]
     AlreadyEligibleOrWinner,
     #[msg("Vault is already drained.")]
-    AlreadyDrained
+    AlreadyDrained,
+    #[msg("The question is too long.")]
+    QuestionTooLong,
 }
 

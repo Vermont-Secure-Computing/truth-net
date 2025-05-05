@@ -31,11 +31,11 @@ const QuestionForm = ({ fetchQuestions, onClose }) => {
 
   const createQuestion = async () => {
     if (!publicKey) {
-      toast.warn("⚠ Please connect your wallet.", { position: "top-center" });
+      toast.warn("Please connect your wallet.", { position: "top-center" });
       return;
     }
     if (!questionText || !reward || !commitEndTime || !revealEndTime) {
-      toast.warn("⚠ All fields are required.", { position: "top-center" });
+      toast.warn("All fields are required.", { position: "top-center" });
       return;
     }
 
