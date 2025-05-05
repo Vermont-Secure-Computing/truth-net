@@ -14,6 +14,7 @@ import QuestionDetail from "./components/QuestionDetail";
 import JoinNetwork from "./components/JoinNetwork";
 import VoterDashboard from "./components/VoterDashboard";
 import VotersList from "./components/VotersList";
+import Instruction from "./components/Instruction";
 import idl from "./idl.json";
 import { PROGRAM_ID } from "./constant";
 
@@ -184,6 +185,9 @@ const App = () => {
                     Voters
                     </button>
 
+                    <button onClick={() => navigate("/instructions")} className="px-4 py-2 rounded-md transition duration-200 bg-white hover:bg-gray-300">Instructions</button>
+
+
                     <WalletMultiButton className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md transition duration-200" />
                 </nav>
 
@@ -239,6 +243,16 @@ const App = () => {
                             className="block w-full text-left px-4 py-2 rounded-md bg-white hover:bg-gray-300"
                         >
                             Voters
+                        </button>
+
+                        <button 
+                            onClick={() => {
+                                navigate("/instructions");
+                                setMobileMenuOpen(false);
+                            }} 
+                            className="block w-full text-left px-4 py-2 rounded-md bg-white hover:bg-gray-300"
+                        >
+                            Instructions
                         </button>
 
                         <div className="pt-2">
@@ -308,6 +322,7 @@ const App = () => {
                 <Route path="/question/:id" element={<QuestionDetail />} />
                 <Route path="/dashboard" element={<VoterDashboard />} />
                 <Route path="/voters" element={<VotersList />} />
+                <Route path="/instructions" element={<Instruction />} />
             </Routes>
         </div>
     );
