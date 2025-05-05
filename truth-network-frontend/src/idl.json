@@ -1,5 +1,5 @@
 {
-  "address": "3QE4hfmAMHPSqcfqimYzyuXU8HyYn7tHBR6mfSuVWZQG",
+  "address": "6JWjb73VpTRtq2Dq8iS5W3TbFJxjhgrJtdeyrcFtf9QB",
   "metadata": {
     "name": "truth_network",
     "version": "0.1.0",
@@ -1231,6 +1231,11 @@
       "code": 6031,
       "name": "AlreadyDrained",
       "msg": "Vault is already drained."
+    },
+    {
+      "code": 6032,
+      "name": "QuestionTooLong",
+      "msg": "The question is too long."
     }
   ],
   "types": [
