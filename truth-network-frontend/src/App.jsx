@@ -136,12 +136,12 @@ const App = () => {
             <ToastContainer position="top-center" autoClose={5000} />
             {/* Header */}
             <header className="bg-white text-black shadow-md w-full">
-                <div className="container mx-auto px-6 py-4 flex justify-between items-center">
+                <div className="container mx-auto px-6 py-4 flex justify-between items-center relative">
 
                 {/* Left side: title + GitHub */}
                 <div className="flex items-center space-x-2">
                     <h1>
-                        <img src="/logo.png" alt="My Logo" class="logo-img" />
+                        <img src="/logo.png" alt="My Logo" className="logo-img" />
                     </h1>
                     <a
                     href="https://github.com/Vermont-Secure-Computing/truth-net"
