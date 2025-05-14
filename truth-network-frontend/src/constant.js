@@ -1,8 +1,8 @@
 import { PublicKey } from "@solana/web3.js";
 
 // Fee receiver hardcoded on-chain
-export const FEE_RECEIVER = new PublicKey("7qfdvYGEKnM2zrMYATbwtAdzagRGQUUCXxU3hhgG3V2u");
+export const FEE_RECEIVER = new PublicKey("CQaZgx5jqQrz7c8shCG3vJLiiPGPrawSGhvkgXtGyxL");
 
 // Program ID
-export const PROGRAM_ID = new PublicKey("6JWjb73VpTRtq2Dq8iS5W3TbFJxjhgrJtdeyrcFtf9QB");
+export const PROGRAM_ID = new PublicKey("AWYhLHrQr1dwCBYL7UzevGRdnkTpvK2NwkQ9xghiYnRN");
 
