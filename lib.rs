@@ -5,13 +5,14 @@ use anchor_lang::solana_program::rent::Rent;
 use anchor_lang::AccountDeserialize;
 
 pub const FEE_RECEIVER_PUBKEY: Pubkey = Pubkey::new_from_array([
-    101, 157, 175, 219, 113, 146, 20, 41,
-    2, 2, 144, 246, 0, 99, 211, 231,
-    60, 27, 160, 55, 23, 245, 118, 143,
-    55, 143, 23, 23, 160, 231, 45, 254
+    2, 236, 12, 165, 146, 38, 247, 217,
+    125, 178, 209, 199, 181, 40, 192, 253,
+    47, 12, 147, 34, 41, 1, 63, 2,
+    102, 250, 134, 97, 98, 61, 247, 241
 ]);
 
-declare_id!("6JWjb73VpTRtq2Dq8iS5W3TbFJxjhgrJtdeyrcFtf9QB");
+
+declare_id!("AWYhLHrQr1dwCBYL7UzevGRdnkTpvK2NwkQ9xghiYnRN");
 
 
 /// An empty account for the vault.
@@ -1062,4 +1063,25 @@ pub enum VotingError {
     #[msg("The question is too long.")]
     QuestionTooLong,
 }
+
+#[cfg(not(feature = "no-entrypoint"))]
+use solana_security_txt::security_txt;
+
+#[cfg(not(feature = "no-entrypoint"))]
+security_txt! {
+name: "Truit.it",
+project_url: "https://truth.it.com/",
+contacts: "mailto:office@vtscc.org,https://vtscc.org/contact.html",
+policy: "https://truth.it.com/security-policy",
+
+// Optional Fields
+preferred_languages: "en",
+source_code: "https://github.com/Vermont-Secure-Computing/truth-net",
+source_revision: "AWYhLHrQr1dwCBYL7UzevGRdnkTpvK2NwkQ9xghiYnRN",
+source_release: "",
+encryption: "",
+auditors: "vtscc.org",
+acknowledgements: "Truth Network"
+}
+
 
