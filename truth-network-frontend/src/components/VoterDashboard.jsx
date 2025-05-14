@@ -181,7 +181,6 @@ const VoterDashboard = () => {
                                 key={index} 
                                 className="bg-white shadow-md rounded-lg p-6 border border-gray-200 cursor-pointer hover:shadow-lg transition"
                                 onClick={() => {
-                                    console.log("Navigating to question:", q.idque, "Type:", typeof q.idque);
                                 
                                     if (!q.idque || typeof q.idque !== "string" || q.idque.length !== 44) {
                                         console.error("Invalid question ID:", q.idque);

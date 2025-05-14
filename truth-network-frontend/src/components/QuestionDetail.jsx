@@ -171,7 +171,6 @@ const QuestionDetail = () => {
             setIsEligibleToClaim(eligibleToClaim);
         } catch (error) {
             if (error.message.includes("Account does not exist")) {
-                console.log("Voter record was closed. Marking as reclaimed.");
                 setUserVoterRecord(null);
                 setHasReclaimed(true);
             } else {
@@ -317,8 +316,6 @@ const QuestionDetail = () => {
                 [Buffer.from("vault"), questionPublicKey.toBuffer()],
                 PROGRAM_ID
             );
-
-            console.log("FEE_RECEIVER passed in:", FEE_RECEIVER.toBase58());
     
             const tx = await program.methods
                 .drainUnclaimedReward()
@@ -402,15 +399,6 @@ const QuestionDetail = () => {
     };
 
     if (loading) return <p className="text-center text-gray-600">Loading...</p>;
-
-    // console.log("Connected wallet:", publicKey?.toString());
-    // console.log("Asker:", question.asker);
-    // console.log("showCommitReveal:", showCommitReveal);
-    // console.log("isMember:", isMember);
-    // console.log("RevealEnd:", new Date(question.revealEndTime * 1000));
-    // console.log("Now:", new Date(now * 1000));
-    // console.log("question distributed reward: ", question.totalDistributed)
-    // console.log("question snapshot reward: ", question.snapshotReward)
     
     const txId = publicKey
         ? localStorage.getItem(`claim_tx_${id}_${publicKey.toString()}`)
@@ -420,19 +408,8 @@ const QuestionDetail = () => {
         ? question.originalReward
         : question.reward * web3.LAMPORTS_PER_SOL;
 
-    // console.log("Revealed Correct Voters:", question.revealedCorrectVoters);
-
     const displayReward = (displayRewardLamports / web3.LAMPORTS_PER_SOL).toFixed(4);
-    // console.log("Reclaim Rent Debug:");
-    // console.log("userVoterRecord:", userVoterRecord);
-    // console.log("question.revealEnded:", question.revealEnded);
-    // console.log("userVoterRecord.claimed:", userVoterRecord?.claimed);
-    // console.log("hasReclaimed:", hasReclaimed);
-    // console.log("reclaiming:", reclaiming);
-    // console.log("userVoterRecord.revealed:", userVoterRecord?.revealed);
-    // console.log("votesOption1:", question.votesOption1);
-    // console.log("votesOption2:", question.votesOption2);
-    // console.log("selectedOption:", userVoterRecord?.selectedOption);
+    
     return (
         <div className="container mx-auto px-6 py-6 flex justify-center">
             <div className="bg-white shadow-lg rounded-lg p-6 border border-gray-200 max-w-lg w-full text-center">
@@ -582,32 +559,6 @@ const QuestionDetail = () => {
                     )}
                 </button>
                 )}
-
-
-{/* <pre className="text-left text-sm text-gray-600">
-{JSON.stringify({
-  vaultOnlyHasRent: question.vaultOnlyHasRent,
-  rentExpired: question.rentExpired,
-  voterRecordsCount: question.voterRecordsCount,
-  voterRecordsClosed: question.voterRecordsClosed,
-  totalDistributed: question.totalDistributed,
-  originalReward: question.originalReward,
-  revealedCorrectVoters: question.revealed_correct_voters,
-  snapshotTotalWeight: question.snapshotTotalWeight,
-  claimedWeight: question.claimedWeight,
-  claimedVotersCount: question.claimedVotersCount,
-  claimedRemainderCount: question.claimedRemainderCount,
-  canDelete: (
-    question.revealEnded &&
-    question.vaultOnlyHasRent &&
-    question.rentExpired &&
-    publicKey.toString() === question.asker &&
-    (question.voterRecordsCount === 0 || question.voterRecordsClosed === question.voterRecordsCount) &&
-    (question.totalDistributed === question.originalReward || question.originalReward === 0)
-  ),
-  snapshotReward: question.snapshotReward
-}, null, 2)}
-</pre> */}
 
             </div>
             {showModal && (

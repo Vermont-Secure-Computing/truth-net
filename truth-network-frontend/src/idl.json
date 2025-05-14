@@ -1,5 +1,5 @@
 {
-  "address": "6JWjb73VpTRtq2Dq8iS5W3TbFJxjhgrJtdeyrcFtf9QB",
+  "address": "AWYhLHrQr1dwCBYL7UzevGRdnkTpvK2NwkQ9xghiYnRN",
   "metadata": {
     "name": "truth_network",
     "version": "0.1.0",
@@ -98,7 +98,7 @@
         {
           "name": "fee_receiver",
           "writable": true,
-          "address": "7qfdvYGEKnM2zrMYATbwtAdzagRGQUUCXxU3hhgG3V2u"
+          "address": "CQaZgx5jqQrz7c8shCG3vJLiiPGPrawSGhvkgXtGyxL"
         },
         {
           "name": "system_program",
@@ -533,7 +533,7 @@
         {
           "name": "fee_receiver",
           "writable": true,
-          "address": "7qfdvYGEKnM2zrMYATbwtAdzagRGQUUCXxU3hhgG3V2u"
+          "address": "CQaZgx5jqQrz7c8shCG3vJLiiPGPrawSGhvkgXtGyxL"
         },
         {
           "name": "system_program",
@@ -566,27 +566,6 @@
           "type": "u64"
         }
       ]
-    },
-    {
-      "name": "hello_world",
-      "discriminator": [
-        11,
-        235,
-        52,
-        244,
-        76,
-        66,
-        25,
-        71
-      ],
-      "accounts": [
-        {
-          "name": "user",
-          "writable": true,
-          "signer": true
-        }
-      ],
-      "args": []
     },
     {
       "name": "initialize_counter",
@@ -955,53 +934,6 @@
           "type": "string"
         }
       ]
-    },
-    {
-      "name": "snapshot_winning_option",
-      "discriminator": [
-        222,
-        88,
-        124,
-        196,
-        0,
-        41,
-        203,
-        133
-      ],
-      "accounts": [
-        {
-          "name": "question",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  113,
-                  117,
-                  101,
-                  115,
-                  116,
-                  105,
-                  111,
-                  110
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "question.asker",
-                "account": "Question"
-              },
-              {
-                "kind": "account",
-                "path": "question.id",
-                "account": "Question"
-              }
-            ]
-          }
-        }
-      ],
-      "args": []
     }
   ],
   "accounts": [
@@ -1139,101 +1071,96 @@
     },
     {
       "code": 6013,
-      "name": "VotingNotFinalized",
-      "msg": "Voting is not finalize yet."
-    },
-    {
-      "code": 6014,
       "name": "NotEligible",
       "msg": "You're not eligible"
     },
     {
-      "code": 6015,
+      "code": 6014,
       "name": "AlreadyClaimed",
       "msg": "Already claimed."
     },
     {
-      "code": 6016,
+      "code": 6015,
       "name": "NoEligibleVoters",
       "msg": "No eligible voters."
     },
     {
-      "code": 6017,
+      "code": 6016,
       "name": "InvalidVaultAccount",
       "msg": "Invalid vault account"
     },
     {
-      "code": 6018,
+      "code": 6017,
       "name": "InsufficientFunds",
       "msg": "Insufficient funds."
     },
     {
-      "code": 6019,
+      "code": 6018,
       "name": "Overflow",
       "msg": "Overflow"
     },
     {
-      "code": 6020,
+      "code": 6019,
       "name": "InsufficientMajority",
       "msg": "Winning votes do not meet the required 51% majority."
     },
     {
-      "code": 6021,
+      "code": 6020,
       "name": "QuestionIdMismatch",
       "msg": "Question ID mismatch."
     },
     {
-      "code": 6022,
+      "code": 6021,
       "name": "NotPartOfVoterList",
       "msg": "Not a part of the voters list."
     },
     {
-      "code": 6023,
+      "code": 6022,
       "name": "RemainingRewardExists",
       "msg": "Remaining reward exists, cannot delete."
     },
     {
-      "code": 6024,
+      "code": 6023,
       "name": "QuestionTooShort",
       "msg": "Question must be at least 10 characters long."
     },
     {
-      "code": 6025,
+      "code": 6024,
       "name": "RewardTooSmall",
       "msg": "Reward must be at least 0.05 SOL."
     },
     {
-      "code": 6026,
+      "code": 6025,
       "name": "RevealPhaseNotOver",
       "msg": "Reveal phase is not yet over."
     },
     {
-      "code": 6027,
+      "code": 6026,
       "name": "CannotDrainReward",
       "msg": "Cannot drain: commits or reveals exist or phases not ended."
     },
     {
-      "code": 6028,
+      "code": 6027,
       "name": "CannotDeleteQuestion",
       "msg": "Cannot delete: question still has active or unclaimed participation."
     },
     {
-      "code": 6029,
+      "code": 6028,
       "name": "RentNotExpired",
       "msg": "Rent has not yet expired."
     },
     {
-      "code": 6030,
+      "code": 6029,
       "name": "AlreadyEligibleOrWinner",
       "msg": "You were a winner or already eligible for reward."
     },
     {
-      "code": 6031,
+      "code": 6030,
       "name": "AlreadyDrained",
       "msg": "Vault is already drained."
     },
     {
-      "code": 6032,
+      "code": 6031,
       "name": "QuestionTooLong",
       "msg": "The question is too long."
     }
@@ -1350,10 +1277,6 @@
           },
           {
             "name": "voter_records_closed",
-            "type": "u64"
-          },
-          {
-            "name": "revealed_correct_voters",
             "type": "u64"
           },
           {

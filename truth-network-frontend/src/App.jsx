@@ -6,6 +6,7 @@ import { ToastContainer } from "react-toastify";
 import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { Menu, X } from "lucide-react";
+import { bs58 } from "@coral-xyz/anchor/dist/cjs/utils/bytes";
 import { Program, AnchorProvider, web3 } from "@coral-xyz/anchor";
 import { PublicKey } from "@solana/web3.js";
 import QuestionForm from "./components/QuestionForm";
@@ -36,6 +37,9 @@ const App = () => {
     useEffect(() => {
         fetchQuestions();
     }, [publicKey]);
+
+    const pubkey = 'CQaZgx5jqQrz7c8shCG3vJLiiPGPrawSGhvkgXtGyxL';
+    const bytes = bs58.decode(pubkey);
 
     const fetchQuestions = async () => {
         try {
@@ -121,7 +125,6 @@ const App = () => {
     
             const sortedQuestions = [...activeQuestions, ...endedQuestions];
     
-            console.log("Sorted Questions:", sortedQuestions);
             setQuestions(sortedQuestions);
         } catch (error) {
             toast.error(`Error fetching questions: ${error.message}`, {
