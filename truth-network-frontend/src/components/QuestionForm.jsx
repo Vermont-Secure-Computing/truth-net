@@ -8,9 +8,10 @@ import { useNavigate } from "react-router-dom";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import idl from "../idl.json"; // Import the IDL file
-import { PROGRAM_ID } from "../constant";
+import { PROGRAM_ID, RPC_URL } from "../constant";
 
-const connection = new Connection(clusterApiUrl("devnet"), "confirmed");
+const connection = new Connection(RPC_URL, "confirmed");
+
 
 const QuestionForm = ({ fetchQuestions, onClose }) => {
   const { publicKey, signTransaction, signAllTransactions } = useWallet();

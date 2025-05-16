@@ -4,9 +4,9 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import idl from "../idl.json";
-import { PROGRAM_ID } from "../constant";
+import { PROGRAM_ID, RPC_URL } from "../constant";
 
-const connection = new web3.Connection(web3.clusterApiUrl("devnet"), "confirmed");
+const connection = new web3.Connection(RPC_URL, "confirmed");
 
 const VoterDashboard = () => {
     const { publicKey, wallet, signTransaction } = useWallet();

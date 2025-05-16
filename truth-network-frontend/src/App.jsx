@@ -17,9 +17,9 @@ import VoterDashboard from "./components/VoterDashboard";
 import VotersList from "./components/VotersList";
 import Instruction from "./components/Instruction";
 import idl from "./idl.json";
-import { PROGRAM_ID } from "./constant";
+import { PROGRAM_ID, RPC_URL } from "./constant";
 
-const connection = new web3.Connection(web3.clusterApiUrl("devnet"), "confirmed");
+const connection = new web3.Connection(RPC_URL, "confirmed");
 
 const App = () => {
     const { publicKey, signTransaction, signAllTransactions } = useWallet();
@@ -45,7 +45,7 @@ const App = () => {
         try {
             const accounts = await program.account.question.all();
     
-            const rentExemption = await connection.getMinimumBalanceForRentExemption(8); // Vault is 8 bytes
+            const rentExemption = await connection.getMinimumBalanceForRentExemption(8);
     
             const vaultPDAs = await Promise.all(
                 accounts.map(async ({ publicKey: questionPubKey }) => {

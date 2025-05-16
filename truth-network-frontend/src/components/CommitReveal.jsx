@@ -6,9 +6,10 @@ import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { keccak256 } from "js-sha3";
 import idl from "../idl.json";
-import { PROGRAM_ID } from "../constant";
+import { PROGRAM_ID, RPC_URL } from "../constant";
 
-const connection = new web3.Connection(web3.clusterApiUrl("devnet"), "confirmed");
+const connection = new web3.Connection(RPC_URL, "confirmed");
+
 
 const CommitReveal = ({ question, onClose, refreshQuestions }) => {
     const { publicKey, signTransaction, signAllTransactions } = useWallet();
@@ -18,6 +19,8 @@ const CommitReveal = ({ question, onClose, refreshQuestions }) => {
     const [hasCommitted, setHasCommitted] = useState(false);
     const [hasCheckedCommitment, setHasCheckedCommitment] = useState(false);
     const [canReveal, setCanReveal] = useState(false);
+    const [blockedReveal, setBlockedReveal] = useState(false);
+
 
     const walletAdapter = publicKey && signTransaction ? { publicKey, signTransaction, signAllTransactions } : null;
     const provider = walletAdapter ? new AnchorProvider(connection, walletAdapter, { preflightCommitment: "processed" }) : null;
@@ -33,21 +36,39 @@ const CommitReveal = ({ question, onClose, refreshQuestions }) => {
     const checkCommitment = async () => {
         try {
             const questionPubKey = new PublicKey(question.id);
-            const [voterRecordPDA] = PublicKey.findProgramAddressSync([
-                Buffer.from("vote"),
-                publicKey.toBuffer(),
-                questionPubKey.toBuffer(),
-            ], PROGRAM_ID);
-
-            const record = await program.account.voterRecord.fetch(voterRecordPDA).catch(() => null);
-            if (record) {
+    
+            const [voterRecordPDA] = PublicKey.findProgramAddressSync(
+                [Buffer.from("vote"), publicKey.toBuffer(), questionPubKey.toBuffer()],
+                PROGRAM_ID
+            );
+    
+            const [userRecordPDA] = PublicKey.findProgramAddressSync(
+                [Buffer.from("user_record"), publicKey.toBuffer()],
+                PROGRAM_ID
+            );
+    
+            const [voterRecord, userRecord] = await Promise.all([
+                program.account.voterRecord.fetch(voterRecordPDA).catch(() => null),
+                program.account.userRecord.fetch(userRecordPDA).catch(() => null),
+            ]);
+    
+            if (voterRecord) {
                 setHasCommitted(true);
-                setCanReveal(!record.revealed);
+                const rejoinedAfterCommit =
+                    userRecord && userRecord.createdAt.toNumber() > voterRecord.userRecordJoinTime.toNumber();
+    
+                if (rejoinedAfterCommit) {
+                    setBlockedReveal(true);
+                    setCanReveal(false);
+                } else {
+                    setCanReveal(!voterRecord.revealed);
+                    setBlockedReveal(false);
+                }
             }
         } catch (err) {
             toast.error("Failed to check commitment.");
         }
-    };
+    };    
 
     const commitVote = async () => {
         if (!publicKey || !password || !program) return;
@@ -160,16 +181,56 @@ const CommitReveal = ({ question, onClose, refreshQuestions }) => {
             )}
 
             {!hasCommitted && !isCommitTimeOver && (
-                <button onClick={commitVote} disabled={loading} className="w-full bg-blue-500 text-white py-2 rounded">
-                    {loading ? "Submitting..." : "Commit Vote"}
+                <button 
+                    onClick={commitVote} 
+                    disabled={loading}
+                    className={`w-full px-4 py-3 rounded-lg transition duration-300 ${
+                    loading 
+                        ? "bg-gray-400 cursor-not-allowed" 
+                        : "bg-blue-500 text-white hover:bg-blue-600"
+                    }`}
+                >
+                    {loading ? (
+                    <span className="flex items-center justify-center">
+                        Committing<span className="dot-animate">.</span>
+                        <span className="dot-animate dot2">.</span>
+                        <span className="dot-animate dot3">.</span>
+                    </span>
+                    ) : (
+                    "Commit Vote"
+                    )}
                 </button>
             )}
 
-            {canReveal && isRevealTime && (
-                <button onClick={revealVote} disabled={loading} className="w-full bg-green-500 text-white py-2 rounded">
-                    {loading ? "Revealing..." : "Reveal Vote"}
-                </button>
+            {isRevealTime && (
+                blockedReveal ? (
+                    <p className="text-red-600 text-center font-medium">
+                    You rejoined after committing. You can't reveal this vote.
+                    </p>
+                ) : canReveal && (
+                    <button
+                    onClick={revealVote}
+                    disabled={loading}
+                    className={`w-full px-4 py-3 rounded-lg transition duration-300 ${
+                        loading 
+                        ? "bg-gray-400 cursor-not-allowed" 
+                        : "bg-green-500 text-white hover:bg-green-600"
+                    }`}
+                    >
+                    {loading ? (
+                        <span className="flex items-center justify-center">
+                        Revealing<span className="dot-animate">.</span>
+                        <span className="dot-animate dot2">.</span>
+                        <span className="dot-animate dot3">.</span>
+                        </span>
+                    ) : (
+                        "Reveal Vote"
+                    )}
+                    </button>
+                )
             )}
+
+
         </div>
     );
 };
