@@ -12,7 +12,7 @@ pub const FEE_RECEIVER_PUBKEY: Pubkey = Pubkey::new_from_array([
 ]);
 
 
-declare_id!("AWYhLHrQr1dwCBYL7UzevGRdnkTpvK2NwkQ9xghiYnRN");
+declare_id!("C26LU8DVw2c51gNWFLye1oAwH3hiRPGcGCA2crnER3mR");
 
 
 /// An empty account for the vault.
@@ -52,6 +52,7 @@ pub mod truth_network {
         user_record.total_earnings = 0;
         user_record.total_revealed_votes = 0;
         user_record.total_correct_votes = 0;
+        user_record.created_at = Clock::get()?.unix_timestamp;
     
         msg!("User joined: {}", user.key());
     
@@ -309,6 +310,7 @@ pub mod truth_network {
         voter_record.commitment = commitment;
         voter_record.voter = *ctx.accounts.voter.key;
         voter_record.question = question.key();
+        voter_record.user_record_join_time = Clock::get()?.unix_timestamp;
     
         question.committed_voters += 1;
         question.voter_records_count += 1;
@@ -321,7 +323,11 @@ pub mod truth_network {
         let question = &mut ctx.accounts.question;
         let voter_record = &mut ctx.accounts.voter_record;
         let user_record = &mut ctx.accounts.user_record;
-    
+        
+        require!(
+            user_record.created_at <= voter_record.user_record_join_time,
+            VotingError::RejoinedAfterCommit
+        );        
         require!(!voter_record.revealed, VotingError::AlreadyRevealed);
         require!(Clock::get()?.unix_timestamp < question.reveal_end_time, VotingError::RevealPhaseEnded);
     
@@ -654,7 +660,7 @@ pub struct CreateQuestion<'info> {
     #[account(
         init,
         payer = asker,
-        space = 800,
+        space = 450,
         seeds = [b"question", asker.key().as_ref(), &question_counter.count.to_le_bytes()],
         bump
     )]
@@ -742,7 +748,7 @@ pub struct JoinNetwork<'info> {
     #[account(
         init,
         payer = user,
-        space = 8 + 65,
+        space = 8 + 80,
         seeds = [b"user_record", user.key().as_ref()],
         bump
     )]
@@ -839,6 +845,7 @@ pub struct UserRecord {
     pub total_earnings: u64,
     pub total_revealed_votes: u64,
     pub total_correct_votes: u64,
+    pub created_at: i64,
 }
 
 
@@ -868,6 +875,7 @@ pub struct VoterRecord {
     pub claimed: bool,
     pub claim_tx_id: [u8; 64],
     pub vote_weight: u64,
+    pub user_record_join_time: i64,
 }
 
 #[derive(Accounts)]
@@ -1062,6 +1070,8 @@ pub enum VotingError {
     AlreadyDrained,
     #[msg("The question is too long.")]
     QuestionTooLong,
+    #[msg("You rejoined after committing. You can't reveal this vote.")]
+    RejoinedAfterCommit,
 }
 
 #[cfg(not(feature = "no-entrypoint"))]
@@ -1083,5 +1093,3 @@ encryption: "",
 auditors: "vtscc.org",
 acknowledgements: "Truth Network"
 }
-
-

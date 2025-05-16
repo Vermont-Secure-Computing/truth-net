@@ -8,9 +8,9 @@ import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import CommitReveal from "./CommitReveal";
 import idl from "../idl.json";
-import { FEE_RECEIVER, PROGRAM_ID } from "../constant";
+import { FEE_RECEIVER, PROGRAM_ID, RPC_URL } from "../constant";
 
-const connection = new web3.Connection(web3.clusterApiUrl("devnet"), "confirmed");
+const connection = new web3.Connection(RPC_URL, "confirmed");
 
 const QuestionDetail = () => {
     const { id } = useParams();

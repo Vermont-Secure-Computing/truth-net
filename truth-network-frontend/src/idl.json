@@ -1,5 +1,5 @@
 {
-  "address": "AWYhLHrQr1dwCBYL7UzevGRdnkTpvK2NwkQ9xghiYnRN",
+  "address": "C26LU8DVw2c51gNWFLye1oAwH3hiRPGcGCA2crnER3mR",
   "metadata": {
     "name": "truth_network",
     "version": "0.1.0",
@@ -1163,6 +1163,11 @@
       "code": 6031,
       "name": "QuestionTooLong",
       "msg": "The question is too long."
+    },
+    {
+      "code": 6032,
+      "name": "RejoinedAfterCommit",
+      "msg": "You rejoined after committing. You can't reveal this vote."
     }
   ],
   "types": [
@@ -1330,6 +1335,10 @@
           {
             "name": "total_correct_votes",
             "type": "u64"
+          },
+          {
+            "name": "created_at",
+            "type": "i64"
           }
         ]
       }
@@ -1391,6 +1400,10 @@
           {
             "name": "vote_weight",
             "type": "u64"
+          },
+          {
+            "name": "user_record_join_time",
+            "type": "i64"
           }
         ]
       }

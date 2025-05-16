@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { Connection, PublicKey } from "@solana/web3.js";
+import bs58 from "bs58";
 import { toast } from "react-toastify";
 import { deserializeUnchecked } from "borsh";
 import BN from "bn.js";
-import { PROGRAM_ID } from "../constant";
+import { PROGRAM_ID, RPC_URL } from "../constant";
 import "react-toastify/dist/ReactToastify.css";
 
 // Define UserRecord structure
@@ -33,7 +34,6 @@ const USER_RECORD_SCHEMA = new Map([
   ],
 ]);
 
-const USER_RECORD_SIZE = 8 + 65; // 8-byte discriminator + 65 bytes of data
 
 const VotersList = () => {
   const [voters, setVoters] = useState([]);
@@ -48,29 +48,39 @@ const VotersList = () => {
     try {
       toast.info("Fetching registered voters...");
 
-      const connection = new Connection("https://api.devnet.solana.com", "confirmed");
+      const connection = new Connection(RPC_URL, "confirmed");
 
       const accounts = await connection.getProgramAccounts(PROGRAM_ID, {
-        filters: [{ dataSize: USER_RECORD_SIZE }],
+        filters: [
+          {
+            memcmp: {
+              offset: 0,
+              bytes: bs58.encode(Uint8Array.from([210, 252, 132, 218, 191, 85, 173, 167])),
+            },
+          },
+          // Remove dataSize for now
+        ],
       });
 
-      const parsedVoters = accounts.map((account, index) => {
-        const data = account.account.data.slice(8); // skip 8-byte discriminator
-        const userRecord = deserializeUnchecked(
-          USER_RECORD_SCHEMA,
-          UserRecord,
-          data
-        );
-
-        return {
-          index: index + 1,
-          address: new PublicKey(userRecord.user).toBase58(),
-          reputation: userRecord.reputation,
-          totalEarnings: userRecord.total_earnings.toString(),
-          totalRevealedVotes: userRecord.total_revealed_votes.toString(),
-          totalCorrectVotes: userRecord.total_correct_votes.toString(),
-        };
-      });
+      const parsedVoters = accounts
+      .map((account, index) => {
+        const data = account.account.data.slice(8);
+        try {
+          const userRecord = deserializeUnchecked(USER_RECORD_SCHEMA, UserRecord, data);
+          return {
+            index: index + 1,
+            address: new PublicKey(userRecord.user).toBase58(),
+            reputation: userRecord.reputation,
+            totalEarnings: userRecord.total_earnings.toString(),
+            totalRevealedVotes: userRecord.total_revealed_votes.toString(),
+            totalCorrectVotes: userRecord.total_correct_votes.toString(),
+          };
+        } catch (e) {
+          console.warn("Skipping invalid voter record", account.pubkey.toBase58());
+          return null; // Important: mark as null
+        }
+      })
+      .filter(Boolean);
 
       setVoters(parsedVoters);
       setCurrentPage(1);

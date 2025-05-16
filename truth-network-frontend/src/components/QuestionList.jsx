@@ -6,9 +6,10 @@ import { Program, AnchorProvider, web3 } from "@coral-xyz/anchor";
 import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import idl from "../idl.json";
-import { PROGRAM_ID } from "../constant";
+import { PROGRAM_ID, RPC_URL } from "../constant";
 
-const connection = new web3.Connection(web3.clusterApiUrl("devnet"), "confirmed");
+
+const connection = new web3.Connection(RPC_URL, "confirmed");
 
 const QuestionsList = ({ questions, fetchQuestions }) => {
     // const { publicKey } = useWallet();

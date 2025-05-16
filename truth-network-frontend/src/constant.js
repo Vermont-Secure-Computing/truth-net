@@ -4,5 +4,8 @@ import { PublicKey } from "@solana/web3.js";
 export const FEE_RECEIVER = new PublicKey("CQaZgx5jqQrz7c8shCG3vJLiiPGPrawSGhvkgXtGyxL");
 
 // Program ID
-export const PROGRAM_ID = new PublicKey("AWYhLHrQr1dwCBYL7UzevGRdnkTpvK2NwkQ9xghiYnRN");
+export const PROGRAM_ID = new PublicKey("C26LU8DVw2c51gNWFLye1oAwH3hiRPGcGCA2crnER3mR");
+
+// Helius API
+export const RPC_URL = "https://api.devnet.solana.com/"
 
