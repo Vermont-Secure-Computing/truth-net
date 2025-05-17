@@ -4,7 +4,7 @@ import bs58 from "bs58";
 import { toast } from "react-toastify";
 import { deserializeUnchecked } from "borsh";
 import BN from "bn.js";
-import { PROGRAM_ID, RPC_URL } from "../constant";
+import { PROGRAM_ID, getRpcUrl } from "../constant";
 import "react-toastify/dist/ReactToastify.css";
 
 // Define UserRecord structure
@@ -40,6 +40,8 @@ const VotersList = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const votersPerPage = 50;
 
+  const connection = new Connection(getRpcUrl(), "confirmed");
+
   useEffect(() => {
     fetchVoters();
   }, []);
@@ -47,8 +49,6 @@ const VotersList = () => {
   const fetchVoters = async () => {
     try {
       toast.info("Fetching registered voters...");
-
-      const connection = new Connection(RPC_URL, "confirmed");
 
       const accounts = await connection.getProgramAccounts(PROGRAM_ID, {
         filters: [
