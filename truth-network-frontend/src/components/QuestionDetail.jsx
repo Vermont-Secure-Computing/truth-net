@@ -8,9 +8,8 @@ import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import CommitReveal from "./CommitReveal";
 import idl from "../idl.json";
-import { FEE_RECEIVER, PROGRAM_ID, RPC_URL } from "../constant";
+import { FEE_RECEIVER, PROGRAM_ID, getRpcUrl } from "../constant";
 
-const connection = new web3.Connection(RPC_URL, "confirmed");
 
 const QuestionDetail = () => {
     const { id } = useParams();
@@ -29,6 +28,7 @@ const QuestionDetail = () => {
     const [hasReclaimed, setHasReclaimed] = useState(false);
     const [reclaiming, setReclaiming] = useState(false);
     const [snapshotTriggered, setSnapshotTriggered] = useState(false);
+    const [connection] = useState(() => new web3.Connection(getRpcUrl(), "confirmed"));
     
 
     const wallet = { publicKey, signTransaction, signAllTransactions };

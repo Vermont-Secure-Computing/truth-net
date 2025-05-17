@@ -8,12 +8,10 @@ import { useNavigate } from "react-router-dom";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import idl from "../idl.json"; // Import the IDL file
-import { PROGRAM_ID, RPC_URL } from "../constant";
-
-const connection = new Connection(RPC_URL, "confirmed");
+import { PROGRAM_ID, getRpcUrl } from "../constant";
 
 
-const QuestionForm = ({ fetchQuestions, onClose }) => {
+const QuestionForm = ({ triggerRefresh, onClose }) => {
   const { publicKey, signTransaction, signAllTransactions } = useWallet();
   const [questionText, setQuestionText] = useState("");
   const [reward, setReward] = useState("");
@@ -22,6 +20,7 @@ const QuestionForm = ({ fetchQuestions, onClose }) => {
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [pendingCreate, setPendingCreate] = useState(false);
+  const [connection] = useState(() => new web3.Connection(getRpcUrl(), "confirmed"));
 
   const walletAdapter = { publicKey, signTransaction, signAllTransactions };
   const provider = new AnchorProvider(connection, walletAdapter, {
@@ -106,7 +105,7 @@ const QuestionForm = ({ fetchQuestions, onClose }) => {
 
       window.dispatchEvent(new CustomEvent("questionCreated"));
 
-      fetchQuestions()
+      triggerRefresh()
 
       // Reset form fields after success
       setQuestionText("");

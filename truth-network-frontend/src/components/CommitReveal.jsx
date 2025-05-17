@@ -6,9 +6,7 @@ import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { keccak256 } from "js-sha3";
 import idl from "../idl.json";
-import { PROGRAM_ID, RPC_URL } from "../constant";
-
-const connection = new web3.Connection(RPC_URL, "confirmed");
+import { PROGRAM_ID, getRpcUrl } from "../constant";
 
 
 const CommitReveal = ({ question, onClose, refreshQuestions }) => {
@@ -20,6 +18,7 @@ const CommitReveal = ({ question, onClose, refreshQuestions }) => {
     const [hasCheckedCommitment, setHasCheckedCommitment] = useState(false);
     const [canReveal, setCanReveal] = useState(false);
     const [blockedReveal, setBlockedReveal] = useState(false);
+    const [connection] = useState(() => new web3.Connection(getRpcUrl(), "confirmed"));
 
 
     const walletAdapter = publicKey && signTransaction ? { publicKey, signTransaction, signAllTransactions } : null;

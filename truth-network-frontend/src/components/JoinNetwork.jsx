@@ -5,14 +5,14 @@ import { Program, AnchorProvider, web3 } from "@coral-xyz/anchor";
 import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import idl from "../idl.json";
-import { PROGRAM_ID, RPC_URL } from "../constant";
+import { PROGRAM_ID, getRpcUrl } from "../constant";
 
-const connection = new web3.Connection(RPC_URL, "confirmed");
 
 const JoinNetwork = ({ compact = false, updateIsMember }) => {
   const { publicKey, signTransaction } = useWallet();
   const [loading, setLoading] = useState(false);
   const [isMember, setIsMember] = useState(false);
+  const [connection] = useState(() => new web3.Connection(getRpcUrl(), "confirmed"));
 
   const provider =
     publicKey && signTransaction

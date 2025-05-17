@@ -4,9 +4,9 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import idl from "../idl.json";
-import { PROGRAM_ID, RPC_URL } from "../constant";
+import { PROGRAM_ID, getRpcUrl } from "../constant";
 
-const connection = new web3.Connection(RPC_URL, "confirmed");
+
 
 const VoterDashboard = () => {
     const { publicKey, wallet, signTransaction } = useWallet();
@@ -16,6 +16,7 @@ const VoterDashboard = () => {
     const [totalRevealedVotes, setTotalRevealedVotes] = useState(0);
     const [totalCorrectVotes, setTotalCorrectVotes] = useState(0);
     const [voterReputation, setVoterReputation] = useState(0);
+    const [connection] = useState(() => new web3.Connection(getRpcUrl(), "confirmed"));
 
     const fetchData = async () => {
         try {

@@ -6,76 +6,108 @@ import { Program, AnchorProvider, web3 } from "@coral-xyz/anchor";
 import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import idl from "../idl.json";
-import { PROGRAM_ID, RPC_URL } from "../constant";
+import { PROGRAM_ID, getRpcUrl } from "../constant";
 
 
-const connection = new web3.Connection(RPC_URL, "confirmed");
-
-const QuestionsList = ({ questions, fetchQuestions }) => {
-    // const { publicKey } = useWallet();
-    // const [questions, setQuestions] = useState([]);
+const QuestionsList = ({ refreshKey }) => {
+    const [questions, setQuestions] = useState([]);
     const [sortOrder, setSortOrder] = useState("highest");
     const navigate = useNavigate();
-
     const { publicKey, signTransaction, signAllTransactions } = useWallet();
-    const wallet = {
-        publicKey,
-        signTransaction,
-        signAllTransactions,
-    };
+    const [connection] = useState(() => new web3.Connection(getRpcUrl(), "confirmed"));
+
+    const wallet = { publicKey, signTransaction, signAllTransactions };
     const provider = new AnchorProvider(connection, wallet, { preflightCommitment: "processed" });
     const program = new Program(idl, provider);
 
-
     useEffect(() => {
         fetchQuestions();
-    }, [publicKey, location]);
-    
+    }, [publicKey, refreshKey]);
 
-    const claimReward = async (questionId) => {
-        if (!publicKey) {
-            toast.warn("Please connect your wallet.", { position: "top-center" });
-            return;
-        }
-    
+    const fetchQuestions = async () => {
         try {
-            toast.info("Processing reward claim...", { position: "top-center" });
-            
-            const questionPublicKey = new PublicKey(questionId);
-    
-            const [voterRecordPDA] = await PublicKey.findProgramAddress(
-                [Buffer.from("vote"), publicKey.toBuffer(), questionPublicKey.toBuffer()],
-                PROGRAM_ID
-            );
-    
-            const [vaultPDA] = await PublicKey.findProgramAddress(
-                [Buffer.from("vault"), questionPublicKey.toBuffer()],
-                PROGRAM_ID
-            );
-    
-            const tx = await program.methods
-                .claimReward()
-                .accounts({
-                    question: questionPublicKey,
-                    voter: publicKey,
-                    voterRecord: voterRecordPDA,
-                    vault: vaultPDA,
-                    systemProgram: web3.SystemProgram.programId,
-                })
-                .rpc();
-    
-            toast.success(`Reward claimed! Tx: ${tx.slice(0, 6)}...${tx.slice(-6)}`, {
-                position: "top-center",
-                autoClose: 5000,
-                onClick: () => window.open(`https://explorer.solana.com/tx/${tx}?cluster=devnet`, "_blank"),
-            });
-    
-            fetchQuestions(); // Refresh the list
-        } catch (error) {
-            toast.error(`Error claiming reward : ${error.message}`, {
-                position: "top-center",
-                autoClose: 5000,
-            });
+        const accounts = await program.account.question.all();
+        const rentExemption = await connection.getMinimumBalanceForRentExemption(8);
+
+        const vaultPDAs = await Promise.all(
+            accounts.map(async ({ publicKey: questionPubKey }) => {
+            const [vaultPDA] = await PublicKey.findProgramAddress([
+                Buffer.from("vault"),
+                questionPubKey.toBuffer(),
+            ], PROGRAM_ID);
+            return vaultPDA;
+            })
+        );
+
+        const vaultAccountInfos = await connection.getMultipleAccountsInfo(vaultPDAs);
+
+        let parsedQuestions = await Promise.all(
+            accounts.map(async ({ publicKey: questionPubKey, account }, index) => {
+            const vaultInfo = vaultAccountInfos[index];
+            const vaultBalance = vaultInfo?.lamports ?? 0;
+            const rewardLamports = Math.max(vaultBalance - rentExemption, 0);
+            const solReward = rewardLamports / web3.LAMPORTS_PER_SOL;
+
+            const commitEndTime = account.commitEndTime.toNumber();
+            const revealEndTime = account.revealEndTime.toNumber();
+            const revealEnded = revealEndTime <= Date.now() / 1000;
+            const committedVoters = account.committedVoters ? account.committedVoters.toNumber() : 0;
+
+            let userVoterRecord = null;
+            if (publicKey) {
+                try {
+                const [voterRecordPDA] = await PublicKey.findProgramAddress([
+                    Buffer.from("vote"),
+                    publicKey.toBuffer(),
+                    questionPubKey.toBuffer(),
+                ], PROGRAM_ID);
+                const voterRecordAccount = await program.account.voterRecord.fetch(voterRecordPDA);
+                userVoterRecord = {
+                    selectedOption: voterRecordAccount.selectedOption,
+                    claimed: voterRecordAccount.claimed,
+                    revealed: voterRecordAccount.revealed,
+                    committed: true,
+                    voterRecordPDA: voterRecordPDA.toString(),
+                };
+                } catch (error) {
+                // No voter record found
+                }
+            }
+
+            return {
+                id: questionPubKey.toString(),
+                questionText: account.questionText,
+                reward: parseFloat(solReward.toFixed(4)),
+                commitEndTime,
+                revealEndTime,
+                committedVoters,
+                votesOption1: account.votesOption1.toNumber(),
+                votesOption2: account.votesOption2.toNumber(),
+                originalReward: account.originalReward?.toNumber?.() || 0,
+                revealEnded,
+                userVoterRecord,
+            };
+            })
+        );
+
+        const activeQuestions = parsedQuestions.filter(
+            (q) => !q.revealEnded || (q.userVoterRecord && !q.userVoterRecord.claimed)
+        );
+        const endedQuestions = parsedQuestions.filter(
+            (q) => q.revealEnded && (!q.userVoterRecord || q.userVoterRecord.claimed)
+        );
+
+        activeQuestions.sort((a, b) =>
+            sortOrder === "highest" ? b.reward - a.reward : a.reward - b.reward
+        );
+
+        const sortedQuestions = [...activeQuestions, ...endedQuestions];
+        setQuestions(sortedQuestions);
+        } catch (err) {
+        toast.error(`Error fetching questions: ${err.message}`, {
+            position: "top-center",
+            autoClose: 5000,
+        });
         }
     };
 
