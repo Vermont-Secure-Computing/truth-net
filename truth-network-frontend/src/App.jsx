@@ -12,6 +12,7 @@ import JoinNetwork from "./components/JoinNetwork";
 import VoterDashboard from "./components/VoterDashboard";
 import VotersList from "./components/VotersList";
 import Instruction from "./components/Instruction";
+import SecurityPolicy from "./components/SecurityPolicy";
 import { getRpcUrl, resetRpcUrl } from "./constant";
 
 const App = () => {
@@ -52,6 +53,7 @@ const App = () => {
               <button onClick={() => navigate("/voters")} className="px-4 py-2 rounded-md bg-white hover:bg-gray-300">Voters</button>
               <button onClick={() => setShowRpcModal(true)} className="px-4 py-2 rounded-md bg-white hover:bg-gray-300">Change RPC</button>
               <button onClick={() => navigate("/instructions")} className="px-4 py-2 rounded-md bg-white hover:bg-gray-300">Instructions</button>
+              <button onClick={() => navigate("/security-policy")} className="px-4 py-2 rounded-md bg-white hover:bg-gray-300">Security Policy</button>
               <WalletMultiButton className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md" />
             </nav>
   
@@ -76,6 +78,15 @@ const App = () => {
                 <button onClick={() => { navigate("/voters"); setMobileMenuOpen(false); }} className="block w-full text-left px-4 py-2 rounded-md bg-white hover:bg-gray-300">Voters</button>
                 <button onClick={() => { setShowRpcModal(true); setMobileMenuOpen(false); }} className="block w-full text-left px-4 py-2 rounded-md bg-white hover:bg-gray-300">Change RPC</button>
                 <button onClick={() => { navigate("/instructions"); setMobileMenuOpen(false); }} className="block w-full text-left px-4 py-2 rounded-md bg-white hover:bg-gray-300">Instructions</button>
+                <button
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    window.open("/security-policy.html", "_blank");
+                  }}
+                  className="block w-full text-left px-4 py-2 rounded-md bg-white hover:bg-gray-300"
+                >
+                  Security Policy
+                </button>
                 <div className="pt-2">
                   <WalletMultiButton className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-md" />
                 </div>
@@ -133,6 +144,7 @@ const App = () => {
           <Route path="/dashboard" element={<VoterDashboard />} />
           <Route path="/voters" element={<VotersList />} />
           <Route path="/instructions" element={<Instruction />} />
+          <Route path="/security-policy" element={<SecurityPolicy />} />
         </Routes>
       </div>
     );
