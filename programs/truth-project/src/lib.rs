@@ -12,7 +12,7 @@ pub const FEE_RECEIVER_PUBKEY: Pubkey = Pubkey::new_from_array([
 ]);
 
 
-declare_id!("C26LU8DVw2c51gNWFLye1oAwH3hiRPGcGCA2crnER3mR");
+declare_id!("4sC1fceX7osnaP8JkY4AfgK5tSFSfS44rXMhX361WEPF");
 
 
 /// An empty account for the vault.
@@ -1087,7 +1087,7 @@ policy: "https://truth.it.com/security-policy",
 // Optional Fields
 preferred_languages: "en",
 source_code: "https://github.com/Vermont-Secure-Computing/truth-net",
-source_revision: "AWYhLHrQr1dwCBYL7UzevGRdnkTpvK2NwkQ9xghiYnRN",
+source_revision: "4sC1fceX7osnaP8JkY4AfgK5tSFSfS44rXMhX361WEPF",
 source_release: "",
 encryption: "",
 auditors: "vtscc.org",

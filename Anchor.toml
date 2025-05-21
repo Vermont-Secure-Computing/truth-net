@@ -4,14 +4,14 @@
 resolution = true
 skip-lint = false
 
-[programs.devnet]
-truth_project = "C26LU8DVw2c51gNWFLye1oAwH3hiRPGcGCA2crnER3mR"
+[programs.mainnet]
+truth_project = "4sC1fceX7osnaP8JkY4AfgK5tSFSfS44rXMhX361WEPF"
 
 [registry]
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "https://api.devnet.solana.com/"
+cluster = "https://api.mainnet-beta.solana.com/"
 wallet = "~/.config/solana/id.json"
 
 [scripts]
