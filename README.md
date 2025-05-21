@@ -1,7 +1,18 @@
 # truth-net
-Distributed Truth Network, no cap
+Distributed Truth Network, no cap.
+
+Earn money as a truth provider ...  
+....  or use this network to provide truth about real world events for your smart contracts.   
 
 
-https://docs.google.com/document/d/17APC76CDpBNBIMuQMiHRa5uoWmS8JTT-8k66f8yEvIk/edit
+See whitepaper in repo.   
+
+devnet.truth.it.com
+
+truth.it.com
+
+audit by: vtscc.org
+
+
 
 
