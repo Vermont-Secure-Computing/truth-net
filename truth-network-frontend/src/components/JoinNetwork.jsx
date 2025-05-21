@@ -75,7 +75,7 @@ const JoinNetwork = ({ compact = false, updateIsMember }) => {
         position: "top-center",
         autoClose: 6000,
         onClick: () =>
-          window.open(`https://explorer.solana.com/tx/${tx}?cluster=devnet`, "_blank"),
+          window.open(`https://explorer.solana.com/tx/${tx}?cluster=mainnet-beta`, "_blank"),
       });
   
       await fetchMembership();
@@ -113,7 +113,7 @@ const JoinNetwork = ({ compact = false, updateIsMember }) => {
         position: "top-center",
         autoClose: 6000,
         onClick: () =>
-          window.open(`https://explorer.solana.com/tx/${tx}?cluster=devnet`, "_blank"),
+          window.open(`https://explorer.solana.com/tx/${tx}?cluster=mainnet-beta`, "_blank"),
       });
   
       await fetchMembership();

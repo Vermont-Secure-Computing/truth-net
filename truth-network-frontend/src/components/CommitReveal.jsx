@@ -100,7 +100,7 @@ const CommitReveal = ({ question, onClose, refreshQuestions }) => {
                 <>
                     Vote committed!{" "}
                     <a
-                        href={`https://explorer.solana.com/tx/${tx}?cluster=devnet`}
+                        href={`https://explorer.solana.com/tx/${tx}?cluster=mainnet-beta`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="underline text-blue-500"
@@ -149,7 +149,7 @@ const CommitReveal = ({ question, onClose, refreshQuestions }) => {
                 <>
                     Vote revealed!{" "}
                     <a
-                        href={`https://explorer.solana.com/tx/${tx}?cluster=devnet`}
+                        href={`https://explorer.solana.com/tx/${tx}?cluster=mainnet-beta`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="underline text-blue-500"

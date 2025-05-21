@@ -100,7 +100,7 @@ const QuestionForm = ({ triggerRefresh, onClose }) => {
       toast.success(`Event Created! `, {
         position: "top-center",
         autoClose: 5000,
-        onClick: () => window.open(`https://explorer.solana.com/tx/${tx}?cluster=devnet`, "_blank"),
+        onClick: () => window.open(`https://explorer.solana.com/tx/${tx}?cluster=mainnet-beta`, "_blank"),
       });
 
       window.dispatchEvent(new CustomEvent("questionCreated"));

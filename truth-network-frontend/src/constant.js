@@ -4,9 +4,9 @@ import { PublicKey } from "@solana/web3.js";
 export const FEE_RECEIVER = new PublicKey("CQaZgx5jqQrz7c8shCG3vJLiiPGPrawSGhvkgXtGyxL");
 
 // Program ID
-export const PROGRAM_ID = new PublicKey("C26LU8DVw2c51gNWFLye1oAwH3hiRPGcGCA2crnER3mR");
+export const PROGRAM_ID = new PublicKey("4sC1fceX7osnaP8JkY4AfgK5tSFSfS44rXMhX361WEPF");
 
-const DEFAULT_RPC_URL = "https://api.devnet.solana.com";
+const DEFAULT_RPC_URL = "https://api.mainnet-beta.solana.com";
 
 // Function to get the current RPC URL
 export const getRpcUrl = () => {

@@ -14,7 +14,7 @@ window.Buffer = Buffer;
 
 
 const Root = () => {
-    const network = clusterApiUrl("devnet");
+    const network = clusterApiUrl("mainnet-beta");
     const wallets = useMemo(() => [new PhantomWalletAdapter(), new SolflareWalletAdapter()], []);
 
     return (

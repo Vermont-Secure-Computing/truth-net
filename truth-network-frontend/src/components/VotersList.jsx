@@ -130,7 +130,7 @@ const VotersList = () => {
                     <td className="p-2 border">{voter.totalCorrectVotes}</td>
                     <td className="p-2 border">
                       <a
-                        href={`https://explorer.solana.com/address/${voter.address}?cluster=devnet`}
+                        href={`https://explorer.solana.com/address/${voter.address}?cluster=mainnet-beta`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-blue-500 underline"
@@ -157,7 +157,7 @@ const VotersList = () => {
                 <p><span className="font-semibold">Revealed Votes:</span> {voter.totalRevealedVotes}</p>
                 <p><span className="font-semibold">Correct Votes:</span> {voter.totalCorrectVotes}</p>
                 <a
-                  href={`https://explorer.solana.com/address/${voter.address}?cluster=devnet`}
+                  href={`https://explorer.solana.com/address/${voter.address}?cluster=mainnet-beta`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-blue-500 underline block mt-1"
