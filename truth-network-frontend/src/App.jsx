@@ -143,7 +143,6 @@ const App = () => {
                 {publicKey && <button onClick={() => { navigate("/dashboard"); setMobileMenuOpen(false); }} className="block w-full text-left px-4 py-2 rounded-md bg-white hover:bg-gray-300">Dashboard</button>}
                 <button onClick={() => { navigate("/voters"); setMobileMenuOpen(false); }} className="block w-full text-left px-4 py-2 rounded-md bg-white hover:bg-gray-300">Voters</button>
                 <button onClick={() => { setShowRpcModal(true); setMobileMenuOpen(false); }} className="block w-full text-left px-4 py-2 rounded-md bg-white hover:bg-gray-300">Change RPC</button>
-                <button onClick={() => { navigate("/instructions"); setMobileMenuOpen(false); }} className="block w-full text-left px-4 py-2 rounded-md bg-white hover:bg-gray-300">Instructions</button>
                 <div className="pt-2">
                   <WalletMultiButton className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-md" />
                 </div>
