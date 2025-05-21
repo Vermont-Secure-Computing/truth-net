@@ -225,7 +225,7 @@ const QuestionDetail = () => {
                 position: "top-center",
                 autoClose: 5000,
                 onClick: () =>
-                    window.open(`https://explorer.solana.com/tx/${tx}?cluster=devnet`, "_blank"),
+                    window.open(`https://explorer.solana.com/tx/${tx}?cluster=mainnet-beta`, "_blank"),
             });
     
             // Manually update state to avoid waiting for fetch
@@ -285,7 +285,7 @@ const QuestionDetail = () => {
     
             toast.success(`Question deleted! Tx: ${tx.slice(0, 6)}...${tx.slice(-6)}`, {
                 onClick: () =>
-                    window.open(`https://explorer.solana.com/tx/${tx}?cluster=devnet`, "_blank"),
+                    window.open(`https://explorer.solana.com/tx/${tx}?cluster=mainnet-beta`, "_blank"),
             });
     
             // Redirect after a short delay
@@ -328,7 +328,7 @@ const QuestionDetail = () => {
                 .rpc();
     
             toast.success(`Reward drained! Tx: ${tx.slice(0, 6)}...${tx.slice(-6)}`, {
-                onClick: () => window.open(`https://explorer.solana.com/tx/${tx}?cluster=devnet`, "_blank"),
+                onClick: () => window.open(`https://explorer.solana.com/tx/${tx}?cluster=mainnet-beta`, "_blank"),
             });
             setHasDrained(true);
             fetchQuestion();
@@ -373,7 +373,7 @@ const QuestionDetail = () => {
     
             toast.success(`Rent reclaimed! Tx: ${tx.slice(0, 6)}...${tx.slice(-6)}`, {
                 onClick: () =>
-                    window.open(`https://explorer.solana.com/tx/${tx}?cluster=devnet`, "_blank"),
+                    window.open(`https://explorer.solana.com/tx/${tx}?cluster=mainnet-beta`, "_blank"),
             });
     
             // Wait for confirmation before refresh
@@ -497,7 +497,7 @@ const QuestionDetail = () => {
                     <p className="text-green-700 font-semibold mt-4">
                         Rewards claimed!{" "}
                         <a
-                        href={`https://explorer.solana.com/tx/${txId}?cluster=devnet`}
+                        href={`https://explorer.solana.com/tx/${txId}?cluster=mainnet-beta`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-blue-600 underline"

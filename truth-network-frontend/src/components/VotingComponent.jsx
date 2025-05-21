@@ -7,7 +7,7 @@ import "react-toastify/dist/ReactToastify.css";
 import idl from "../idl.json";
 
 const PROGRAM_ID = new PublicKey("E3791ATbxae3NKVRVD3quBAxav5acfTN7rTxUA6NNLsd");
-const connection = new web3.Connection(web3.clusterApiUrl("devnet"), "confirmed");
+const connection = new web3.Connection(web3.clusterApiUrl("mainnet-beta"), "confirmed");
 
 const VotingComponent = ({ question, onClose }) => {
     if (!question) {
@@ -109,7 +109,7 @@ const VotingComponent = ({ question, onClose }) => {
             toast.success(`Vote Submitted Successfully! Tx: ${tx.slice(0, 6)}...${tx.slice(-6)}`, {
                 position: "top-center",
                 autoClose: 5000,
-                onClick: () => window.open(`https://explorer.solana.com/tx/${tx}?cluster=devnet`, "_blank"),
+                onClick: () => window.open(`https://explorer.solana.com/tx/${tx}?cluster=mainnet-beta`, "_blank"),
             });
 
             checkIfVoted();
@@ -142,7 +142,7 @@ const VotingComponent = ({ question, onClose }) => {
                         <li key={index}>
                             <strong>Voter:</strong>{" "}
                             <a
-                                href={`https://explorer.solana.com/address/${vote.voter}?cluster=devnet`}
+                                href={`https://explorer.solana.com/address/${vote.voter}?cluster=mainnet-beta`}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 style={{ color: "#007bff", textDecoration: "underline" }}

@@ -3,7 +3,7 @@ import { Program, AnchorProvider, web3 } from "@coral-xyz/anchor";
 import { useWallet } from "@solana/wallet-adapter-react";
 
 const PROGRAM_ID = new web3.PublicKey("4z8w5yvsZP8XpDVD7uuYWTy6AidoeMGpDM5qeXgA69t2");
-const connection = new web3.Connection(web3.clusterApiUrl("devnet"), "confirmed");
+const connection = new web3.Connection(web3.clusterApiUrl("mainnet-beta"), "confirmed");
 
 const HelloWorld = () => {
     const { publicKey, wallet, signTransaction } = useWallet();
