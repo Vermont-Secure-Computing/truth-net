@@ -3,6 +3,7 @@ import React, { useState } from "react";
 import { Routes, Route, useNavigate } from "react-router-dom";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { useWallet } from "@solana/wallet-adapter-react";
+import axios from "axios";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import QuestionForm from "./components/QuestionForm";
@@ -24,6 +25,73 @@ const App = () => {
     const [refreshKey, setRefreshKey] = useState(0);
     const [isMember, setIsMember] = useState(null);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+    const [error, setError] = useState("");
+    const [loading, setLoading] = useState(false);
+
+    const hasMaliciousChars = (url) => {
+      const pattern = /<script|javascript:|data:text|<|>|"|'/i;
+      return pattern.test(url);
+    };
+    
+    const isValidHttpUrl = (string) => {
+      try {
+        const url = new URL(string);
+        return url.protocol === "http:" || url.protocol === "https:";
+      } catch (err) {
+        return false;
+      }
+    };
+    
+    const testRpcConnection = async (url) => {
+      try {
+        const res = await axios.post(
+          url,
+          {
+            jsonrpc: "2.0",
+            id: 1,
+            method: "getVersion"
+          },
+          {
+            headers: { "Content-Type": "application/json" }
+          }
+        );
+        return res.status === 200;
+      } catch (error) {
+        console.error("RPC version check failed:", error.message);
+        return false;
+      }
+    };
+    
+    const handleSave = async () => {
+      setError("");
+    
+      if (rpcUrl.length < 10 || rpcUrl.length > 200) {
+        setError("RPC URL must be between 10 and 200 characters.");
+        return;
+      }
+    
+      if (hasMaliciousChars(rpcUrl)) {
+        setError("RPC URL contains forbidden or unsafe characters.");
+        return;
+      }
+    
+      if (!isValidHttpUrl(rpcUrl)) {
+        setError("Please enter a valid HTTP/HTTPS URL.");
+        return;
+      }
+    
+      setLoading(true);
+      const works = await testRpcConnection(rpcUrl);
+    
+      if (!works) {
+        setError("Unable to connect to this RPC endpoint.");
+        setLoading(false);
+        return;
+      }
+    
+      localStorage.setItem("solana_rpc_url", rpcUrl);
+      window.location.reload();
+    };
   
     return (
       <div className="w-full min-h-screen bg-white text-black flex flex-col">
@@ -52,8 +120,6 @@ const App = () => {
               {publicKey && <button onClick={() => navigate("/dashboard")} className="px-4 py-2 rounded-md bg-white hover:bg-gray-300">Dashboard</button>}
               <button onClick={() => navigate("/voters")} className="px-4 py-2 rounded-md bg-white hover:bg-gray-300">Voters</button>
               <button onClick={() => setShowRpcModal(true)} className="px-4 py-2 rounded-md bg-white hover:bg-gray-300">Change RPC</button>
-              <button onClick={() => navigate("/instructions")} className="px-4 py-2 rounded-md bg-white hover:bg-gray-300">Instructions</button>
-              <button onClick={() => navigate("/security-policy")} className="px-4 py-2 rounded-md bg-white hover:bg-gray-300">Security Policy</button>
               <WalletMultiButton className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md" />
             </nav>
   
@@ -78,15 +144,6 @@ const App = () => {
                 <button onClick={() => { navigate("/voters"); setMobileMenuOpen(false); }} className="block w-full text-left px-4 py-2 rounded-md bg-white hover:bg-gray-300">Voters</button>
                 <button onClick={() => { setShowRpcModal(true); setMobileMenuOpen(false); }} className="block w-full text-left px-4 py-2 rounded-md bg-white hover:bg-gray-300">Change RPC</button>
                 <button onClick={() => { navigate("/instructions"); setMobileMenuOpen(false); }} className="block w-full text-left px-4 py-2 rounded-md bg-white hover:bg-gray-300">Instructions</button>
-                <button
-                  onClick={() => {
-                    setMobileMenuOpen(false);
-                    window.open("/security-policy.html", "_blank");
-                  }}
-                  className="block w-full text-left px-4 py-2 rounded-md bg-white hover:bg-gray-300"
-                >
-                  Security Policy
-                </button>
                 <div className="pt-2">
                   <WalletMultiButton className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-md" />
                 </div>
@@ -128,10 +185,28 @@ const App = () => {
             <div className="bg-white p-6 rounded-lg w-full max-w-md shadow-lg relative">
               <button onClick={() => setShowRpcModal(false)} className="absolute top-2 right-3 text-gray-600 hover:text-gray-900 text-xl">&times;</button>
               <h2 className="text-lg font-semibold mb-4">Change Solana RPC URL</h2>
-              <input type="text" value={rpcUrl} onChange={(e) => setRpcUrl(e.target.value)} className="w-full border px-3 py-2 rounded" />
+              <input
+                type="text"
+                value={rpcUrl}
+                onChange={(e) => setRpcUrl(e.target.value)}
+                className="w-full border px-3 py-2 rounded"
+              />
+              {error && (
+                <p className="text-red-600 mt-2 text-sm font-medium">{error}</p>
+              )}
               <div className="mt-4 flex justify-end space-x-2">
                 <button onClick={() => setShowRpcModal(false)} className="px-4 py-2 rounded bg-gray-300 hover:bg-gray-400">Cancel</button>
-                <button onClick={() => { if (rpcUrl.startsWith("http")) { localStorage.setItem("solana_rpc_url", rpcUrl); window.location.reload(); } else { alert("Please enter a valid RPC URL."); } }} className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700">Save & Reload</button>
+                <button
+                  onClick={handleSave}
+                  disabled={loading}
+                  className={`px-4 py-2 rounded text-white ${
+                    loading
+                      ? "bg-gray-400 cursor-not-allowed"
+                      : "bg-blue-600 hover:bg-blue-700"
+                  }`}
+                >
+                  {loading ? "Saving..." : "Save & Reload"}
+                </button>
                 <button onClick={() => { resetRpcUrl(); window.location.reload(); }} className="px-4 py-2 rounded bg-yellow-500 text-white hover:bg-yellow-600">Reset to Default</button>
               </div>
             </div>
@@ -146,6 +221,28 @@ const App = () => {
           <Route path="/instructions" element={<Instruction />} />
           <Route path="/security-policy" element={<SecurityPolicy />} />
         </Routes>
+
+        <footer className="border-t border-gray-300 mt-12 py-4">
+          <div className="container mx-auto px-6 flex flex-col md:flex-row justify-between items-center">
+            <button
+              onClick={() => navigate("/instructions")}
+              className="px-4 py-2 rounded-md bg-white hover:bg-gray-300 mb-2 md:mb-0"
+            >
+              Instructions
+            </button>
+
+            <p className="text-center text-sm text-gray-600 font-medium">
+              © 2025 truth.it.com
+            </p>
+
+            <button
+              onClick={() => navigate("/security-policy")}
+              className="px-4 py-2 rounded-md bg-white hover:bg-gray-300 mt-2 md:mt-0"
+            >
+              Security Policy
+            </button>
+          </div>
+        </footer>
       </div>
     );
   };

@@ -96,7 +96,19 @@ const CommitReveal = ({ question, onClose, refreshQuestions }) => {
                 systemProgram: web3.SystemProgram.programId,
             }).rpc();
 
-            toast.success("Vote committed!");
+            toast.success(
+                <>
+                    Vote committed!{" "}
+                    <a
+                        href={`https://explorer.solana.com/tx/${tx}?cluster=devnet`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="underline text-blue-500"
+                    >
+                        View on Explorer
+                    </a>
+                </>
+            );
             setHasCommitted(true);
             setCanReveal(true);
             if (refreshQuestions) refreshQuestions();
@@ -133,7 +145,19 @@ const CommitReveal = ({ question, onClose, refreshQuestions }) => {
                 userRecord: userRecordPDA,
             }).rpc();
 
-            toast.success("Vote revealed!");
+            toast.success(
+                <>
+                    Vote revealed!{" "}
+                    <a
+                        href={`https://explorer.solana.com/tx/${tx}?cluster=devnet`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="underline text-blue-500"
+                    >
+                        View on Explorer
+                    </a>
+                </>
+            );
             setCanReveal(false);
         } catch (e) {
             toast.error("Reveal failed: " + e.message);
