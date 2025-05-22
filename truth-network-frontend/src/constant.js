@@ -6,7 +6,7 @@ export const FEE_RECEIVER = new PublicKey("CQaZgx5jqQrz7c8shCG3vJLiiPGPrawSGhvkg
 // Program ID
 export const PROGRAM_ID = new PublicKey("4sC1fceX7osnaP8JkY4AfgK5tSFSfS44rXMhX361WEPF");
 
-const DEFAULT_RPC_URL = "https://api.mainnet-beta.solana.com";
+const DEFAULT_RPC_URL = "https://solana-rpc.publicnode.com";
 
 // Function to get the current RPC URL
 export const getRpcUrl = () => {
