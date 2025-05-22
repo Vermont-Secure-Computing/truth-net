@@ -154,6 +154,7 @@ const App = () => {
         <div className="px-6 mt-4">
           <div className="max-w-7xl mx-auto">
             <div className="text-center mb-2">
+            <p className="text-gray-700">Program ID: 4sC1fceX7osnaP8JkY4AfgK5tSFSfS44rXMhX361WEPF</p>
               <h2 className="text-xl font-semibold mb-1">Truth Network Membership</h2>
               {!publicKey ? (
                 <p className="text-gray-700">Please connect your wallet first.</p>
