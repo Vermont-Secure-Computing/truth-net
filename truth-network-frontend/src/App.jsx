@@ -112,6 +112,7 @@ const App = () => {
                     alt="GitHub Logo"
                     className="h-6 w-auto object-contain"
                 />
+                <sup className="text-xs text-gray-600">Devnet</sup>
             </a>
             </div>
   
@@ -119,7 +120,7 @@ const App = () => {
               <button onClick={() => navigate("/")} className="px-4 py-2 rounded-md bg-white hover:bg-gray-300">Home</button>
               {publicKey && <button onClick={() => navigate("/dashboard")} className="px-4 py-2 rounded-md bg-white hover:bg-gray-300">Dashboard</button>}
               <button onClick={() => navigate("/voters")} className="px-4 py-2 rounded-md bg-white hover:bg-gray-300">Voters</button>
-              <button onClick={() => setShowRpcModal(true)} className="px-4 py-2 rounded-md bg-white hover:bg-gray-300">Change RPC</button>
+              <button onClick={() => navigate("/instructions")} className="px-4 py-2 rounded-md bg-white hover:bg-gray-300">Instructions</button>
               <WalletMultiButton className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md" />
             </nav>
   
@@ -142,7 +143,7 @@ const App = () => {
                 <button onClick={() => { navigate("/"); setMobileMenuOpen(false); }} className="block w-full text-left px-4 py-2 rounded-md bg-white hover:bg-gray-300">Home</button>
                 {publicKey && <button onClick={() => { navigate("/dashboard"); setMobileMenuOpen(false); }} className="block w-full text-left px-4 py-2 rounded-md bg-white hover:bg-gray-300">Dashboard</button>}
                 <button onClick={() => { navigate("/voters"); setMobileMenuOpen(false); }} className="block w-full text-left px-4 py-2 rounded-md bg-white hover:bg-gray-300">Voters</button>
-                <button onClick={() => { setShowRpcModal(true); setMobileMenuOpen(false); }} className="block w-full text-left px-4 py-2 rounded-md bg-white hover:bg-gray-300">Change RPC</button>
+                <button onClick={() => { navigate("/instructions"); setMobileMenuOpen(false); }} className="block w-full text-left px-4 py-2 rounded-md bg-white hover:bg-gray-300">Instructions</button>
                 <div className="pt-2">
                   <WalletMultiButton className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-md" />
                 </div>
@@ -154,6 +155,14 @@ const App = () => {
         <div className="px-6 mt-4">
           <div className="max-w-7xl mx-auto">
             <div className="text-center mb-2">
+              <a
+                href="https://explorer.solana.com/address/C26LU8DVw2c51gNWFLye1oAwH3hiRPGcGCA2crnER3mR?cluster=devnet"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-gray-700 hover:underline break-all"
+              >
+                Program ID: C26LU8DVw2c51gNWFLye1oAwH3hiRPGcGCA2crnER3mR
+              </a>
               <h2 className="text-xl font-semibold mb-1">Truth Network Membership</h2>
               {!publicKey ? (
                 <p className="text-gray-700">Please connect your wallet first.</p>
@@ -223,12 +232,13 @@ const App = () => {
 
         <footer className="border-t border-gray-300 mt-12 py-4">
           <div className="container mx-auto px-6 flex flex-col md:flex-row justify-between items-center">
-            <button
-              onClick={() => navigate("/instructions")}
-              className="px-4 py-2 rounded-md bg-white hover:bg-gray-300 mb-2 md:mb-0"
-            >
-              Instructions
-            </button>
+          <button
+            onClick={() => setShowRpcModal(true)}
+            className="px-4 py-2 rounded-md bg-white hover:bg-gray-300 mb-2 md:mb-0"
+          >
+            Network Settings
+          </button>
+
 
             <p className="text-center text-sm text-gray-600 font-medium">
               © 2025 truth.it.com
