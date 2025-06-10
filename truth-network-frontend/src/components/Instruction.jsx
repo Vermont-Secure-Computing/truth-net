@@ -40,14 +40,19 @@ export default function InstructionsPage() {
       <ul className="list-disc list-inside space-y-2">
         <li><strong>Question creators:</strong> Make sure your question is in the form of a true or false statement.</li>
         <li><strong>Truth providers:</strong> To receive your reward you must vote with the majority.</li>
-        <li><strong>You can access devnet </strong><a
-          href="https://devnet.truth.it.com"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-blue-600 underline"
-        >
-          here
-        </a></li>
+        <li>
+          <strong>You can access {import.meta.env.VITE_NETWORK === "mainnet" ? "devnet" : "mainnet"} </strong>
+          <a
+            href={import.meta.env.VITE_NETWORK === "mainnet" 
+              ? "https://devnet.truth.it.com" 
+              : "https://truth.it.com"}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-blue-600 underline"
+          >
+            here
+          </a>
+        </li>
       </ul>
     </div>
   );

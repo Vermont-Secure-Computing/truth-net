@@ -9,16 +9,18 @@ import { Buffer } from 'buffer';
 import App from "./App";
 import "@solana/wallet-adapter-react-ui/styles.css";
 import './index.css';
+import { getConstants } from "./constants";
 
 window.Buffer = Buffer;
 
 
 const Root = () => {
-    const network = clusterApiUrl("mainnet-beta");
+    const { getRpcUrl } = getConstants();
+    const endpoint = getRpcUrl();
     const wallets = useMemo(() => [new PhantomWalletAdapter(), new SolflareWalletAdapter()], []);
 
     return (
-        <ConnectionProvider endpoint={network}>
+        <ConnectionProvider endpoint={endpoint}>
             <WalletProvider wallets={wallets} autoConnect>
                 <WalletModalProvider>
                     <BrowserRouter>

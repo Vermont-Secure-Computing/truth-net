@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { PublicKey, Connection, clusterApiUrl } from "@solana/web3.js";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { Program, AnchorProvider, web3, BN } from "@coral-xyz/anchor";
@@ -7,8 +7,10 @@ import "react-toastify/dist/ReactToastify.css"; // Import styles
 import { useNavigate } from "react-router-dom";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
-import idl from "../idl.json"; // Import the IDL file
-import { PROGRAM_ID, getRpcUrl } from "../constant";
+import { getConstants, getIDL } from "../constants";
+
+const { PROGRAM_ID, getRpcUrl } = getConstants();
+
 
 
 const QuestionForm = ({ triggerRefresh, onClose }) => {
@@ -20,18 +22,45 @@ const QuestionForm = ({ triggerRefresh, onClose }) => {
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [pendingCreate, setPendingCreate] = useState(false);
+  const [program, setProgram] = useState(null);
   const [connection] = useState(() => new web3.Connection(getRpcUrl(), "confirmed"));
 
   const walletAdapter = { publicKey, signTransaction, signAllTransactions };
   const provider = new AnchorProvider(connection, walletAdapter, {
     preflightCommitment: "processed",
   });
-  const program = new Program(idl, provider);
+  // const program = new Program(idl, provider);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const setupProgram = async () => {
+      try {
+        if (!publicKey || !signTransaction || !signAllTransactions) return;
+  
+        const idl = await getIDL();
+        const walletAdapter = { publicKey, signTransaction, signAllTransactions };
+        const provider = new AnchorProvider(connection, walletAdapter, {
+          preflightCommitment: "processed",
+        });
+  
+        const programInstance = new Program(idl || idl, provider);
+        setProgram(programInstance);
+      } catch (error) {
+        console.error("Failed to initialize program:", error);
+        toast.error("Failed to initialize program.");
+      }
+    };
+  
+    setupProgram();
+  }, [publicKey, signTransaction, signAllTransactions]);
 
   const createQuestion = async () => {
     if (!publicKey) {
       toast.warn("Please connect your wallet.", { position: "top-center" });
+      return;
+    }
+    if (!program) {
+      toast.error("Program is not initialized yet.", { position: "top-center" });
       return;
     }
     if (!questionText || !reward || !commitEndTime || !revealEndTime) {

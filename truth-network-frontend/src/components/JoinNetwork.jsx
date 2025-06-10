@@ -4,22 +4,34 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { Program, AnchorProvider, web3 } from "@coral-xyz/anchor";
 import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
-import idl from "../idl.json";
-import { PROGRAM_ID, getRpcUrl } from "../constant";
+import { getConstants, getIDL } from "../constants";
 
+const { PROGRAM_ID, getRpcUrl, getExplorerTxUrl } = getConstants();
 
 const JoinNetwork = ({ compact = false, updateIsMember }) => {
   const { publicKey, signTransaction } = useWallet();
   const [loading, setLoading] = useState(false);
   const [isMember, setIsMember] = useState(false);
   const [connection] = useState(() => new web3.Connection(getRpcUrl(), "confirmed"));
+  const [program, setProgram] = useState(null);
 
-  const provider =
-    publicKey && signTransaction
-      ? new AnchorProvider(connection, { publicKey, signTransaction }, { commitment: "confirmed" })
-      : null;
+  useEffect(() => {
+    const setupProgram = async () => {
+      try {
+        const idl = await getIDL();
+        const walletAdapter = { publicKey, signTransaction };
+        const provider = new AnchorProvider(connection, walletAdapter, { commitment: "confirmed" });
+        const programInstance = new Program(idl, provider);
+        setProgram(programInstance);
+      } catch (err) {
+        console.error("Failed to setup program:", err);
+      }
+    };
 
-  const program = provider ? new Program(idl, provider) : null;
+    if (publicKey && signTransaction) {
+      setupProgram();
+    }
+  }, [publicKey, signTransaction]);
 
   const fetchMembership = async () => {
     try {
@@ -75,7 +87,7 @@ const JoinNetwork = ({ compact = false, updateIsMember }) => {
         position: "top-center",
         autoClose: 6000,
         onClick: () =>
-          window.open(`https://explorer.solana.com/tx/${tx}?cluster=mainnet-beta`, "_blank"),
+        window.open(getExplorerTxUrl(tx), "_blank"),
       });
   
       await fetchMembership();
@@ -113,7 +125,7 @@ const JoinNetwork = ({ compact = false, updateIsMember }) => {
         position: "top-center",
         autoClose: 6000,
         onClick: () =>
-          window.open(`https://explorer.solana.com/tx/${tx}?cluster=mainnet-beta`, "_blank"),
+        window.open(getExplorerTxUrl(tx), "_blank"),
       });
   
       await fetchMembership();
