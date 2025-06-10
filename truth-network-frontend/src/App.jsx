@@ -146,7 +146,7 @@ const App = () => {
                     className="h-6 w-auto object-contain"
                 />
                 <sup className="text-xs text-gray-600">
-                  {import.meta.env.VITE_NETWORK === "mainnet" ? "Mainnet" : "Devnet"}
+                  {import.meta.env.VITE_SOLANA_NETWORK === "mainnet" ? "Mainnet" : "Devnet"}
                 </sup>
             </a>
             <span
@@ -172,14 +172,14 @@ const App = () => {
               <button onClick={() => navigate("/voters")} className="px-4 py-2 rounded-md bg-white hover:bg-gray-300">Voters</button>
               <button onClick={() => navigate("/instructions")} className="px-4 py-2 rounded-md bg-white hover:bg-gray-300">Instructions</button>
               <a
-                href={import.meta.env.VITE_NETWORK === "mainnet" 
+                href={import.meta.env.VITE_SOLANA_NETWORK === "mainnet" 
                   ? "https://devnet.truth.it.com" 
                   : "https://truth.it.com"}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="px-4 py-2 rounded-md bg-white hover:bg-gray-300 text-black"
               >
-                {import.meta.env.VITE_NETWORK === "mainnet" ? "Open Devnet" : "Open Mainnet"}
+                {import.meta.env.VITE_SOLANA_NETWORK === "mainnet" ? "Open Devnet" : "Open Mainnet"}
               </a>
 
               <WalletMultiButton className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md" />
@@ -226,7 +226,7 @@ const App = () => {
             <div className="text-center mb-2">
               <a
                 href={`https://explorer.solana.com/address/${PROGRAM_ID.toBase58?.() || PROGRAM_ID}${
-                  import.meta.env.VITE_NETWORK === "mainnet" ? "" : "?cluster=devnet"
+                  import.meta.env.VITE_SOLANA_NETWORK === "mainnet" ? "" : "?cluster=devnet"
                 }`}
                 target="_blank"
                 rel="noopener noreferrer"
