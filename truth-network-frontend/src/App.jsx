@@ -1,5 +1,5 @@
 // Updated App.jsx
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Routes, Route, useNavigate } from "react-router-dom";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { useWallet } from "@solana/wallet-adapter-react";
@@ -16,42 +16,33 @@ import VoterDashboard from "./components/VoterDashboard";
 import VotersList from "./components/VotersList";
 import Instruction from "./components/Instruction";
 import SecurityPolicy from "./components/SecurityPolicy";
-import { getConstants, getIDL } from "./constants";
+import { getConstants } from "./constants";
+import { getIdls } from "./idl";
 
-const { getRpcUrl, resetRpcUrl, PROGRAM_ID } = getConstants();
+const { DEFAULT_RPC_URL, resetRpcUrl, PROGRAM_ID } = getConstants();
 
 const App = () => {
   const { publicKey, signTransaction, signAllTransactions } = useWallet();
     const navigate = useNavigate();
     const [showQuestionForm, setShowQuestionForm] = useState(false);
     const [showRpcModal, setShowRpcModal] = useState(false);
-    const [rpcUrl, setRpcUrl] = useState(() => getRpcUrl());
+    const [rpcUrl, setRpcUrl] = useState(() => DEFAULT_RPC_URL);
     const [refreshKey, setRefreshKey] = useState(0);
     const [isMember, setIsMember] = useState(null);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
-    const [program, setProgram] = useState(null);
     const [rpcOnline, setRpcOnline] = useState(null);
+    const [connection] = useState(() => new web3.Connection(DEFAULT_RPC_URL, "confirmed"));
 
-    useEffect(() => {
-      const setupProgram = async () => {
-        try {
-          if (!publicKey || !signTransaction || !signAllTransactions) return;
-          const idl = await getIDL();
-          const walletAdapter = { publicKey, signTransaction, signAllTransactions };
-          const provider = new AnchorProvider(new Connection(getRpcUrl(), "confirmed"), walletAdapter, {
-            preflightCommitment: "processed",
-          });
-          const programInstance = new Program(idl || idl, provider);
-          setProgram(programInstance);
-        } catch (err) {
-          console.error("Failed to initialize program", err);
-        }
-      };
-  
-      setupProgram();
-    }, [publicKey, signTransaction, signAllTransactions]);
+    const { truthNetworkIDL } = getIdls();
+    const wallet = { publicKey, signTransaction, signAllTransactions };
+    const provider = useMemo(() => {
+      return new AnchorProvider(connection, wallet, { preflightCommitment: "processed" });
+    }, [connection, wallet]);
+    const program = useMemo(() => {
+      return new Program(truthNetworkIDL, provider);
+    }, [truthNetworkIDL, provider]);
 
     useEffect(() => {
       const checkRpcStatus = async () => {

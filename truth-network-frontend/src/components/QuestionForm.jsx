@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useMemo } from "react";
 import { PublicKey, Connection, clusterApiUrl } from "@solana/web3.js";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { Program, AnchorProvider, web3, BN } from "@coral-xyz/anchor";
@@ -7,9 +7,10 @@ import "react-toastify/dist/ReactToastify.css"; // Import styles
 import { useNavigate } from "react-router-dom";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
-import { getConstants, getIDL } from "../constants";
+import { getConstants } from "../constants";
+import { getIdls } from "../idl";
 
-const { PROGRAM_ID, getRpcUrl } = getConstants();
+const { PROGRAM_ID, DEFAULT_RPC_URL } = getConstants();
 
 
 
@@ -22,37 +23,40 @@ const QuestionForm = ({ triggerRefresh, onClose }) => {
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [pendingCreate, setPendingCreate] = useState(false);
-  const [program, setProgram] = useState(null);
-  const [connection] = useState(() => new web3.Connection(getRpcUrl(), "confirmed"));
-
-  const walletAdapter = { publicKey, signTransaction, signAllTransactions };
-  const provider = new AnchorProvider(connection, walletAdapter, {
-    preflightCommitment: "processed",
-  });
+  // const [program, setProgram] = useState(null);
+  const [connection] = useState(() => new web3.Connection(DEFAULT_RPC_URL, "confirmed"));
+  const { truthNetworkIDL } = getIdls();
+  const wallet = { publicKey, signTransaction, signAllTransactions };
+  const provider = useMemo(() => {
+    return new AnchorProvider(connection, wallet, { preflightCommitment: "processed" });
+  }, [connection, wallet]);
+  const program = useMemo(() => {
+    return new Program(truthNetworkIDL, provider);
+  }, [truthNetworkIDL, provider]);
   // const program = new Program(idl, provider);
   const navigate = useNavigate();
 
-  useEffect(() => {
-    const setupProgram = async () => {
-      try {
-        if (!publicKey || !signTransaction || !signAllTransactions) return;
+  // useEffect(() => {
+  //   const setupProgram = async () => {
+  //     try {
+  //       if (!publicKey || !signTransaction || !signAllTransactions) return;
   
-        const idl = await getIDL();
-        const walletAdapter = { publicKey, signTransaction, signAllTransactions };
-        const provider = new AnchorProvider(connection, walletAdapter, {
-          preflightCommitment: "processed",
-        });
+  //       const idl = await getIDL();
+  //       const walletAdapter = { publicKey, signTransaction, signAllTransactions };
+  //       const provider = new AnchorProvider(connection, walletAdapter, {
+  //         preflightCommitment: "processed",
+  //       });
   
-        const programInstance = new Program(idl || idl, provider);
-        setProgram(programInstance);
-      } catch (error) {
-        console.error("Failed to initialize program:", error);
-        toast.error("Failed to initialize program.");
-      }
-    };
+  //       const programInstance = new Program(idl || idl, provider);
+  //       setProgram(programInstance);
+  //     } catch (error) {
+  //       console.error("Failed to initialize program:", error);
+  //       toast.error("Failed to initialize program.");
+  //     }
+  //   };
   
-    setupProgram();
-  }, [publicKey, signTransaction, signAllTransactions]);
+  //   setupProgram();
+  // }, [publicKey, signTransaction, signAllTransactions]);
 
   const createQuestion = async () => {
     if (!publicKey) {

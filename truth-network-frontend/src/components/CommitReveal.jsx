@@ -5,9 +5,10 @@ import { Program, AnchorProvider, web3 } from "@coral-xyz/anchor";
 import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { keccak256 } from "js-sha3";
-import { getConstants, getIDL } from "../constants";
+import { getConstants } from "../constants";
+import { getIdls } from "../idl";
 
-const { PROGRAM_ID, getRpcUrl, getExplorerTxUrl } = getConstants();
+const { PROGRAM_ID, DEFAULT_RPC_URL, getExplorerTxUrl } = getConstants();
 
 
 const CommitReveal = ({ question, onClose, refreshQuestions }) => {
@@ -19,26 +20,30 @@ const CommitReveal = ({ question, onClose, refreshQuestions }) => {
     const [hasCheckedCommitment, setHasCheckedCommitment] = useState(false);
     const [canReveal, setCanReveal] = useState(false);
     const [blockedReveal, setBlockedReveal] = useState(false);
-    const [connection] = useState(() => new web3.Connection(getRpcUrl(), "confirmed"));
-    const [program, setProgram] = useState(null);
+    const [connection] = useState(() => new web3.Connection(DEFAULT_RPC_URL, "confirmed"));
+    // const [program, setProgram] = useState(null);
+    const { truthNetworkIDL } = getIdls();
+    const wallet = { publicKey, signTransaction, signAllTransactions };
+    const provider = new AnchorProvider(connection, wallet, { preflightCommitment: "processed" });
+    const program = new Program(truthNetworkIDL, provider);
 
-    useEffect(() => {
-        const setupProgram = async () => {
-            try {
-                const idl = await getIDL();
-                const walletAdapter = { publicKey, signTransaction, signAllTransactions };
-                const provider = new AnchorProvider(connection, walletAdapter, { preflightCommitment: "processed" });
-                const programInstance = new Program(idl, provider);
-                setProgram(programInstance);
-            } catch (err) {
-                console.error("Failed to setup program:", err);
-            }
-        };
+    // useEffect(() => {
+    //     const setupProgram = async () => {
+    //         try {
+    //             const idl = await getIDL();
+    //             const walletAdapter = { publicKey, signTransaction, signAllTransactions };
+    //             const provider = new AnchorProvider(connection, walletAdapter, { preflightCommitment: "processed" });
+    //             const programInstance = new Program(idl, provider);
+    //             setProgram(programInstance);
+    //         } catch (err) {
+    //             console.error("Failed to setup program:", err);
+    //         }
+    //     };
 
-        if (publicKey) {
-            setupProgram();
-        }
-    }, [publicKey]);
+    //     if (publicKey) {
+    //         setupProgram();
+    //     }
+    // }, [publicKey]);
 
     useEffect(() => {
         if (publicKey && program && !hasCheckedCommitment) {
