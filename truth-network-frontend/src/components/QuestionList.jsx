@@ -26,7 +26,6 @@ const QuestionsList = ({ refreshKey }) => {
 
   const provider = new AnchorProvider(connection, wallet, { preflightCommitment: "processed" });
 
-  console.log("testing mainnet: ", import.meta.env.VITE_NETWORK)
 
   useEffect(() => {
     const setupProgram = async () => {

@@ -50,16 +50,12 @@ const VoterDashboard = () => {
             return;
         }
         try {
-            console.log("Before getVoterStats()");
             const stats = await getVoterStats(program, publicKey, connection);
-            console.log("Got voter stats:", stats);
             setTotalEarnings(stats.totalEarnings);
             setTotalRevealedVotes(stats.totalRevealedVotes);
             setTotalCorrectVotes(stats.totalCorrectVotes);
             setVoterReputation(stats.voterReputation);
 
-            console.log("typeof program.account.VoterRecord?.all:", typeof program.account?.VoterRecord?.all);
-            console.log("typeof program.account.voterRecord?.all:", typeof program.account?.voterRecord?.all);
             
             let allVoterRecords = [];
             try {
@@ -89,8 +85,6 @@ const VoterDashboard = () => {
                 return r.account.voter.equals(publicKey);
             });
               
-            console.log("Filtering by:", publicKey.toBase58());
-            console.log("Fetching all voterRecord accounts...");
             const voterRecordMap = {};
             const voterRecords = [];
             (rawVoterRecords || []).forEach((record, idx) => {
@@ -121,7 +115,7 @@ const VoterDashboard = () => {
                 setQuestions([]);
                 return;
             }
-            console.log("userVoterRecords before mapping:", userVoterRecords);
+
             try {
                 const questionPubkeys = (userVoterRecords || [])
                     .filter((record, i) => {
@@ -213,9 +207,9 @@ const VoterDashboard = () => {
                     voterReputation: 0,
                 };
             }
-            console.log("Fetching userRecord for PDA:", userRecordPDA.toBase58());
+            
             const record = await program.account.userRecord.fetch(userRecordPDA);
-            console.log("Fetched userRecord:", record);
+            
             return {
                 totalEarnings: (record.totalEarnings?.toNumber() || 0) / web3.LAMPORTS_PER_SOL,
                 totalRevealedVotes: record.totalRevealedVotes?.toNumber() || 0,
