@@ -4,8 +4,8 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev:mainnet": "cross-env VITE_SOLANA_NETWORK=mainnet vite",
-    "dev:devnet": "cross-env VITE_SOLANA_NETWORK=devnet vite",
+    "dev:mainnet": "cross-env VITE_NETWORK=mainnet vite",
+    "dev:devnet": "cross-env VITE_NETWORK=devnet vite",
     "build:mainnet": "vite build --mode mainnet",
     "build:devnet": "vite build --mode devnet",
     "preview": "vite preview"

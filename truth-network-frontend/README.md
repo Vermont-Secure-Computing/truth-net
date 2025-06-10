@@ -52,13 +52,13 @@ Vite automatically selects the correct file based on the script you run.
 **Example contents of `.env.devnet`:**
 
 ```env
-VITE_SOLANA_NETWORK=devnet
+VITE_NETWORK=devnet
 ```
 
 **Example contents of `.env.mainnet`:**
 
 ```env
-VITE_SOLANA_NETWORK=mainnet
+VITE_NETWORK=mainnet
 ```
 
 Make sure these files exist in the project root.
