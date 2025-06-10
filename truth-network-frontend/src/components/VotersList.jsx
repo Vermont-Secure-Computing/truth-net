@@ -8,7 +8,7 @@ import { getConstants } from "../constants";
 import "react-toastify/dist/ReactToastify.css";
 
 const { PROGRAM_ID, getRpcUrl } = getConstants();
-const clusterParam = import.meta.env.VITE_SOLANA_NETWORK === "mainnet" ? "" : "?cluster=devnet";
+const clusterParam = import.meta.env.VITE_NETWORK === "mainnet" ? "" : "?cluster=devnet";
 // Define UserRecord structure
 class UserRecord {
   constructor(fields) {
