@@ -1,13 +1,14 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { PublicKey } from "@solana/web3.js";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { Program, AnchorProvider, web3 } from "@coral-xyz/anchor";
 import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
-import { getConstants, getIDL } from "../constants";
+import { getConstants } from "../constants";
+import { getIdls } from "../idl";
 
-const { PROGRAM_ID, getRpcUrl } = getConstants();
+const { PROGRAM_ID, DEFAULT_RPC_URL } = getConstants();
 
 const QuestionsList = ({ refreshKey }) => {
   const [questions, setQuestions] = useState([]);
@@ -19,52 +20,48 @@ const QuestionsList = ({ refreshKey }) => {
 
   const navigate = useNavigate();
   const { publicKey, signTransaction, signAllTransactions } = useWallet();
-  const [connection] = useState(() => new web3.Connection(getRpcUrl(), "confirmed"));
-  const [program, setProgram] = useState(null);
+  const [connection] = useState(() => new web3.Connection(DEFAULT_RPC_URL, "confirmed"));
+  // const [program, setProgram] = useState(null);
+  const { truthNetworkIDL } = getIdls();
+  const wallet = useMemo(() => ({
+    publicKey: publicKey || new PublicKey("11111111111111111111111111111111"),
+    signAllTransactions: async (txs) => txs,
+    signTransaction: async (tx) => tx,
+  }), [publicKey]);
+  const provider = useMemo(() => {
+    return new AnchorProvider(connection, wallet, { preflightCommitment: "processed" });
+  }, [connection, wallet]);
+  const program = useMemo(() => {
+    return new Program(truthNetworkIDL, provider);
+  }, [truthNetworkIDL, provider]);
 
-  const wallet = { publicKey, signTransaction, signAllTransactions };
-
-  const provider = new AnchorProvider(connection, wallet, { preflightCommitment: "processed" });
-
-
+  
   useEffect(() => {
-    const setupProgram = async () => {
-      try {
-        const idl = await getIDL();
-        const walletAdapter = { publicKey, signTransaction, signAllTransactions };
-        const provider = new AnchorProvider(connection, walletAdapter, { preflightCommitment: "processed" });
-        const programInstance = new Program(idl, provider);
-        setProgram(programInstance);
-      } catch (err) {
-        console.error("Failed to setup program:", err);
-        toast.error("Error initializing program.");
-      }
-    };
-
-    if (publicKey) {
-      setupProgram();
-    }
-  }, [publicKey]);
-
+    if (!program) return;
+  
+    // Always fetch when refreshKey changes
+    fetchQuestions();
+  
+  }, [refreshKey, program]);
+  
   useEffect(() => {
-    if (!program || !publicKey) return;
-
-    fetchQuestions(); // immediate fetch
-
+    if (!program) return;
+  
+    // Set up polling only once
     const interval = setInterval(() => {
-      console.log("Fetching questions")
       fetchQuestions();
-    }, 300000); // every 5 minutes
-
+    }, 300000); // 5 minutes
+  
     return () => clearInterval(interval);
-  }, [program, publicKey, refreshKey]);
+  }, [program]);
 
   const fetchQuestions = async () => {
     try {
       setLoading(true);
       const accounts = await program.account.question.all();
       const rentExemption = await connection.getMinimumBalanceForRentExemption(8);
-
+  
+      // Get vault PDAs for all questions
       const vaultPDAs = await Promise.all(
         accounts.map(async ({ publicKey: questionPubKey }) => {
           const [vaultPDA] = await PublicKey.findProgramAddress(
@@ -74,44 +71,66 @@ const QuestionsList = ({ refreshKey }) => {
           return vaultPDA;
         })
       );
-
+  
       const vaultAccountInfos = await connection.getMultipleAccountsInfo(vaultPDAs);
       const totalLamports = vaultAccountInfos.reduce((sum, acct) => sum + (acct?.lamports || 0), 0);
       const totalRewardLamports = Math.max(totalLamports - rentExemption * vaultAccountInfos.length, 0);
       setTotalVaultBalance(totalRewardLamports / web3.LAMPORTS_PER_SOL);
-
-      let parsedQuestions = await Promise.all(
+  
+      // Prepare voterRecord PDAs if publicKey is connected
+      let voterRecordPDAs = [];
+      if (publicKey) {
+        voterRecordPDAs = await Promise.all(
+          accounts.map(async ({ publicKey: questionPubKey }) => {
+            const [voterRecordPDA] = await PublicKey.findProgramAddress(
+              [Buffer.from("vote"), publicKey.toBuffer(), questionPubKey.toBuffer()],
+              PROGRAM_ID
+            );
+            return voterRecordPDA;
+          })
+        );
+      }
+  
+      // Batch fetch all voterRecord accounts if applicable
+      const voterRecordInfos = publicKey && voterRecordPDAs.length > 0
+        ? await connection.getMultipleAccountsInfo(voterRecordPDAs)
+        : [];
+  
+      // Parse all questions
+      const parsedQuestions = await Promise.all(
         accounts.map(async ({ publicKey: questionPubKey, account }, index) => {
           const vaultInfo = vaultAccountInfos[index];
           const vaultBalance = vaultInfo?.lamports ?? 0;
           const rewardLamports = Math.max(vaultBalance - rentExemption, 0);
           const solReward = rewardLamports / web3.LAMPORTS_PER_SOL;
-
+  
           const commitEndTime = account.commitEndTime.toNumber();
           const revealEndTime = account.revealEndTime.toNumber();
           const revealEnded = revealEndTime <= Date.now() / 1000;
           const committedVoters = account.committedVoters ? account.committedVoters.toNumber() : 0;
-
+  
           let userVoterRecord = null;
-          if (publicKey) {
+  
+          // Parse voter record if available
+          if (publicKey && voterRecordInfos[index]) {
             try {
-              const [voterRecordPDA] = await PublicKey.findProgramAddress(
-                [Buffer.from("vote"), publicKey.toBuffer(), questionPubKey.toBuffer()],
-                PROGRAM_ID
+              const voterRecordAccount = program.account.voterRecord.coder.accounts.decode(
+                "VoterRecord",
+                voterRecordInfos[index].data
               );
-              const voterRecordAccount = await program.account.voterRecord.fetch(voterRecordPDA);
+  
               userVoterRecord = {
                 selectedOption: voterRecordAccount.selectedOption,
                 claimed: voterRecordAccount.claimed,
                 revealed: voterRecordAccount.revealed,
                 committed: true,
-                voterRecordPDA: voterRecordPDA.toString(),
+                voterRecordPDA: voterRecordPDAs[index].toString(),
               };
-            } catch (error) {
-              // no voter record found
+            } catch (err) {
+              // decoding failed (might not be initialized)
             }
           }
-
+  
           return {
             id: questionPubKey.toString(),
             questionText: account.questionText,
@@ -127,20 +146,20 @@ const QuestionsList = ({ refreshKey }) => {
           };
         })
       );
-
+  
+      // Sort and categorize questions
       const activeQuestions = parsedQuestions.filter(
         (q) => !q.revealEnded || (q.userVoterRecord && !q.userVoterRecord.claimed)
       );
       const endedQuestions = parsedQuestions.filter(
         (q) => q.revealEnded && (!q.userVoterRecord || q.userVoterRecord.claimed)
       );
-
+  
       activeQuestions.sort((a, b) =>
         sortOrder === "highest" ? b.reward - a.reward : a.reward - b.reward
       );
-
-      const sortedQuestions = [...activeQuestions, ...endedQuestions];
-      setQuestions(sortedQuestions);
+  
+      setQuestions([...activeQuestions, ...endedQuestions]);
     } catch (err) {
       toast.error(`Error fetching questions: ${err.message}`, {
         position: "top-center",
@@ -150,6 +169,7 @@ const QuestionsList = ({ refreshKey }) => {
       setLoading(false);
     }
   };
+  
 
   const paginatedQuestions = questions.slice(
     (currentPage - 1) * pageSize,

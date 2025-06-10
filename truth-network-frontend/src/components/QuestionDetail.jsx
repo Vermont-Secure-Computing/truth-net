@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { PublicKey } from "@solana/web3.js";
 import { useWallet } from "@solana/wallet-adapter-react";
@@ -7,9 +7,10 @@ import { QRCodeCanvas } from "qrcode.react";
 import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import CommitReveal from "./CommitReveal";
-import { getConstants, getIDL } from "../constants";
+import { getConstants } from "../constants";
+import { getIdls } from "../idl";
 
-const { PROGRAM_ID, getRpcUrl, getExplorerTxUrl, FEE_RECEIVER } = getConstants();
+const { PROGRAM_ID, DEFAULT_RPC_URL, getExplorerTxUrl, FEE_RECEIVER } = getConstants();
 
 
 const QuestionDetail = () => {
@@ -29,37 +30,43 @@ const QuestionDetail = () => {
     const [hasReclaimed, setHasReclaimed] = useState(false);
     const [reclaiming, setReclaiming] = useState(false);
     const [snapshotTriggered, setSnapshotTriggered] = useState(false);
-    const [connection] = useState(() => new web3.Connection(getRpcUrl(), "confirmed"));
-    const [program, setProgram] = useState(null);
+    const [connection] = useState(() => new web3.Connection(DEFAULT_RPC_URL, "confirmed"));
+    // const [program, setProgram] = useState(null);
+    const { truthNetworkIDL } = getIdls();
+    const wallet = { publicKey, signTransaction, signAllTransactions };
+    const provider = useMemo(() => {
+        return new AnchorProvider(connection, wallet, { preflightCommitment: "processed" });
+      }, [connection, wallet]);
+      const program = useMemo(() => {
+        return new Program(truthNetworkIDL, provider);
+      }, [truthNetworkIDL, provider]);
 
     const navigate = useNavigate();
     const now = Math.floor(Date.now() / 1000);
-    useEffect(() => {
-        const setupProgram = async () => {
-            const idl = await getIDL();
-            const wallet = { publicKey, signTransaction, signAllTransactions };
-            const provider = new AnchorProvider(connection, wallet, { preflightCommitment: "processed" });
-            const programInstance = new Program(idl, provider);
-            setProgram(programInstance);
-        };
-
-        if (publicKey) {
-            setupProgram();
-        }
-    }, [publicKey]);
+    
+    // }, [publicKey]);
+    const hasFetchedRef = useRef(false);
+    const lastFetchedId = useRef(null);
 
     useEffect(() => {
-        if (program) {
-            fetchQuestion();
-            if (publicKey) {
-                checkMembership();
+        if (!program || !id || !publicKey) return;
+      
+        if (!hasFetchedRef.current || lastFetchedId.current !== id) {
+          (async () => {
+            const success = await fetchQuestion();
+            if (success) {
+              hasFetchedRef.current = true;
+              lastFetchedId.current = id;
             }
+          })();
         }
-    }, [program]);
+      
+        checkMembership();
+      }, [program, publicKey, id]);
 
     const checkMembership = async () => {
         try {
-          const [userRecordPDA] = await PublicKey.findProgramAddress(
+          const [userRecordPDA] = await PublicKey.findProgramAddressSync(
             [Buffer.from("user_record"), publicKey.toBuffer()],
             PROGRAM_ID
           );
@@ -71,14 +78,6 @@ const QuestionDetail = () => {
         }
       };
       
-
-    useEffect(() => {
-        fetchQuestion();
-
-        if (publicKey) {
-            checkMembership();
-        }
-    }, [id, publicKey]);
 
     // Fetch Question Details & User Voter Record
     const fetchQuestion = async () => {
@@ -142,14 +141,11 @@ const QuestionDetail = () => {
             snapshotTaken: account.rewardFeeTaken || false,
           };
     
-          setQuestion(newQuestion);
-    
-          if (publicKey) {
+            setQuestion(newQuestion);
             await fetchUserVoterRecord(questionPublicKey, newQuestion);
-          }
-    
-          setShowCommitReveal(!newQuestion.revealEnded);
-          setLoading(false);
+            setShowCommitReveal(!newQuestion.revealEnded);
+            setLoading(false);
+            return true;
         } catch (error) {
           console.error("Error fetching question:", error);
           if (error.message.includes("Account does not exist")) {
@@ -158,6 +154,7 @@ const QuestionDetail = () => {
             }
             setQuestionDeleted(true);
           }
+          return false;
         }
       };
 

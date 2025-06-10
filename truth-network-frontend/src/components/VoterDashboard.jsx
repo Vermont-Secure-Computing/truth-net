@@ -1,11 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { Program, AnchorProvider, web3 } from "@coral-xyz/anchor";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
-import { getConstants, getIDL } from "../constants";
+import { getConstants } from "../constants";
+import { getIdls } from "../idl";
 
-const { PROGRAM_ID, getRpcUrl } = getConstants();
+const { DEFAULT_RPC_URL, PROGRAM_ID, getRpcUrl } = getConstants();
 
 
 
@@ -17,26 +18,34 @@ const VoterDashboard = () => {
     const [totalRevealedVotes, setTotalRevealedVotes] = useState(0);
     const [totalCorrectVotes, setTotalCorrectVotes] = useState(0);
     const [voterReputation, setVoterReputation] = useState(0);
-    const [connection] = useState(() => new web3.Connection(getRpcUrl(), "confirmed"));
-    const [program, setProgram] = useState(null);
+    const [connection] = useState(() => new web3.Connection(DEFAULT_RPC_URL, "confirmed"));
+    // const [program, setProgram] = useState(null);
 
-    useEffect(() => {
-        const setupProgramAndFetch = async () => {
-            try {
-                const idl = await getIDL();
-                const walletAdapter = { publicKey, signTransaction, signAllTransactions: wallet?.signAllTransactions };
-                const provider = new AnchorProvider(connection, walletAdapter, { preflightCommitment: "processed" });
-                const programInstance = new Program(idl, provider);
-                setProgram(programInstance);
-            } catch (err) {
-                console.error("Failed to setup program:", err);
-            }
-        };
+    // useEffect(() => {
+    //     const setupProgramAndFetch = async () => {
+    //         try {
+    //             const idl = await getIDL();
+    //             const walletAdapter = { publicKey, signTransaction, signAllTransactions: wallet?.signAllTransactions };
+    //             const provider = new AnchorProvider(connection, walletAdapter, { preflightCommitment: "processed" });
+    //             const programInstance = new Program(idl, provider);
+    //             setProgram(programInstance);
+    //         } catch (err) {
+    //             console.error("Failed to setup program:", err);
+    //         }
+    //     };
 
-        if (publicKey) {
-            setupProgramAndFetch();
-        }
-    }, [publicKey, wallet]);
+    //     if (publicKey) {
+    //         setupProgramAndFetch();
+    //     }
+    // }, [publicKey, wallet]);
+    const { truthNetworkIDL } = getIdls();
+    const wallet1 = { publicKey, signTransaction };
+    const provider = useMemo(() => {
+        return new AnchorProvider(connection, wallet, { preflightCommitment: "processed" });
+      }, [connection, wallet]);
+      const program = useMemo(() => {
+        return new Program(truthNetworkIDL, provider);
+      }, [truthNetworkIDL, provider]);
 
     useEffect(() => {
         if (program && publicKey) {

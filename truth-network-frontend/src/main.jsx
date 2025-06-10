@@ -15,8 +15,8 @@ window.Buffer = Buffer;
 
 
 const Root = () => {
-    const { getRpcUrl } = getConstants();
-    const endpoint = getRpcUrl();
+    const constants = getConstants();
+    const endpoint = constants.DEFAULT_RPC_URL;
     const wallets = useMemo(() => [new PhantomWalletAdapter(), new SolflareWalletAdapter()], []);
 
     return (
