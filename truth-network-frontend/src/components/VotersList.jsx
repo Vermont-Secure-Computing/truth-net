@@ -4,9 +4,11 @@ import bs58 from "bs58";
 import { toast } from "react-toastify";
 import { deserializeUnchecked } from "borsh";
 import BN from "bn.js";
-import { PROGRAM_ID, getRpcUrl } from "../constant";
+import { getConstants } from "../constants";
 import "react-toastify/dist/ReactToastify.css";
 
+const { PROGRAM_ID, getRpcUrl } = getConstants();
+const clusterParam = import.meta.env.VITE_NETWORK === "mainnet" ? "" : "?cluster=devnet";
 // Define UserRecord structure
 class UserRecord {
   constructor(fields) {
@@ -130,7 +132,7 @@ const VotersList = () => {
                     <td className="p-2 border">{voter.totalCorrectVotes}</td>
                     <td className="p-2 border">
                       <a
-                        href={`https://explorer.solana.com/address/${voter.address}?cluster=mainnet-beta`}
+                        href={`https://explorer.solana.com/address/${voter.address}${clusterParam}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-blue-500 underline"
@@ -157,7 +159,7 @@ const VotersList = () => {
                 <p><span className="font-semibold">Revealed Votes:</span> {voter.totalRevealedVotes}</p>
                 <p><span className="font-semibold">Correct Votes:</span> {voter.totalCorrectVotes}</p>
                 <a
-                  href={`https://explorer.solana.com/address/${voter.address}?cluster=mainnet-beta`}
+                  href={`https://explorer.solana.com/address/${voter.address}${clusterParam}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-blue-500 underline block mt-1"

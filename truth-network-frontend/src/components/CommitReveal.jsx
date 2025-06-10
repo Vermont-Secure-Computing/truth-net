@@ -5,8 +5,9 @@ import { Program, AnchorProvider, web3 } from "@coral-xyz/anchor";
 import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { keccak256 } from "js-sha3";
-import idl from "../idl.json";
-import { PROGRAM_ID, getRpcUrl } from "../constant";
+import { getConstants, getIDL } from "../constants";
+
+const { PROGRAM_ID, getRpcUrl, getExplorerTxUrl } = getConstants();
 
 
 const CommitReveal = ({ question, onClose, refreshQuestions }) => {
@@ -19,11 +20,25 @@ const CommitReveal = ({ question, onClose, refreshQuestions }) => {
     const [canReveal, setCanReveal] = useState(false);
     const [blockedReveal, setBlockedReveal] = useState(false);
     const [connection] = useState(() => new web3.Connection(getRpcUrl(), "confirmed"));
+    const [program, setProgram] = useState(null);
 
+    useEffect(() => {
+        const setupProgram = async () => {
+            try {
+                const idl = await getIDL();
+                const walletAdapter = { publicKey, signTransaction, signAllTransactions };
+                const provider = new AnchorProvider(connection, walletAdapter, { preflightCommitment: "processed" });
+                const programInstance = new Program(idl, provider);
+                setProgram(programInstance);
+            } catch (err) {
+                console.error("Failed to setup program:", err);
+            }
+        };
 
-    const walletAdapter = publicKey && signTransaction ? { publicKey, signTransaction, signAllTransactions } : null;
-    const provider = walletAdapter ? new AnchorProvider(connection, walletAdapter, { preflightCommitment: "processed" }) : null;
-    const program = provider ? new Program(idl, provider) : null;
+        if (publicKey) {
+            setupProgram();
+        }
+    }, [publicKey]);
 
     useEffect(() => {
         if (publicKey && program && !hasCheckedCommitment) {
@@ -97,18 +112,18 @@ const CommitReveal = ({ question, onClose, refreshQuestions }) => {
             }).rpc();
 
             toast.success(
-                <>
-                    Vote committed!{" "}
-                    <a
-                        href={`https://explorer.solana.com/tx/${tx}?cluster=mainnet-beta`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="underline text-blue-500"
-                    >
-                        View on Explorer
-                    </a>
-                </>
-            );
+                <div>
+                  Vote committed!{" "}
+                  <a
+                    href={getExplorerTxUrl(tx)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline text-blue-500"
+                  >
+                    View on Explorer
+                  </a>
+                </div>
+              );
             setHasCommitted(true);
             setCanReveal(true);
             if (refreshQuestions) refreshQuestions();
@@ -146,18 +161,18 @@ const CommitReveal = ({ question, onClose, refreshQuestions }) => {
             }).rpc();
 
             toast.success(
-                <>
-                    Vote revealed!{" "}
-                    <a
-                        href={`https://explorer.solana.com/tx/${tx}?cluster=mainnet-beta`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="underline text-blue-500"
-                    >
-                        View on Explorer
-                    </a>
-                </>
-            );
+                <div>
+                  Vote committed!{" "}
+                  <a
+                    href={getExplorerTxUrl(tx)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline text-blue-500"
+                  >
+                    View on Explorer
+                  </a>
+                </div>
+              );
             setCanReveal(false);
         } catch (e) {
             toast.error("Reveal failed: " + e.message);

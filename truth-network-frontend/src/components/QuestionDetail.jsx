@@ -7,8 +7,9 @@ import { QRCodeCanvas } from "qrcode.react";
 import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import CommitReveal from "./CommitReveal";
-import idl from "../idl.json";
-import { FEE_RECEIVER, PROGRAM_ID, getRpcUrl } from "../constant";
+import { getConstants, getIDL } from "../constants";
+
+const { PROGRAM_ID, getRpcUrl, getExplorerTxUrl, FEE_RECEIVER } = getConstants();
 
 
 const QuestionDetail = () => {
@@ -29,13 +30,32 @@ const QuestionDetail = () => {
     const [reclaiming, setReclaiming] = useState(false);
     const [snapshotTriggered, setSnapshotTriggered] = useState(false);
     const [connection] = useState(() => new web3.Connection(getRpcUrl(), "confirmed"));
-    
+    const [program, setProgram] = useState(null);
 
-    const wallet = { publicKey, signTransaction, signAllTransactions };
-    const provider = new AnchorProvider(connection, wallet, { preflightCommitment: "processed" });
-    const program = new Program(idl, provider);
     const navigate = useNavigate();
     const now = Math.floor(Date.now() / 1000);
+    useEffect(() => {
+        const setupProgram = async () => {
+            const idl = await getIDL();
+            const wallet = { publicKey, signTransaction, signAllTransactions };
+            const provider = new AnchorProvider(connection, wallet, { preflightCommitment: "processed" });
+            const programInstance = new Program(idl, provider);
+            setProgram(programInstance);
+        };
+
+        if (publicKey) {
+            setupProgram();
+        }
+    }, [publicKey]);
+
+    useEffect(() => {
+        if (program) {
+            fetchQuestion();
+            if (publicKey) {
+                checkMembership();
+            }
+        }
+    }, [program]);
 
     const checkMembership = async () => {
         try {
@@ -62,6 +82,11 @@ const QuestionDetail = () => {
 
     // Fetch Question Details & User Voter Record
     const fetchQuestion = async () => {
+        if (!program || !publicKey) {
+            console.warn("Program or publicKey not ready. Skipping fetch.");
+            return;
+        }
+    
         try {
           const questionPublicKey = new PublicKey(id);
           const account = await program.account.question.fetch(questionPublicKey);
@@ -225,7 +250,7 @@ const QuestionDetail = () => {
                 position: "top-center",
                 autoClose: 5000,
                 onClick: () =>
-                    window.open(`https://explorer.solana.com/tx/${tx}?cluster=mainnet-beta`, "_blank"),
+                    window.open(getExplorerTxUrl(tx), "_blank"),
             });
     
             // Manually update state to avoid waiting for fetch
@@ -285,7 +310,7 @@ const QuestionDetail = () => {
     
             toast.success(`Question deleted! Tx: ${tx.slice(0, 6)}...${tx.slice(-6)}`, {
                 onClick: () =>
-                    window.open(`https://explorer.solana.com/tx/${tx}?cluster=mainnet-beta`, "_blank"),
+                    window.open(getExplorerTxUrl(tx), "_blank"),
             });
     
             // Redirect after a short delay
@@ -328,7 +353,9 @@ const QuestionDetail = () => {
                 .rpc();
     
             toast.success(`Reward drained! Tx: ${tx.slice(0, 6)}...${tx.slice(-6)}`, {
-                onClick: () => window.open(`https://explorer.solana.com/tx/${tx}?cluster=mainnet-beta`, "_blank"),
+                position: "top-center",
+                autoClose: 6000,
+                onClick: () => window.open(getExplorerTxUrl(tx), "_blank"),
             });
             setHasDrained(true);
             fetchQuestion();
@@ -373,7 +400,7 @@ const QuestionDetail = () => {
     
             toast.success(`Rent reclaimed! Tx: ${tx.slice(0, 6)}...${tx.slice(-6)}`, {
                 onClick: () =>
-                    window.open(`https://explorer.solana.com/tx/${tx}?cluster=mainnet-beta`, "_blank"),
+                    window.open(getExplorerTxUrl(tx), "_blank"),
             });
     
             // Wait for confirmation before refresh
@@ -497,7 +524,7 @@ const QuestionDetail = () => {
                     <p className="text-green-700 font-semibold mt-4">
                         Rewards claimed!{" "}
                         <a
-                        href={`https://explorer.solana.com/tx/${txId}?cluster=mainnet-beta`}
+                        href={getExplorerTxUrl(txId)}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-blue-600 underline"

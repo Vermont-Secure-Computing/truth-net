@@ -1,8 +1,10 @@
 // Updated App.jsx
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Routes, Route, useNavigate } from "react-router-dom";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { useWallet } from "@solana/wallet-adapter-react";
+import { Connection } from "@solana/web3.js";
+import { AnchorProvider, Program, web3 } from "@coral-xyz/anchor";
 import axios from "axios";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
@@ -14,10 +16,12 @@ import VoterDashboard from "./components/VoterDashboard";
 import VotersList from "./components/VotersList";
 import Instruction from "./components/Instruction";
 import SecurityPolicy from "./components/SecurityPolicy";
-import { getRpcUrl, resetRpcUrl } from "./constant";
+import { getConstants, getIDL } from "./constants";
+
+const { getRpcUrl, resetRpcUrl, PROGRAM_ID } = getConstants();
 
 const App = () => {
-    const { publicKey } = useWallet();
+  const { publicKey, signTransaction, signAllTransactions } = useWallet();
     const navigate = useNavigate();
     const [showQuestionForm, setShowQuestionForm] = useState(false);
     const [showRpcModal, setShowRpcModal] = useState(false);
@@ -27,6 +31,35 @@ const App = () => {
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
+    const [program, setProgram] = useState(null);
+    const [rpcOnline, setRpcOnline] = useState(null);
+
+    useEffect(() => {
+      const setupProgram = async () => {
+        try {
+          if (!publicKey || !signTransaction || !signAllTransactions) return;
+          const idl = await getIDL();
+          const walletAdapter = { publicKey, signTransaction, signAllTransactions };
+          const provider = new AnchorProvider(new Connection(getRpcUrl(), "confirmed"), walletAdapter, {
+            preflightCommitment: "processed",
+          });
+          const programInstance = new Program(idl || idl, provider);
+          setProgram(programInstance);
+        } catch (err) {
+          console.error("Failed to initialize program", err);
+        }
+      };
+  
+      setupProgram();
+    }, [publicKey, signTransaction, signAllTransactions]);
+
+    useEffect(() => {
+      const checkRpcStatus = async () => {
+        const isOnline = await testRpcConnection(rpcUrl);
+        setRpcOnline(isOnline);
+      };
+      checkRpcStatus();
+    }, [rpcUrl]);
 
     const hasMaliciousChars = (url) => {
       const pattern = /<script|javascript:|data:text|<|>|"|'/i;
@@ -112,8 +145,25 @@ const App = () => {
                     alt="GitHub Logo"
                     className="h-6 w-auto object-contain"
                 />
-                <sup className="text-xs text-gray-600">Mainnet</sup>
+                <sup className="text-xs text-gray-600">
+                  {import.meta.env.VITE_NETWORK === "mainnet" ? "Mainnet" : "Devnet"}
+                </sup>
             </a>
+            <span
+              className={`text-xs font-semibold px-2 py-1 rounded-md ${
+                rpcOnline === null
+                  ? "bg-gray-400 text-white"
+                  : rpcOnline
+                  ? "bg-green-500 text-white"
+                  : "bg-red-500 text-white"
+              }`}
+            >
+              {rpcOnline === null
+                ? "Checking RPC..."
+                : rpcOnline
+                ? "RPC Online"
+                : "RPC Offline"}
+            </span>
             </div>
   
             <nav className="hidden md:flex items-center space-x-4">
@@ -122,12 +172,14 @@ const App = () => {
               <button onClick={() => navigate("/voters")} className="px-4 py-2 rounded-md bg-white hover:bg-gray-300">Voters</button>
               <button onClick={() => navigate("/instructions")} className="px-4 py-2 rounded-md bg-white hover:bg-gray-300">Instructions</button>
               <a
-                href="https://devnet.truth.it.com"
+                href={import.meta.env.VITE_NETWORK === "mainnet" 
+                  ? "https://devnet.truth.it.com" 
+                  : "https://truth.it.com"}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="px-4 py-2 rounded-md bg-white hover:bg-gray-300 text-black"
               >
-                Open Devnet
+                {import.meta.env.VITE_NETWORK === "mainnet" ? "Open Devnet" : "Open Mainnet"}
               </a>
 
               <WalletMultiButton className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md" />
@@ -173,12 +225,14 @@ const App = () => {
           <div className="max-w-7xl mx-auto">
             <div className="text-center mb-2">
               <a
-                href="https://explorer.solana.com/address/4sC1fceX7osnaP8JkY4AfgK5tSFSfS44rXMhX361WEPF"
+                href={`https://explorer.solana.com/address/${PROGRAM_ID.toBase58?.() || PROGRAM_ID}${
+                  import.meta.env.VITE_NETWORK === "mainnet" ? "" : "?cluster=devnet"
+                }`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-gray-700 hover:underline break-all"
               >
-                Program ID: 4sC1fceX7osnaP8JkY4AfgK5tSFSfS44rXMhX361WEPF
+                Program ID: {PROGRAM_ID.toBase58?.() || PROGRAM_ID}
               </a>
               <h2 className="text-xl font-semibold mb-1">Truth Network Membership</h2>
               {!publicKey ? (
@@ -197,13 +251,18 @@ const App = () => {
         </div>
   
         {showQuestionForm && (
-          <div className="fixed inset-0 flex items-center justify-center z-50" style={{ backgroundColor: "rgba(0, 0, 0, 0.6)" }}>
-            <div className="bg-white pt-12 pb-6 px-6 rounded-lg w-full max-w-lg mx-auto shadow-xl relative">
-              <button onClick={() => setShowQuestionForm(false)} className="absolute top-4 right-4 text-gray-600 hover:text-gray-900 text-xl">&times;</button>
-              <QuestionForm onClose={() => setShowQuestionForm(false)} triggerRefresh={() => setRefreshKey(k => k + 1)} />
-            </div>
+        <div className="fixed inset-0 flex items-center justify-center z-50" style={{ backgroundColor: "rgba(0, 0, 0, 0.6)" }}>
+          <div className="bg-white pt-12 pb-6 px-6 rounded-lg w-full max-w-lg mx-auto shadow-xl relative">
+            <button onClick={() => setShowQuestionForm(false)} className="absolute top-4 right-4 text-gray-600 hover:text-gray-900 text-xl">&times;</button>
+            {program ? (
+              <QuestionForm program={program} onClose={() => setShowQuestionForm(false)} triggerRefresh={() => setRefreshKey(k => k + 1)} />
+            ) : (
+              <div className="text-center text-gray-500">Initializing program...</div>
+            )}
           </div>
-        )}
+        </div>
+      )}
+
   
         {showRpcModal && (
           <div className="fixed inset-0 flex items-center justify-center z-50" style={{ backgroundColor: "rgba(0, 0, 0, 0.6)" }}>
