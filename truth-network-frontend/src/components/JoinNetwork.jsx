@@ -13,26 +13,15 @@ const JoinNetwork = ({ compact = false, updateIsMember }) => {
   const { publicKey, signTransaction } = useWallet();
   const [loading, setLoading] = useState(false);
   const [isMember, setIsMember] = useState(false);
+  const [inviterModalOpen, setInviterModalOpen] = useState(false);
+  const [inviterInput, setInviterInput] = useState("");
   const [connection] = useState(() => new web3.Connection(DEFAULT_RPC_URL, "confirmed"));
-  // const [program, setProgram] = useState(null);
+  const [providerCount, setProviderCount] = useState(0);
+  const [statePDA] = useState(() =>
+    PublicKey.findProgramAddressSync([Buffer.from("state")], PROGRAM_ID)[0]
+  );
 
-  // useEffect(() => {
-  //   const setupProgram = async () => {
-  //     try {
-  //       const idl = await getIDL();
-  //       const walletAdapter = { publicKey, signTransaction };
-  //       const provider = new AnchorProvider(connection, walletAdapter, { commitment: "confirmed" });
-  //       const programInstance = new Program(idl, provider);
-  //       setProgram(programInstance);
-  //     } catch (err) {
-  //       console.error("Failed to setup program:", err);
-  //     }
-  //   };
 
-  //   if (publicKey && signTransaction) {
-  //     setupProgram();
-  //   }
-  // }, [publicKey, signTransaction]);
   const { truthNetworkIDL } = getIdls();
   const wallet = { publicKey, signTransaction };
   const provider = useMemo(() => {
@@ -42,15 +31,37 @@ const JoinNetwork = ({ compact = false, updateIsMember }) => {
     return new Program(truthNetworkIDL, provider);
   }, [truthNetworkIDL, provider]);
 
+  const fetchState = async () => {
+    try {
+      const stateAccount = await program.account.state.fetch(statePDA);
+      stateAccount.pendingInvites.forEach((invite, index) => {
+        console.log(
+          `Invite #${index}:`,
+          "Invitee =", invite.invitee.toBase58(),
+          "Inviter =", invite.inviter.toBase58()
+        );
+      });
+      setProviderCount(stateAccount.truthProviderCount.toNumber());
+    } catch (error) {
+      if (error.message.includes("Account does not exist")) {
+        console.log("State account does not exist yet. No providers registered.");
+        setProviderCount(0);
+      } else {
+        console.error("Failed to fetch state:", error);
+      }
+    }
+  };
+  
+
   const fetchMembership = async () => {
     try {
       const [userRecordPDA] = await PublicKey.findProgramAddress(
         [Buffer.from("user_record"), publicKey.toBuffer()],
         PROGRAM_ID
       );
-  
+
       const userRecordAccount = await program.account.userRecord.fetch(userRecordPDA);
-      const member = !!userRecordAccount; // If account exists, user is a member
+      const member = !!userRecordAccount;
       setIsMember(member);
       updateIsMember?.(member);
     } catch (error) {
@@ -63,43 +74,79 @@ const JoinNetwork = ({ compact = false, updateIsMember }) => {
       }
     }
   };
-  
 
   useEffect(() => {
     if (program && publicKey) {
       fetchMembership();
+      fetchState();
     }
   }, [program, publicKey]);
 
   const joinNetworkHandler = async () => {
+    if (providerCount < 2) {
+      // Directly join
+      await confirmJoin();
+    } else {
+      // Show modal to require inviter
+      setInviterModalOpen(true);
+    }
+  };
+
+  const confirmJoin = async () => {
     try {
       setLoading(true);
-  
-      const [vaultPDA] = await PublicKey.findProgramAddressSync(
-        [Buffer.from("vault"), publicKey.toBuffer()],
-        PROGRAM_ID
-      );
   
       const [userRecordPDA] = await PublicKey.findProgramAddressSync(
         [Buffer.from("user_record"), publicKey.toBuffer()],
         PROGRAM_ID
       );
   
-      const tx = await program.methods.joinNetwork().accounts({
+      let inviterRecordPDA = null;
+  
+      if (inviterInput.trim() !== "") {
+        try {
+          const inviterPubkey = new PublicKey(inviterInput.trim());
+          [inviterRecordPDA] = await PublicKey.findProgramAddressSync(
+            [Buffer.from("user_record"), inviterPubkey.toBuffer()],
+            PROGRAM_ID
+          );
+        } catch {
+          toast.error("Invalid inviter address", { position: "top-center" });
+          return;
+        }
+      }
+  
+      // if (providerCount >= 2 && !inviterRecordPDA) {
+      //   toast.error("An inviter address is required.", { position: "top-center" });
+      //   return;
+      // }
+  
+      const accounts = {
+        state: statePDA,
         user: publicKey,
-        vault: vaultPDA,
         userRecord: userRecordPDA,
         systemProgram: web3.SystemProgram.programId,
-      }).rpc();
+      };
+      
+      if (inviterRecordPDA) {
+        accounts.inviterRecord = inviterRecordPDA;
+      }
+      
+      const tx = await program.methods
+        .joinNetwork()
+        .accounts(accounts)
+        .rpc();
   
       toast.success(`Joined the network! Tx: ${tx.slice(0, 6)}...${tx.slice(-6)}`, {
         position: "top-center",
         autoClose: 6000,
-        onClick: () =>
-        window.open(getExplorerTxUrl(tx), "_blank"),
+        onClick: () => window.open(getExplorerTxUrl(tx), "_blank"),
       });
   
+      setInviterModalOpen(false);
+      setInviterInput("");
       await fetchMembership();
+      await fetchState();
     } catch (error) {
       toast.error(`Failed to join: ${error.message}`, { position: "top-center" });
       console.error("Failed to join network:", error);
@@ -112,31 +159,33 @@ const JoinNetwork = ({ compact = false, updateIsMember }) => {
   const leaveNetworkHandler = async () => {
     try {
       setLoading(true);
-  
+
       const [vaultPDA] = await PublicKey.findProgramAddressSync(
         [Buffer.from("vault"), publicKey.toBuffer()],
         PROGRAM_ID
       );
-  
+
       const [userRecordPDA] = await PublicKey.findProgramAddressSync(
         [Buffer.from("user_record"), publicKey.toBuffer()],
         PROGRAM_ID
       );
-  
-      const tx = await program.methods.leaveNetwork().accounts({
-        user: publicKey,
-        vault: vaultPDA,
-        userRecord: userRecordPDA,
-        systemProgram: web3.SystemProgram.programId,
-      }).rpc();
-  
+
+      const tx = await program.methods
+        .leaveNetwork()
+        .accounts({
+          user: publicKey,
+          vault: vaultPDA,
+          userRecord: userRecordPDA,
+          systemProgram: web3.SystemProgram.programId,
+        })
+        .rpc();
+
       toast.success(`Left the network. Tx: ${tx.slice(0, 6)}...${tx.slice(-6)}`, {
         position: "top-center",
         autoClose: 6000,
-        onClick: () =>
-        window.open(getExplorerTxUrl(tx), "_blank"),
+        onClick: () => window.open(getExplorerTxUrl(tx), "_blank"),
       });
-  
+
       await fetchMembership();
     } catch (error) {
       toast.error(`Failed to leave: ${error.message}`, { position: "top-center" });
@@ -145,7 +194,6 @@ const JoinNetwork = ({ compact = false, updateIsMember }) => {
       setLoading(false);
     }
   };
-  
 
   const renderButton = () =>
     isMember ? (
@@ -182,28 +230,68 @@ const JoinNetwork = ({ compact = false, updateIsMember }) => {
       </button>
     );
 
-  return compact ? (
-    renderButton()
-  ) : (
-    <div>
-      <h2 className="text-xl font-semibold mb-2">Truth Network Membership</h2>
-      {!publicKey ? (
-        <p className="text-gray-700">Please connect your wallet first.</p>
-      ) : !program ? (
-        <p className="text-gray-700">Loading provider...</p>
-      ) : (
-        <>
-          <p className="mb-4">
-            {isMember
-              ? "You are a Registered Truth Provider."
-              : "You are not registered."}
-          </p>
-          {renderButton()}
-        </>
+  return (
+    <>
+      {inviterModalOpen && (
+        <div className="fixed inset-0 flex items-center justify-center z-50" style={{ backgroundColor: "rgba(0, 0, 0, 0.4)" }}>
+          <div className="bg-white rounded-md p-6 w-full max-w-md shadow-lg">
+            <h3 className="text-lg font-semibold mb-4">Join Truth It Network</h3>
+            <label className="block mb-2 text-gray-700">
+            {providerCount === 0
+              ? "No members yet. You will be the first Truth Provider!"
+              : providerCount < 2
+              ? "Inviter Address (optional)"
+              : "Inviter Address (required)"}
+            </label>
+            <input
+              type="text"
+              placeholder="Paste inviter address (or leave blank)"
+              value={inviterInput}
+              onChange={(e) => setInviterInput(e.target.value)}
+              className="w-full px-3 py-2 border rounded-md mb-4"
+            />
+            <div className="flex justify-end space-x-2">
+              <button
+                onClick={() => setInviterModalOpen(false)}
+                className="px-4 py-2 bg-gray-300 rounded-md"
+                disabled={loading}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmJoin}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md"
+                disabled={loading}
+              >
+                {loading ? "Joining..." : "Confirm Join"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
-    </div>
+      {compact ? (
+        renderButton()
+      ) : (
+        <div>
+          <h2 className="text-xl font-semibold mb-2">Truth Network Membership</h2>
+          {!publicKey ? (
+            <p className="text-gray-700">Please connect your wallet first.</p>
+          ) : !program ? (
+            <p className="text-gray-700">Loading provider...</p>
+          ) : (
+            <>
+              <p className="mb-4">
+                {isMember
+                  ? "You are a Registered Truth Provider."
+                  : "You are not registered."}
+              </p>
+              {renderButton()}
+            </>
+          )}
+        </div>
+      )}
+    </>
   );
 };
 
 export default JoinNetwork;
-
