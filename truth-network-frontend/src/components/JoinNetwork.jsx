@@ -13,12 +13,10 @@ const JoinNetwork = ({ compact = false, updateIsMember }) => {
   const { publicKey, signTransaction } = useWallet();
   const [loading, setLoading] = useState(false);
   const [isMember, setIsMember] = useState(false);
-  const [inviterModalOpen, setInviterModalOpen] = useState(false);
-  const [inviterInput, setInviterInput] = useState("");
   const [connection] = useState(() => new web3.Connection(DEFAULT_RPC_URL, "confirmed"));
   const [providerCount, setProviderCount] = useState(0);
   const [statePDA] = useState(() =>
-    PublicKey.findProgramAddressSync([Buffer.from("state")], PROGRAM_ID)[0]
+    PublicKey.findProgramAddressSync([Buffer.from("global_state")], PROGRAM_ID)[0]
   );
 
 
@@ -83,59 +81,61 @@ const JoinNetwork = ({ compact = false, updateIsMember }) => {
   }, [program, publicKey]);
 
   const joinNetworkHandler = async () => {
-    if (providerCount < 2) {
-      // Directly join
-      await confirmJoin();
-    } else {
-      // Show modal to require inviter
-      setInviterModalOpen(true);
-    }
+    await confirmJoin();
   };
 
   const confirmJoin = async () => {
     try {
       setLoading(true);
   
-      const [userRecordPDA] = await PublicKey.findProgramAddressSync(
+      const [userRecordPDA] = PublicKey.findProgramAddressSync(
         [Buffer.from("user_record"), publicKey.toBuffer()],
         PROGRAM_ID
       );
   
-      let inviterRecordPDA = null;
+      // Derive this user's invite PDA
+      const [invitePDA] = PublicKey.findProgramAddressSync(
+        [Buffer.from("invite"), publicKey.toBuffer()],
+        PROGRAM_ID
+      );
   
-      if (inviterInput.trim() !== "") {
-        try {
-          const inviterPubkey = new PublicKey(inviterInput.trim());
-          [inviterRecordPDA] = await PublicKey.findProgramAddressSync(
-            [Buffer.from("user_record"), inviterPubkey.toBuffer()],
-            PROGRAM_ID
-          );
-        } catch {
-          toast.error("Invalid inviter address", { position: "top-center" });
-          return;
+      let inviteExists = false;
+  
+      // Try to fetch the invite PDA (if it exists)
+      try {
+        const inviteAccount = await program.account.invite.fetch(invitePDA);
+        if (inviteAccount) {
+          inviteExists = true;
+          console.log("Invite found from inviter:", inviteAccount.inviter.toBase58());
+        }
+      } catch (fetchErr) {
+        if (fetchErr.message.includes("Account does not exist")) {
+          console.log("No invite account found (joining without invite).");
+        } else {
+          console.error("Error checking invite PDA:", fetchErr);
         }
       }
   
-      // if (providerCount >= 2 && !inviterRecordPDA) {
-      //   toast.error("An inviter address is required.", { position: "top-center" });
-      //   return;
-      // }
-  
       const accounts = {
-        state: statePDA,
+        globalState: statePDA,
         user: publicKey,
         userRecord: userRecordPDA,
         systemProgram: web3.SystemProgram.programId,
       };
-      
-      if (inviterRecordPDA) {
-        accounts.inviterRecord = inviterRecordPDA;
-      }
-      
-      const tx = await program.methods
+  
+      // const builder = program.methods.joinNetwork().accounts(accounts);
+  
+      let tx;
+
+      tx = await program.methods
         .joinNetwork()
-        .accounts(accounts)
+        .accounts({
+          ...accounts,
+          invite: inviteExists ? invitePDA : null,
+        })
         .rpc();
+
+
   
       toast.success(`Joined the network! Tx: ${tx.slice(0, 6)}...${tx.slice(-6)}`, {
         position: "top-center",
@@ -143,8 +143,6 @@ const JoinNetwork = ({ compact = false, updateIsMember }) => {
         onClick: () => window.open(getExplorerTxUrl(tx), "_blank"),
       });
   
-      setInviterModalOpen(false);
-      setInviterInput("");
       await fetchMembership();
       await fetchState();
     } catch (error) {
@@ -154,7 +152,7 @@ const JoinNetwork = ({ compact = false, updateIsMember }) => {
       setLoading(false);
     }
   };
-  
+   
 
   const leaveNetworkHandler = async () => {
     try {
@@ -232,43 +230,6 @@ const JoinNetwork = ({ compact = false, updateIsMember }) => {
 
   return (
     <>
-      {inviterModalOpen && (
-        <div className="fixed inset-0 flex items-center justify-center z-50" style={{ backgroundColor: "rgba(0, 0, 0, 0.4)" }}>
-          <div className="bg-white rounded-md p-6 w-full max-w-md shadow-lg">
-            <h3 className="text-lg font-semibold mb-4">Join Truth It Network</h3>
-            <label className="block mb-2 text-gray-700">
-            {providerCount === 0
-              ? "No members yet. You will be the first Truth Provider!"
-              : providerCount < 2
-              ? "Inviter Address (optional)"
-              : "Inviter Address (required)"}
-            </label>
-            <input
-              type="text"
-              placeholder="Paste inviter address (or leave blank)"
-              value={inviterInput}
-              onChange={(e) => setInviterInput(e.target.value)}
-              className="w-full px-3 py-2 border rounded-md mb-4"
-            />
-            <div className="flex justify-end space-x-2">
-              <button
-                onClick={() => setInviterModalOpen(false)}
-                className="px-4 py-2 bg-gray-300 rounded-md"
-                disabled={loading}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={confirmJoin}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md"
-                disabled={loading}
-              >
-                {loading ? "Joining..." : "Confirm Join"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
       {compact ? (
         renderButton()
       ) : (

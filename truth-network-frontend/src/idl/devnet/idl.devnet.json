@@ -1,5 +1,5 @@
 {
-  "address": "2QQpmf5rEc6z711FxZmgCrSJ56To7v3QuM3SiNP63FsE",
+  "address": "9yAdGEsDDrgj73m1Q586dcN4tZqMnLMgnC86WAqsnXEs",
   "metadata": {
     "name": "truth_network",
     "version": "0.1.0",
@@ -626,6 +626,56 @@
       "args": []
     },
     {
+      "name": "initialize_global_state",
+      "discriminator": [
+        232,
+        254,
+        209,
+        244,
+        123,
+        89,
+        154,
+        207
+      ],
+      "accounts": [
+        {
+          "name": "global_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  108,
+                  111,
+                  98,
+                  97,
+                  108,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "join_network",
       "discriminator": [
         246,
@@ -639,13 +689,20 @@
       ],
       "accounts": [
         {
-          "name": "state",
+          "name": "global_state",
           "writable": true,
           "pda": {
             "seeds": [
               {
                 "kind": "const",
                 "value": [
+                  103,
+                  108,
+                  111,
+                  98,
+                  97,
+                  108,
+                  95,
                   115,
                   116,
                   97,
@@ -685,6 +742,10 @@
           }
         },
         {
+          "name": "invite",
+          "optional": true
+        },
+        {
           "name": "user",
           "writable": true,
           "signer": true
@@ -692,11 +753,6 @@
         {
           "name": "system_program",
           "address": "11111111111111111111111111111111"
-        },
-        {
-          "name": "inviter_record",
-          "writable": true,
-          "optional": true
         }
       ],
       "args": []
@@ -768,16 +824,64 @@
       ],
       "accounts": [
         {
-          "name": "state",
-          "writable": true
+          "name": "invite",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  110,
+                  118,
+                  105,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "nominee"
+              }
+            ]
+          }
         },
         {
           "name": "user_record",
-          "writable": true
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  117,
+                  115,
+                  101,
+                  114,
+                  95,
+                  114,
+                  101,
+                  99,
+                  111,
+                  114,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "inviter"
+              }
+            ]
+          }
         },
         {
           "name": "inviter",
+          "writable": true,
           "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
         }
       ],
       "args": [
@@ -950,6 +1054,32 @@
   ],
   "accounts": [
     {
+      "name": "GlobalState",
+      "discriminator": [
+        163,
+        46,
+        74,
+        168,
+        216,
+        123,
+        133,
+        98
+      ]
+    },
+    {
+      "name": "Invite",
+      "discriminator": [
+        230,
+        17,
+        253,
+        74,
+        50,
+        78,
+        85,
+        101
+      ]
+    },
+    {
       "name": "Question",
       "discriminator": [
         111,
@@ -973,19 +1103,6 @@
         154,
         240,
         18
-      ]
-    },
-    {
-      "name": "State",
-      "discriminator": [
-        216,
-        146,
-        107,
-        94,
-        104,
-        75,
-        182,
-        177
       ]
     },
     {
@@ -1222,7 +1339,19 @@
   ],
   "types": [
     {
-      "name": "PendingInvite",
+      "name": "GlobalState",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "truth_provider_count",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Invite",
       "type": {
         "kind": "struct",
         "fields": [
@@ -1233,6 +1362,10 @@
           {
             "name": "inviter",
             "type": "pubkey"
+          },
+          {
+            "name": "created_at",
+            "type": "i64"
           }
         ]
       }
@@ -1381,28 +1514,6 @@
           {
             "name": "count",
             "type": "u64"
-          }
-        ]
-      }
-    },
-    {
-      "name": "State",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "truth_provider_count",
-            "type": "u64"
-          },
-          {
-            "name": "pending_invites",
-            "type": {
-              "vec": {
-                "defined": {
-                  "name": "PendingInvite"
-                }
-              }
-            }
           }
         ]
       }

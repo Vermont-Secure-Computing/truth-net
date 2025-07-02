@@ -193,42 +193,47 @@ const VoterDashboard = () => {
 
     const nominateInvitee = async () => {
         if (!nomineeInput.trim()) {
-            toast.error("Please enter a wallet address.", { position: "top-center" });
-            return;
+          toast.error("Please enter a wallet address.", { position: "top-center" });
+          return;
         }
+      
         try {
-            const nomineePubkey = new web3.PublicKey(nomineeInput.trim());
-            const [userRecordPDA] = web3.PublicKey.findProgramAddressSync(
-                [Buffer.from("user_record"), publicKey.toBuffer()],
-                PROGRAM_ID
-            );
-            const statePDA = web3.PublicKey.findProgramAddressSync(
-                [Buffer.from("state")],
-                PROGRAM_ID
-            )[0];
-    
-            const tx = await program.methods
-                .nominateInvitee(nomineePubkey)
-                .accounts({
-                    state: statePDA,
-                    userRecord: userRecordPDA,
-                    inviter: publicKey
-                })
-                .rpc();
-    
-            toast.success(`Invitee nominated! Tx: ${tx.slice(0, 6)}...${tx.slice(-6)}`, {
-                position: "top-center",
-                autoClose: 6000,
-                onClick: () => window.open(`https://solscan.io/tx/${tx}`, "_blank")
-            });
-    
-            setNominateModalOpen(false);
-            setNomineeInput("");
+          const nomineePubkey = new web3.PublicKey(nomineeInput.trim());
+      
+          const [invitePDA] = web3.PublicKey.findProgramAddressSync(
+            [Buffer.from("invite"), nomineePubkey.toBuffer()],
+            PROGRAM_ID
+          );
+      
+          const [userRecordPDA] = web3.PublicKey.findProgramAddressSync(
+            [Buffer.from("user_record"), publicKey.toBuffer()],
+            PROGRAM_ID
+          );
+      
+          const tx = await program.methods
+            .nominateInvitee(nomineePubkey)
+            .accounts({
+              invite: invitePDA,
+              userRecord: userRecordPDA,
+              inviter: publicKey,
+              systemProgram: web3.SystemProgram.programId,
+            })
+            .rpc();
+      
+          toast.success(`Invitee nominated! Tx: ${tx.slice(0, 6)}...${tx.slice(-6)}`, {
+            position: "top-center",
+            autoClose: 6000,
+            onClick: () => window.open(`https://solscan.io/tx/${tx}`, "_blank"),
+          });
+      
+          setNominateModalOpen(false);
+          setNomineeInput("");
         } catch (error) {
-            toast.error(`Failed to nominate: ${error.message}`, { position: "top-center" });
-            console.error("Nominate error", error);
+          toast.error(`Failed to nominate: ${error.message}`, { position: "top-center" });
+          console.error("Nominate error", error);
         }
-    };
+      };
+      
     
     const fetchUserRecord = async () => {
         const [userRecordPDA] = web3.PublicKey.findProgramAddressSync(
