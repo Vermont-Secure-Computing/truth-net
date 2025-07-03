@@ -1,5 +1,5 @@
 {
-  "address": "9DuZCtKqhQQr3qKwCm42NZgndSNHwLi3vt6edgV9VAoE",
+  "address": "9MLtAFYsh6FqK7hoN1DmMF6oQyMjzi9bPRzBJqA7MsWZ",
   "metadata": {
     "name": "truth_network",
     "version": "0.1.0",
@@ -1335,6 +1335,16 @@
       "code": 6037,
       "name": "InviteLimitReached",
       "msg": "Invite limit reached. Please wait for pending invites to be used."
+    },
+    {
+      "code": 6038,
+      "name": "ActionInProgress",
+      "msg": "Another action is already in progress."
+    },
+    {
+      "code": 6039,
+      "name": "InvalidInvitee",
+      "msg": "Invalid invitee address."
     }
   ],
   "types": [
@@ -1416,10 +1426,6 @@
             "type": "i64"
           },
           {
-            "name": "rent_expiration",
-            "type": "i64"
-          },
-          {
             "name": "votes_option_1",
             "type": "u64"
           },
@@ -1493,6 +1499,10 @@
           },
           {
             "name": "reward_drained",
+            "type": "bool"
+          },
+          {
+            "name": "action_in_progress",
             "type": "bool"
           },
           {

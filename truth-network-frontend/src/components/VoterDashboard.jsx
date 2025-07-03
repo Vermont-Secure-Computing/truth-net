@@ -22,6 +22,7 @@ const VoterDashboard = () => {
     const [nominateModalOpen, setNominateModalOpen] = useState(false);
     const [nomineeInput, setNomineeInput] = useState("");
     const [userRecord, setUserRecord] = useState(null);
+    const [nomineeError, setNomineeError] = useState("");
 
     
     const { truthNetworkIDL } = getIdls();
@@ -429,16 +430,34 @@ const VoterDashboard = () => {
             )}
         </div>
         {nominateModalOpen && (
-            <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
+            <div className="fixed inset-0 flex items-center justify-center z-50" style={{ backgroundColor: "rgba(0, 0, 0, 0.4)" }}>
                 <div className="bg-white rounded-md p-6 w-full max-w-md shadow-lg">
                     <h3 className="text-lg font-semibold mb-4">Nominate Invitee</h3>
                     <input
                         type="text"
                         placeholder="Invitee wallet address"
                         value={nomineeInput}
-                        onChange={(e) => setNomineeInput(e.target.value)}
-                        className="w-full px-3 py-2 border rounded-md mb-4"
+                        onChange={(e) => {
+                            const value = e.target.value.trim();
+                            setNomineeInput(value);
+
+                            if (!value) {
+                            setNomineeError("");
+                            return;
+                            }
+
+                            try {
+                            new web3.PublicKey(value);
+                            setNomineeError("");
+                            } catch {
+                            setNomineeError("Not a valid Solana address.");
+                            }
+                        }}
+                        className="w-full px-3 py-2 border rounded-md mb-1"
                     />
+                        {nomineeError && (
+                            <p className="text-red-500 text-sm mb-2">{nomineeError}</p>
+                        )}
                     <div className="flex justify-end space-x-2">
                         <button
                             onClick={() => setNominateModalOpen(false)}

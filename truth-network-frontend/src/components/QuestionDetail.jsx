@@ -108,7 +108,6 @@ const QuestionDetail = () => {
             vaultBalance > rentExemption &&
             ((commitPhaseOver && noOneCommitted) || (revealPhaseOver && noOneRevealed));
           const vaultOnlyHasRent = (vaultBalance - rentExemption) < 1000;
-          const rentExpired = account.rentExpiration.toNumber() <= now;
     
           const newQuestion = {
             id,
@@ -129,7 +128,6 @@ const QuestionDetail = () => {
             idNumber: account.id.toNumber(),
             canDrainReward,
             vaultOnlyHasRent,
-            rentExpired,
             voterRecordsCount: account.voterRecordsCount?.toNumber?.() || 0,
             voterRecordsClosed: account.voterRecordsClosed?.toNumber?.() || 0,
             snapshotReward: account.snapshotReward?.toNumber?.() || 0,
@@ -349,7 +347,7 @@ const QuestionDetail = () => {
                 })
                 .rpc();
     
-            toast.success(`Reward drained! Tx: ${tx.slice(0, 6)}...${tx.slice(-6)}`, {
+            toast.success(`Reward claimed! Tx: ${tx.slice(0, 6)}...${tx.slice(-6)}`, {
                 position: "top-center",
                 autoClose: 6000,
                 onClick: () => window.open(getExplorerTxUrl(tx), "_blank"),
@@ -553,7 +551,6 @@ const QuestionDetail = () => {
                 {publicKey &&
                 question.revealEnded &&
                 question.vaultOnlyHasRent &&
-                question.rentExpired &&
                 publicKey.toString() === question.asker &&
                 (
                 // Allow delete if either:
