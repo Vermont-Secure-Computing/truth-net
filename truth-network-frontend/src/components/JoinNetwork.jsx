@@ -14,25 +14,12 @@ const JoinNetwork = ({ compact = false, updateIsMember }) => {
   const [loading, setLoading] = useState(false);
   const [isMember, setIsMember] = useState(false);
   const [connection] = useState(() => new web3.Connection(DEFAULT_RPC_URL, "confirmed"));
-  // const [program, setProgram] = useState(null);
+  const [providerCount, setProviderCount] = useState(0);
+  const [statePDA] = useState(() =>
+    PublicKey.findProgramAddressSync([Buffer.from("global_state")], PROGRAM_ID)[0]
+  );
 
-  // useEffect(() => {
-  //   const setupProgram = async () => {
-  //     try {
-  //       const idl = await getIDL();
-  //       const walletAdapter = { publicKey, signTransaction };
-  //       const provider = new AnchorProvider(connection, walletAdapter, { commitment: "confirmed" });
-  //       const programInstance = new Program(idl, provider);
-  //       setProgram(programInstance);
-  //     } catch (err) {
-  //       console.error("Failed to setup program:", err);
-  //     }
-  //   };
 
-  //   if (publicKey && signTransaction) {
-  //     setupProgram();
-  //   }
-  // }, [publicKey, signTransaction]);
   const { truthNetworkIDL } = getIdls();
   const wallet = { publicKey, signTransaction };
   const provider = useMemo(() => {
@@ -42,15 +29,37 @@ const JoinNetwork = ({ compact = false, updateIsMember }) => {
     return new Program(truthNetworkIDL, provider);
   }, [truthNetworkIDL, provider]);
 
+  const fetchState = async () => {
+    try {
+      const stateAccount = await program.account.state.fetch(statePDA);
+      stateAccount.pendingInvites.forEach((invite, index) => {
+        console.log(
+          `Invite #${index}:`,
+          "Invitee =", invite.invitee.toBase58(),
+          "Inviter =", invite.inviter.toBase58()
+        );
+      });
+      setProviderCount(stateAccount.truthProviderCount.toNumber());
+    } catch (error) {
+      if (error.message.includes("Account does not exist")) {
+        console.log("State account does not exist yet. No providers registered.");
+        setProviderCount(0);
+      } else {
+        console.error("Failed to fetch state:", error);
+      }
+    }
+  };
+  
+
   const fetchMembership = async () => {
     try {
       const [userRecordPDA] = await PublicKey.findProgramAddress(
         [Buffer.from("user_record"), publicKey.toBuffer()],
         PROGRAM_ID
       );
-  
+
       const userRecordAccount = await program.account.userRecord.fetch(userRecordPDA);
-      const member = !!userRecordAccount; // If account exists, user is a member
+      const member = !!userRecordAccount;
       setIsMember(member);
       updateIsMember?.(member);
     } catch (error) {
@@ -63,43 +72,79 @@ const JoinNetwork = ({ compact = false, updateIsMember }) => {
       }
     }
   };
-  
 
   useEffect(() => {
     if (program && publicKey) {
       fetchMembership();
+      fetchState();
     }
   }, [program, publicKey]);
 
   const joinNetworkHandler = async () => {
+    await confirmJoin();
+  };
+
+  const confirmJoin = async () => {
     try {
       setLoading(true);
   
-      const [vaultPDA] = await PublicKey.findProgramAddressSync(
-        [Buffer.from("vault"), publicKey.toBuffer()],
-        PROGRAM_ID
-      );
-  
-      const [userRecordPDA] = await PublicKey.findProgramAddressSync(
+      const [userRecordPDA] = PublicKey.findProgramAddressSync(
         [Buffer.from("user_record"), publicKey.toBuffer()],
         PROGRAM_ID
       );
   
-      const tx = await program.methods.joinNetwork().accounts({
+      // Derive this user's invite PDA
+      const [invitePDA] = PublicKey.findProgramAddressSync(
+        [Buffer.from("invite"), publicKey.toBuffer()],
+        PROGRAM_ID
+      );
+  
+      let inviteExists = false;
+  
+      // Try to fetch the invite PDA (if it exists)
+      try {
+        const inviteAccount = await program.account.invite.fetch(invitePDA);
+        if (inviteAccount) {
+          inviteExists = true;
+          console.log("Invite found from inviter:", inviteAccount.inviter.toBase58());
+        }
+      } catch (fetchErr) {
+        if (fetchErr.message.includes("Account does not exist")) {
+          console.log("No invite account found (joining without invite).");
+        } else {
+          console.error("Error checking invite PDA:", fetchErr);
+        }
+      }
+  
+      const accounts = {
+        globalState: statePDA,
         user: publicKey,
-        vault: vaultPDA,
         userRecord: userRecordPDA,
         systemProgram: web3.SystemProgram.programId,
-      }).rpc();
+      };
+  
+      // const builder = program.methods.joinNetwork().accounts(accounts);
+  
+      let tx;
+
+      tx = await program.methods
+        .joinNetwork()
+        .accounts({
+          ...accounts,
+          invite: inviteExists ? invitePDA : null,
+        })
+        .rpc();
+
+
   
       toast.success(`Joined the network! Tx: ${tx.slice(0, 6)}...${tx.slice(-6)}`, {
         position: "top-center",
         autoClose: 6000,
-        onClick: () =>
-        window.open(getExplorerTxUrl(tx), "_blank"),
+        onClick: () => window.open(getExplorerTxUrl(tx), "_blank"),
       });
   
       await fetchMembership();
+      await fetchState();
     } catch (error) {
       toast.error(`Failed to join: ${error.message}`, { position: "top-center" });
       console.error("Failed to join network:", error);
@@ -107,36 +152,38 @@ const JoinNetwork = ({ compact = false, updateIsMember }) => {
       setLoading(false);
     }
   };
-  
+   
 
   const leaveNetworkHandler = async () => {
     try {
       setLoading(true);
-  
+
       const [vaultPDA] = await PublicKey.findProgramAddressSync(
         [Buffer.from("vault"), publicKey.toBuffer()],
         PROGRAM_ID
       );
-  
+
       const [userRecordPDA] = await PublicKey.findProgramAddressSync(
         [Buffer.from("user_record"), publicKey.toBuffer()],
         PROGRAM_ID
       );
-  
-      const tx = await program.methods.leaveNetwork().accounts({
-        user: publicKey,
-        vault: vaultPDA,
-        userRecord: userRecordPDA,
-        systemProgram: web3.SystemProgram.programId,
-      }).rpc();
-  
+
+      const tx = await program.methods
+        .leaveNetwork()
+        .accounts({
+          user: publicKey,
+          vault: vaultPDA,
+          userRecord: userRecordPDA,
+          systemProgram: web3.SystemProgram.programId,
+        })
+        .rpc();
+
       toast.success(`Left the network. Tx: ${tx.slice(0, 6)}...${tx.slice(-6)}`, {
         position: "top-center",
         autoClose: 6000,
-        onClick: () =>
-        window.open(getExplorerTxUrl(tx), "_blank"),
+        onClick: () => window.open(getExplorerTxUrl(tx), "_blank"),
       });
-  
+
       await fetchMembership();
     } catch (error) {
       toast.error(`Failed to leave: ${error.message}`, { position: "top-center" });
@@ -145,7 +192,6 @@ const JoinNetwork = ({ compact = false, updateIsMember }) => {
       setLoading(false);
     }
   };
-  
 
   const renderButton = () =>
     isMember ? (
@@ -182,28 +228,31 @@ const JoinNetwork = ({ compact = false, updateIsMember }) => {
       </button>
     );
 
-  return compact ? (
-    renderButton()
-  ) : (
-    <div>
-      <h2 className="text-xl font-semibold mb-2">Truth Network Membership</h2>
-      {!publicKey ? (
-        <p className="text-gray-700">Please connect your wallet first.</p>
-      ) : !program ? (
-        <p className="text-gray-700">Loading provider...</p>
+  return (
+    <>
+      {compact ? (
+        renderButton()
       ) : (
-        <>
-          <p className="mb-4">
-            {isMember
-              ? "You are a Registered Truth Provider."
-              : "You are not registered."}
-          </p>
-          {renderButton()}
-        </>
+        <div>
+          <h2 className="text-xl font-semibold mb-2">Truth Network Membership</h2>
+          {!publicKey ? (
+            <p className="text-gray-700">Please connect your wallet first.</p>
+          ) : !program ? (
+            <p className="text-gray-700">Loading provider...</p>
+          ) : (
+            <>
+              <p className="mb-4">
+                {isMember
+                  ? "You are a Registered Truth Provider."
+                  : "You are not registered."}
+              </p>
+              {renderButton()}
+            </>
+          )}
+        </div>
       )}
-    </div>
+    </>
   );
 };
 
 export default JoinNetwork;
-

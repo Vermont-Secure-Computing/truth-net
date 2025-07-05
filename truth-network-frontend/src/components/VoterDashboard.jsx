@@ -19,37 +19,38 @@ const VoterDashboard = () => {
     const [totalCorrectVotes, setTotalCorrectVotes] = useState(0);
     const [voterReputation, setVoterReputation] = useState(0);
     const [connection] = useState(() => new web3.Connection(DEFAULT_RPC_URL, "confirmed"));
-    // const [program, setProgram] = useState(null);
+    const [nominateModalOpen, setNominateModalOpen] = useState(false);
+    const [nomineeInput, setNomineeInput] = useState("");
+    const [userRecord, setUserRecord] = useState(null);
+    const [nomineeError, setNomineeError] = useState("");
+    const [myInvites, setMyInvites] = useState([]);
+    const [loadingInvites, setLoadingInvites] = useState(false);
 
-    // useEffect(() => {
-    //     const setupProgramAndFetch = async () => {
-    //         try {
-    //             const idl = await getIDL();
-    //             const walletAdapter = { publicKey, signTransaction, signAllTransactions: wallet?.signAllTransactions };
-    //             const provider = new AnchorProvider(connection, walletAdapter, { preflightCommitment: "processed" });
-    //             const programInstance = new Program(idl, provider);
-    //             setProgram(programInstance);
-    //         } catch (err) {
-    //             console.error("Failed to setup program:", err);
-    //         }
-    //     };
-
-    //     if (publicKey) {
-    //         setupProgramAndFetch();
-    //     }
-    // }, [publicKey, wallet]);
+    
     const { truthNetworkIDL } = getIdls();
-    const wallet1 = { publicKey, signTransaction };
-    const provider = useMemo(() => {
-        return new AnchorProvider(connection, wallet, { preflightCommitment: "processed" });
-      }, [connection, wallet]);
-      const program = useMemo(() => {
+    const walletAdapter = useMemo(() => {
+        if (!wallet?.adapter || !publicKey) return undefined;
+        return {
+          publicKey,
+          signTransaction: wallet.adapter.signTransaction,
+          signAllTransactions: wallet.adapter.signAllTransactions,
+        };
+      }, [wallet, publicKey]);
+    
+      const provider = useMemo(() => {
+        if (!wallet?.adapter || !publicKey) return undefined;
+        return new AnchorProvider(connection, wallet.adapter, { preflightCommitment: "processed" });
+      }, [connection, wallet, publicKey]);
+      
+    const program = useMemo(() => {
+        if (!provider) return undefined;
         return new Program(truthNetworkIDL, provider);
-      }, [truthNetworkIDL, provider]);
+    }, [truthNetworkIDL, provider]);
 
     useEffect(() => {
         if (program && publicKey) {
             fetchData();
+            fetchMyInvites();
         }
     }, [program]);
 
@@ -194,9 +195,146 @@ const VoterDashboard = () => {
         }
     };
 
+    const fetchMyInvites = async () => {
+        if (!program || !publicKey) return;
+        setLoadingInvites(true);
+      
+        try {
+          // Fetch all invite accounts
+          const allInvites = await program.account.invite.all();
+      
+          // Filter invites you created
+          const myCreatedInvites = allInvites.filter(
+            (i) => i.account.inviter.toBase58() === publicKey.toBase58()
+          );
+      
+          // For each invite, check if the user has joined
+          const invitesWithUsage = await Promise.all(
+            myCreatedInvites.map(async (invite) => {
+              const [userRecordPDA] = web3.PublicKey.findProgramAddressSync(
+                [Buffer.from("user_record"), invite.account.invitee.toBuffer()],
+                PROGRAM_ID
+              );
+              const info = await connection.getAccountInfo(userRecordPDA);
+              const hasJoined = !!info;
+              return {
+                invite,
+                hasJoined,
+              };
+            })
+          );
+      
+          setMyInvites(invitesWithUsage);
+        } catch (err) {
+          console.error("Failed to fetch invites", err);
+        } finally {
+          setLoadingInvites(false);
+        }
+      };
+      
+
+    const nominateInvitee = async () => {
+        if (!nomineeInput.trim()) {
+          toast.error("Please enter a wallet address.", { position: "top-center" });
+          return;
+        }
+      
+        try {
+          const nomineePubkey = new web3.PublicKey(nomineeInput.trim());
+      
+          const [invitePDA] = web3.PublicKey.findProgramAddressSync(
+            [Buffer.from("invite"), nomineePubkey.toBuffer()],
+            PROGRAM_ID
+          );
+      
+          const [userRecordPDA] = web3.PublicKey.findProgramAddressSync(
+            [Buffer.from("user_record"), publicKey.toBuffer()],
+            PROGRAM_ID
+          );
+      
+          const tx = await program.methods
+            .nominateInvitee(nomineePubkey)
+            .accounts({
+              invite: invitePDA,
+              userRecord: userRecordPDA,
+              inviter: publicKey,
+              systemProgram: web3.SystemProgram.programId,
+            })
+            .rpc();
+      
+          toast.success(`Invitee nominated! Tx: ${tx.slice(0, 6)}...${tx.slice(-6)}`, {
+            position: "top-center",
+            autoClose: 6000,
+            onClick: () => window.open(`https://solscan.io/tx/${tx}`, "_blank"),
+          });
+      
+          setNominateModalOpen(false);
+          setNomineeInput("");
+        } catch (error) {
+          toast.error(`Failed to nominate: ${error.message}`, { position: "top-center" });
+          console.error("Nominate error", error);
+        }
+      };
+
+      const deleteInvite = async (inviteePubkey) => {
+        if (!inviteePubkey) return;
+      
+        try {
+          const [invitePDA] = web3.PublicKey.findProgramAddressSync(
+            [Buffer.from("invite"), inviteePubkey.toBuffer()],
+            PROGRAM_ID
+          );
+      
+          const tx = await program.methods
+            .deleteInvite()
+            .accounts({
+              invite: invitePDA,
+              inviter: publicKey,
+            })
+            .rpc();
+      
+          toast.success(`Claim invitation refund Tx: ${tx.slice(0,6)}...${tx.slice(-6)}`, {
+            position: "top-center",
+            autoClose: 6000,
+            onClick: () => window.open(`https://solscan.io/tx/${tx}`, "_blank"),
+          });
+      
+          // Refresh list
+          fetchMyInvites();
+        } catch (err) {
+          console.error("Delete invite failed", err);
+          toast.error(`Delete failed: ${err.message}`);
+        }
+      };
+      
+      
+    
+    const fetchUserRecord = async () => {
+        const [userRecordPDA] = web3.PublicKey.findProgramAddressSync(
+          [Buffer.from("user_record"), publicKey.toBuffer()],
+          PROGRAM_ID
+        );
+        try {
+          const userRecordAccount = await program.account.userRecord.fetch(userRecordPDA);
+          setUserRecord(userRecordAccount);
+      
+          // Check inviter safely
+          if (userRecordAccount?.inviter) {
+            console.log("userRecord.inviter:", userRecordAccount.inviter.toBase58());
+          } else {
+            console.log("userRecord has no inviter field.");
+          }
+      
+        } catch (err) {
+          console.error("Failed to fetch user record", err);
+          setUserRecord(null); // clear any previous state
+        }
+      };
+
     useEffect(() => {
         if (!publicKey) return;
         fetchData();
+        fetchUserRecord()
     }, [publicKey, wallet]);
 
     async function getVoterStats(program, voterPubkey, connection) {
@@ -237,6 +375,7 @@ const VoterDashboard = () => {
     }
 
     return (
+      <>
         <div className="container mx-auto px-6 py-6">
             <h2 className="text-2xl font-semibold mb-4 text-center border-b border-gray-300 pb-2">
                 Truth Provider Dashboard
@@ -246,7 +385,44 @@ const VoterDashboard = () => {
                 <h3 className="text-lg">Total Revealed Votes: <span className="font-bold">{totalRevealedVotes}</span></h3>
                 <h3 className="text-lg">Total Correct Votes: <span className="font-bold">{totalCorrectVotes}</span></h3>
                 <h3 className="text-green-600 font-semibold mt-2">Reputation: {voterReputation}</h3>
+                {userRecord && (
+                    <h3 className="text-blue-600 font-semibold mt-2">
+                        Invite Tokens: {userRecord.inviteTokens}
+                    </h3>
+                )}
             </div>
+            <div className="mb-6 flex justify-end">
+                <button
+                    onClick={() => setNominateModalOpen(true)}
+                    disabled={!userRecord || userRecord.inviteTokens === 0}
+                    className={`px-4 py-2 rounded-md transition duration-200 ${
+                        !userRecord || userRecord.inviteTokens === 0
+                        ? "bg-gray-400 cursor-not-allowed"
+                        : "bg-purple-600 text-white hover:bg-purple-700"
+                    }`}
+                    >
+                    Nominate Invitee
+                </button>
+
+            </div>
+
+            <div className="mt-6">
+                <div className="space-y-3">
+                    {myInvites
+                    .filter(({ hasJoined }) => hasJoined)
+                    .map(({ invite }, idx) => (
+                        <button
+                        key={idx}
+                        onClick={() => deleteInvite(invite.account.invitee)}
+                        className="px-3 py-1 bg-red-600 text-white text-sm rounded-md hover:bg-red-700"
+                        >
+                        Claim Invitation Refund 
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+
             <h3 className="text-xl font-semibold mb-4">Voted Events:</h3>
             {questions.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -344,6 +520,53 @@ const VoterDashboard = () => {
                 <p className="text-gray-500">No voted questions found.</p>
             )}
         </div>
+        {nominateModalOpen && (
+            <div className="fixed inset-0 flex items-center justify-center z-50" style={{ backgroundColor: "rgba(0, 0, 0, 0.4)" }}>
+                <div className="bg-white rounded-md p-6 w-full max-w-md shadow-lg">
+                    <h3 className="text-lg font-semibold mb-4">Nominate Invitee</h3>
+                    <input
+                        type="text"
+                        placeholder="Invitee wallet address"
+                        value={nomineeInput}
+                        onChange={(e) => {
+                            const value = e.target.value.trim();
+                            setNomineeInput(value);
+
+                            if (!value) {
+                            setNomineeError("");
+                            return;
+                            }
+
+                            try {
+                            new web3.PublicKey(value);
+                            setNomineeError("");
+                            } catch {
+                            setNomineeError("Not a valid Solana address.");
+                            }
+                        }}
+                        className="w-full px-3 py-2 border rounded-md mb-1"
+                    />
+                        {nomineeError && (
+                            <p className="text-red-500 text-sm mb-2">{nomineeError}</p>
+                        )}
+                    <div className="flex justify-end space-x-2">
+                        <button
+                            onClick={() => setNominateModalOpen(false)}
+                            className="px-4 py-2 bg-gray-300 rounded-md"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            onClick={nominateInvitee}
+                            className="px-4 py-2 bg-blue-600 text-white rounded-md"
+                        >
+                            Nominate
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
+      </>  
     );
 };
 

@@ -4,7 +4,7 @@ import { PublicKey } from "@solana/web3.js";
 export const FEE_RECEIVER = new PublicKey("CQaZgx5jqQrz7c8shCG3vJLiiPGPrawSGhvkgXtGyxL");
 
 // Program ID
-export const PROGRAM_ID = new PublicKey("C26LU8DVw2c51gNWFLye1oAwH3hiRPGcGCA2crnER3mR");
+export const PROGRAM_ID = new PublicKey("31wdq6EJgHKRjZotAjc6vkuJ7aRyQPauwmgadPiEm8EY");
 
 export const DEFAULT_RPC_URL = localStorage.getItem("solana_rpc_url") || "https://api.devnet.solana.com";
 

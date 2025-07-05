@@ -167,7 +167,7 @@ const CommitReveal = ({ question, onClose, refreshQuestions }) => {
 
             toast.success(
                 <div>
-                  Vote committed!{" "}
+                  Vote revealed!{" "}
                   <a
                     href={getExplorerTxUrl(tx)}
                     target="_blank"
