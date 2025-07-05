@@ -12,7 +12,7 @@ pub const FEE_RECEIVER_PUBKEY: Pubkey = Pubkey::new_from_array([
 ]);
 
 
-declare_id!("4sC1fceX7osnaP8JkY4AfgK5tSFSfS44rXMhX361WEPF");
+declare_id!("FFL71XjBkjq5gce7EtpB7Wa5p8qnRNueLKSzM4tkEMoc");
 
 
 /// An empty account for the vault.
@@ -28,36 +28,57 @@ pub mod truth_network {
     pub fn join_network(ctx: Context<JoinNetwork>) -> Result<()> {
         let user_record = &mut ctx.accounts.user_record;
         let user = &ctx.accounts.user;
-
-        require!(user_record.user == Pubkey::default(), VotingError::AlreadyJoined);
+        let global_state = &mut ctx.accounts.global_state;
     
-        // Transfer 0.5 SOL to vault
-        let deposit_amount: u64 = 500_000_000;
-        invoke(
-            &system_instruction::transfer(
-                &user.key,
-                &ctx.accounts.vault.key(),
-                deposit_amount,
-            ),
-            &[
-                user.to_account_info(),
-                ctx.accounts.vault.to_account_info(),
-                ctx.accounts.system_program.to_account_info(),
-            ],
-        )?;
+        require!(
+            user_record.user == Pubkey::default(),
+            VotingError::AlreadyJoined
+        );
     
-        // Initialize UserRecord
+        if global_state.truth_provider_count < 33 {
+            global_state.truth_provider_count += 1;
+            msg!("User joined as initial truth provider: {}", user.key());
+        } else {
+            let invite_info = ctx
+                .accounts
+                .invite
+                .as_ref()
+                .ok_or(VotingError::NotInvited)?;
+    
+            // Verify PDA address
+            let (expected_pda, _) = Pubkey::find_program_address(
+                &[b"invite", user.key().as_ref()],
+                ctx.program_id,
+            );
+            require_keys_eq!(
+                invite_info.key(),
+                expected_pda,
+                VotingError::InvalidInviter
+            );
+    
+            // Deserialize manually
+            let invite: Invite = Invite::try_deserialize(&mut &invite_info.data.borrow()[..])?;
+    
+            msg!(
+                "User {} joined via invitation from {}",
+                user.key(),
+                invite.inviter
+            );
+        }
+    
         user_record.user = *user.key;
         user_record.reputation = 0;
         user_record.total_earnings = 0;
         user_record.total_revealed_votes = 0;
         user_record.total_correct_votes = 0;
+        user_record.invite_tokens = 0;
+        user_record.invite_correct_votes = 0;
         user_record.created_at = Clock::get()?.unix_timestamp;
-    
-        msg!("User joined: {}", user.key());
     
         Ok(())
     }
+    
+      
     
     pub fn leave_network(_ctx: Context<LeaveNetwork>) -> Result<()> {
         msg!("Vault and UserRecord closed successfully. Goodbye, {}!", _ctx.accounts.user.key());
@@ -88,7 +109,8 @@ pub mod truth_network {
         );
         
         // Ensure commit and reveal times are valid.
-        require!(Clock::get()?.unix_timestamp < commit_end_time, VotingError::VotingEnded);
+        let now = Clock::get()?.unix_timestamp;
+        require!(now < commit_end_time, VotingError::VotingEnded);
         require!(commit_end_time < reveal_end_time, VotingError::InvalidTimeframe);
         
         // Require reward to be at least 0.05 SOL (in lamports)
@@ -119,10 +141,9 @@ pub mod truth_network {
         question.question_text = question_text;
         question.option_1 = "True".to_string();
         question.option_2 = "False".to_string();
-        // question.reward = total_transfer;
+        question.created_at = now;
         question.commit_end_time = commit_end_time;
         question.reveal_end_time = reveal_end_time;
-        question.rent_expiration = Clock::get()?.unix_timestamp; //+ 86400;
         question.votes_option_1 = 0;
         question.votes_option_2 = 0;
         question.finalized = false;
@@ -148,26 +169,7 @@ pub mod truth_network {
         Ok(())
     }
     
-            
-
-    // pub fn update_reward(
-    //     ctx: Context<UpdateReward>,
-    //     new_reward: u64,
-    // ) -> Result<()> {
-    //     let question = &mut ctx.accounts.question;
-    
-    //     // Ensure the question has not ended
-    //     require!(
-    //         Clock::get()?.unix_timestamp < question.commit_end_time,
-    //         VotingError::VotingEnded
-    //     );
-    
-    //     // Update the reward
-    //     question.reward += new_reward;
-    
-    //     msg!("Reward Updated: {}", new_reward);
-    //     Ok(())
-    // }              
+                        
 
     pub fn delete_expired_question(ctx: Context<DeleteExpiredQuestion>) -> Result<()> {
         let question = &ctx.accounts.question;
@@ -178,11 +180,6 @@ pub mod truth_network {
     
         let now = Clock::get()?.unix_timestamp;
 
-        // Rent must have expired
-        require!(
-            now >= question.rent_expiration,
-            VotingError::RentNotExpired
-        );
 
         // Case 1: No one committed and commit phase is over
         let no_one_committed = question.committed_voters == 0 && now >= question.commit_end_time;
@@ -242,11 +239,16 @@ pub mod truth_network {
         };
 
         // Determine winning option and percentage
-        let (winning_option, winning_percent) = if question.votes_option_1 >= question.votes_option_2 {
+        let (winning_option, winning_percent) = if total_votes == 0 {
+            (0, 0.0)
+        } else if question.votes_option_1 == question.votes_option_2 {
+            (0, 50.0)
+        } else if question.votes_option_1 > question.votes_option_2 {
             (1, option1_percent)
         } else {
             (2, option2_percent)
         };
+        
         
         
         // Set eligible voters to the winning votes count
@@ -304,8 +306,15 @@ pub mod truth_network {
     pub fn commit_vote(ctx: Context<CommitVote>, commitment: [u8; 32]) -> Result<()> {
         let question = &mut ctx.accounts.question;
         let voter_record = &mut ctx.accounts.voter_record;
+
+        require!(commitment != [0u8;32], VotingError::InvalidReveal);
     
         require!(Clock::get()?.unix_timestamp < question.commit_end_time, VotingError::CommitPhaseEnded);
+
+        require!(
+            voter_record.commitment == [0u8; 32],
+            VotingError::AlreadyVoted
+        );
     
         voter_record.commitment = commitment;
         voter_record.voter = *ctx.accounts.voter.key;
@@ -353,6 +362,9 @@ pub mod truth_network {
         } else {
             question.votes_option_2 += voter_record.vote_weight;
         }
+
+        // Increment revealed count
+        question.revealed_voters_count += 1;
     
         // Update user revealed votes
         user_record.total_revealed_votes += 1;
@@ -378,126 +390,155 @@ pub mod truth_network {
         let voter_info = ctx.accounts.voter.to_account_info();
         let vault_info = ctx.accounts.vault.to_account_info();
         let fee_receiver_info = ctx.accounts.fee_receiver.to_account_info();
-    
-        require!(!voter_record.claimed, VotingError::AlreadyClaimed);
-        require!(ctx.accounts.voter.key() == voter_record.voter, VotingError::NotEligible);
 
-        if question.winning_option == 255 {
-            question.winning_option = if question.votes_option_1 == question.votes_option_2 {
-                0
-            } else if question.votes_option_1 > question.votes_option_2 {
-                1
+        require!(!question.action_in_progress, VotingError::ActionInProgress);
+
+        question.action_in_progress = true;
+
+        let result = (|| {
+            require!(!voter_record.claimed, VotingError::AlreadyClaimed);
+            require!(ctx.accounts.voter.key() == voter_record.voter, VotingError::NotEligible);
+
+            if question.winning_option == 255 {
+                question.winning_option = if question.votes_option_1 == question.votes_option_2 {
+                    0
+                } else if question.votes_option_1 > question.votes_option_2 {
+                    1
+                } else {
+                    2
+                };
+            }
+
+            let winning_option = question.winning_option;
+            let is_tie = winning_option == 0;
+
+            if !is_tie {
+                require!(
+                    voter_record.selected_option == winning_option,
+                    VotingError::NotEligible
+                );
+            }
+
+            let rent = Rent::get()?;
+            let min_balance = rent.minimum_balance(vault_info.data_len());
+            let vault_balance = **vault_info.lamports.borrow();
+
+            if !question.reward_fee_taken {
+                let available_reward = vault_balance.saturating_sub(min_balance);
+                let fee = available_reward * 2 / 100;
+                let snapshot = available_reward.saturating_sub(fee);
+
+                **vault_info.try_borrow_mut_lamports()? -= fee;
+                **fee_receiver_info.try_borrow_mut_lamports()? += fee;
+
+                question.original_reward = available_reward;
+                question.snapshot_reward = snapshot;
+
+                question.snapshot_total_weight = if is_tie {
+                    question.votes_option_1 + question.votes_option_2
+                } else if winning_option == 1 {
+                    question.votes_option_1
+                } else {
+                    question.votes_option_2
+                };
+
+                question.claimed_weight = 0;
+                question.claimed_voters_count = 0;
+                question.claimed_remainder_count = 0;
+                question.total_distributed = 0;
+                question.reward_fee_taken = true;
+
+                msg!(
+                    "Reward snapshot initialized. Total weight: {}",
+                    question.snapshot_total_weight
+                );
+            }
+
+            let voter_weight = voter_record.vote_weight;
+            let total_snapshot_reward = question.snapshot_reward;
+            let total_weight = question.snapshot_total_weight;
+
+            require!(total_weight > 0, VotingError::NoEligibleVoters);
+
+            let is_last_claimer = question.claimed_weight + voter_weight == total_weight;
+            let base_share = (total_snapshot_reward * voter_weight) / total_weight;
+
+            let mut voter_share = base_share;
+            let available = vault_balance.saturating_sub(min_balance);
+
+            if is_last_claimer {
+                let remaining = total_snapshot_reward.saturating_sub(question.total_distributed);
+                voter_share = remaining.min(available);
             } else {
-                2
-            };
-        }
-    
-        let winning_option = question.winning_option;
-        let is_tie = winning_option == 0;
-    
-        // Determine if this voter is eligible (tie or correct vote)
-        if !is_tie {
-            require!(
-                voter_record.selected_option == winning_option,
-                VotingError::NotEligible
-            );
-        }
-    
-        let rent = Rent::get()?;
-        let min_balance = rent.minimum_balance(vault_info.data_len());
-        let vault_balance = **vault_info.lamports.borrow();
-    
-        // Initialize reward snapshot if not taken
-        if !question.reward_fee_taken {
-            let available_reward = vault_balance.saturating_sub(min_balance);
-            let fee = available_reward * 2 / 100;
-            let snapshot = available_reward.saturating_sub(fee);
-    
-            **vault_info.try_borrow_mut_lamports()? -= fee;
-            **fee_receiver_info.try_borrow_mut_lamports()? += fee;
-    
-            question.original_reward = available_reward;
-            question.snapshot_reward = snapshot;
-    
-            question.snapshot_total_weight = if is_tie {
-                question.votes_option_1 + question.votes_option_2
-            } else if winning_option == 1 {
-                question.votes_option_1
-            } else {
-                question.votes_option_2
-            };
-    
-            question.claimed_weight = 0;
-            question.claimed_voters_count = 0;
-            question.claimed_remainder_count = 0;
-            question.total_distributed = 0;
-            question.reward_fee_taken = true;
-    
-            msg!(
-                "Reward snapshot initialized. Total weight: {}",
-                question.snapshot_total_weight
-            );
-        }
-    
-        let voter_weight = voter_record.vote_weight;
-        let total_snapshot_reward = question.snapshot_reward;
-        let total_weight = question.snapshot_total_weight;
-    
-        require!(total_weight > 0, VotingError::NoEligibleVoters);
-    
-        let is_last_claimer = question.claimed_weight + voter_weight == total_weight;
-        let base_share = (total_snapshot_reward * voter_weight) / total_weight;
-    
-        let mut voter_share = base_share;
-        let available = vault_balance.saturating_sub(min_balance);
-    
-        if is_last_claimer {
-            let remaining = total_snapshot_reward.saturating_sub(question.total_distributed);
-            voter_share = remaining.min(available);
-        } else {
-            require!(
-                question.total_distributed + voter_share <= total_snapshot_reward,
-                VotingError::InsufficientFunds
-            );
-            voter_share = voter_share.min(available);
-        }
-    
-        voter_record.claimed = true;
-        question.total_distributed += voter_share;
-        question.claimed_weight += voter_weight;
-        question.claimed_voters_count += 1;
-        question.voter_records_closed += 1;
-    
-        **vault_info.try_borrow_mut_lamports()? -= voter_share;
-        **voter_info.try_borrow_mut_lamports()? += voter_share;
-    
-        // Store claim tx ID
-        let tx_id_bytes = tx_id.as_bytes();
-        let len = tx_id_bytes.len().min(64);
-        voter_record.claim_tx_id[..len].copy_from_slice(&tx_id_bytes[..len]);
-        for i in len..64 {
-            voter_record.claim_tx_id[i] = 0;
-        }
-    
-        user_record.total_earnings = user_record
-            .total_earnings
-            .checked_add(voter_share)
-            .ok_or(VotingError::Overflow)?;
-    
-        if !is_tie && voter_record.selected_option == winning_option {
-            user_record.total_correct_votes += 1;
-            user_record.reputation = calculate_reputation(
-                user_record.total_revealed_votes,
-                user_record.total_correct_votes,
-            );
-        }
-    
-        msg!("Reward claimed successfully! Earned: {} lamports", voter_share);
-    
-        Ok(())
+                require!(
+                    question.total_distributed + voter_share <= total_snapshot_reward,
+                    VotingError::InsufficientFunds
+                );
+                voter_share = voter_share.min(available);
+            }
+
+            voter_record.claimed = true;
+            question.total_distributed += voter_share;
+            question.claimed_weight += voter_weight;
+            question.claimed_voters_count += 1;
+            question.voter_records_closed += 1;
+
+            **vault_info.try_borrow_mut_lamports()? -= voter_share;
+            **voter_info.try_borrow_mut_lamports()? += voter_share;
+
+            // Store claim tx ID
+            let tx_id_bytes = tx_id.as_bytes();
+            let len = tx_id_bytes.len().min(64);
+            voter_record.claim_tx_id[..len].copy_from_slice(&tx_id_bytes[..len]);
+            for i in len..64 {
+                voter_record.claim_tx_id[i] = 0;
+            }
+
+            user_record.total_earnings = user_record
+                .total_earnings
+                .checked_add(voter_share)
+                .ok_or(VotingError::Overflow)?;
+
+            if !is_tie && voter_record.selected_option == winning_option {
+                user_record.total_correct_votes += 1;
+                user_record.reputation = calculate_reputation(
+                    user_record.total_revealed_votes,
+                    user_record.total_correct_votes,
+                );
+
+                const MIN_VOTERS: u64 = 3;
+                const MIN_HOURS: i64 = 86_400;
+
+                let meets_conditions = !is_tie
+                    && question.revealed_voters_count >= MIN_VOTERS
+                    && question.reveal_end_time - question.created_at >= MIN_HOURS
+                    && voter_record.selected_option == winning_option;
+
+                if meets_conditions {
+                    user_record.invite_correct_votes += 1;
+
+                    if user_record.invite_correct_votes >= 3 && user_record.invite_tokens == 0 {
+                        user_record.invite_tokens += 1;
+                        user_record.invite_correct_votes = 0;
+                        msg!(
+                            "User earned a new invite token because they had none. Total invite tokens: {}",
+                            user_record.invite_tokens
+                        );
+                    }
+                }
+            }
+
+            msg!("Reward claimed successfully! Earned: {} lamports", voter_share);
+
+            Ok(())
+        })();
+
+        question.action_in_progress = false;
+
+        result
     }
-    
-          
+
+   
 
     pub fn drain_unclaimed_reward(ctx: Context<DrainUnclaimedReward>) -> Result<()> {
         let question = &mut ctx.accounts.question;
@@ -571,9 +612,54 @@ pub mod truth_network {
         );
 
         Ok(())
-    }    
-                                           
-        
+    }   
+
+    pub fn nominate_invitee(ctx: Context<NominateInvitee>, nominee: Pubkey) -> Result<()> {
+        let invite = &mut ctx.accounts.invite;
+        let user_record = &mut ctx.accounts.user_record;
+        let inviter = ctx.accounts.inviter.key();
+    
+        // Verify that inviter owns this user record
+        require!(user_record.user == inviter, VotingError::NotEligible);
+        require!(user_record.invite_tokens > 0, VotingError::NoInviteTokens);
+    
+        // Ensure nominee is not the default Pubkey
+        require!(nominee != Pubkey::default(), VotingError::InvalidInvitee);
+    
+        // Ensure nominee is not the inviter themselves
+        require!(nominee != inviter, VotingError::InvalidInvitee);
+    
+        // Set invite data
+        invite.invitee = nominee;
+        invite.inviter = inviter;
+        invite.created_at = Clock::get()?.unix_timestamp;
+    
+        // Decrement inviter's tokens
+        user_record.invite_tokens -= 1;
+    
+        msg!("Invite created for {}", nominee);
+    
+        Ok(())
+    }
+    
+    
+    
+    
+    pub fn initialize_global_state(ctx: Context<InitializeGlobalState>) -> Result<()> {
+        ctx.accounts.global_state.truth_provider_count = 0;
+        Ok(())
+    }
+
+    pub fn delete_invite(ctx: Context<DeleteInvite>) -> Result<()> {
+        msg!(
+            "Invite closed by inviter {} for invitee {}",
+            ctx.accounts.inviter.key(),
+            ctx.accounts.invite.invitee
+        );
+        Ok(())
+    }
+    
+     
 }
 
 fn calculate_reputation(revealed: u64, correct: u64) -> u8 {
@@ -612,13 +698,14 @@ pub struct Question {
     pub question_text: String,
     pub option_1: String,
     pub option_2: String,
+    pub created_at: i64,
     pub commit_end_time: i64,
     pub reveal_end_time: i64,
-    pub rent_expiration: i64,
     pub votes_option_1: u64,
     pub votes_option_2: u64,
     pub finalized: bool,
     pub committed_voters: u64,
+    pub revealed_voters_count: u64,
     pub eligible_voters: u64,
     pub winning_option: u8,
     pub winning_percent: f64,
@@ -633,6 +720,7 @@ pub struct Question {
     pub voter_records_count: u64,
     pub voter_records_closed: u64,
     pub reward_drained: bool,
+    pub action_in_progress: bool,
     pub bump: u8,
 }
 
@@ -746,6 +834,13 @@ pub struct DeleteExpiredQuestion<'info> {
 #[derive(Accounts)]
 pub struct JoinNetwork<'info> {
     #[account(
+        mut,
+        seeds = [b"global_state"],
+        bump
+    )]
+    pub global_state: Account<'info, GlobalState>,
+
+    #[account(
         init,
         payer = user,
         space = 8 + 80,
@@ -754,14 +849,8 @@ pub struct JoinNetwork<'info> {
     )]
     pub user_record: Account<'info, UserRecord>,
 
-    #[account(
-        init_if_needed,
-        payer = user,
-        space = 8,
-        seeds = [b"vault", user.key().as_ref()],
-        bump
-    )]
-    pub vault: Account<'info, Vault>,
+    /// CHECK: Invite is optional; validate manually if present
+    pub invite: Option<AccountInfo<'info>>,
 
     #[account(mut)]
     pub user: Signer<'info>,
@@ -769,16 +858,12 @@ pub struct JoinNetwork<'info> {
     pub system_program: Program<'info, System>,
 }
 
+
+
+
 #[derive(Accounts)]
 pub struct LeaveNetwork<'info> {
-    #[account(
-        mut,
-        seeds = [b"vault", user.key().as_ref()],
-        bump,
-        close = user
-    )]
-    pub vault: Account<'info, Vault>,
-
+    
     #[account(
         mut,
         seeds = [b"user_record", user.key().as_ref()],
@@ -840,29 +925,15 @@ pub struct CreateVoterRecord<'info> {
 
 #[account]
 pub struct UserRecord {
-    pub user: Pubkey,
-    pub reputation: u8,
-    pub total_earnings: u64,
-    pub total_revealed_votes: u64,
-    pub total_correct_votes: u64,
-    pub created_at: i64,
+   pub user: Pubkey,
+   pub reputation: u8,
+   pub total_earnings: u64,
+   pub total_revealed_votes: u64,
+   pub total_correct_votes: u64,
+   pub invite_correct_votes: u64,
+   pub invite_tokens: u8,
+   pub created_at: i64,
 }
-
-
-// #[account]
-// pub struct VoterList {
-//     pub voters: Vec<Voter>,
-// }
-
-// #[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq, Debug)]
-// pub struct Voter {
-//     pub address: Pubkey,
-//     pub reputation: u8,
-//     pub total_earnings: u64,
-//     pub total_revealed_votes: u64,
-//     pub total_correct_votes: u64,
-//     pub selected_option: u8,
-// }
 
 
 #[account]
@@ -1002,6 +1073,77 @@ pub struct SnapshotWinningOption<'info> {
     pub question: Account<'info, Question>,
 }
 
+#[account]
+pub struct Invite {
+    pub invitee: Pubkey,
+    pub inviter: Pubkey,
+    pub created_at: i64,
+}
+
+
+#[derive(Accounts)]
+#[instruction(nominee: Pubkey)]
+pub struct NominateInvitee<'info> {
+    #[account(
+        init,
+        payer = inviter,
+        space = 8 + 32 + 32 + 8, // discriminator + invitee + inviter + created_at
+        seeds = [b"invite", nominee.key().as_ref()],
+        bump
+    )]
+    pub invite: Account<'info, Invite>,
+
+    #[account(
+        mut,
+        seeds = [b"user_record", inviter.key().as_ref()],
+        bump
+    )]
+    pub user_record: Account<'info, UserRecord>,
+
+    #[account(mut, signer)]
+    pub inviter: Signer<'info>,
+
+    pub system_program: Program<'info, System>,
+}
+
+
+
+#[account]
+pub struct GlobalState {
+    pub truth_provider_count: u64,
+}
+
+#[derive(Accounts)]
+pub struct InitializeGlobalState<'info> {
+    #[account(
+        init,
+        payer = payer,
+        space = 8 + 8,
+        seeds = [b"global_state"],
+        bump
+    )]
+    pub global_state: Account<'info, GlobalState>,
+
+    #[account(mut)]
+    pub payer: Signer<'info>,
+
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct DeleteInvite<'info> {
+    #[account(
+        mut,
+        seeds = [b"invite", invite.invitee.as_ref()],
+        bump,
+        close = inviter
+    )]
+    pub invite: Account<'info, Invite>,
+
+    #[account(mut, signer)]
+    pub inviter: Signer<'info>,
+}
+
 
 
 #[error_code]
@@ -1012,8 +1154,6 @@ pub enum VotingError {
     VotingStillActive,
     #[msg("Voting has already been finalized.")]
     AlreadyFinalized,
-    #[msg("You have already joined the network.")]
-    AlreadyJoined,
     #[msg("Question counter already exists.")]
     AlreadyInitialized,
     #[msg("You have already voted on this question.")]
@@ -1022,7 +1162,7 @@ pub enum VotingError {
     AlreadyRevealed,
     #[msg("Invalid voting reveal.")]
     InvalidReveal,
-    #[msg("You have already leaved the network.")]
+    #[msg("You have already left the network.")]
     NotJoined,
     #[msg("Rent period has not expired or votes have been committed.")]
     RentNotExpiredOrVotesExist,
@@ -1064,7 +1204,7 @@ pub enum VotingError {
     CannotDeleteQuestion,
     #[msg("Rent has not yet expired.")]
     RentNotExpired,
-    #[msg("You were a winner or already eligible for reward.")]
+    #[msg("You were already eligible for a reward or were a winner.")]
     AlreadyEligibleOrWinner,
     #[msg("Vault is already drained.")]
     AlreadyDrained,
@@ -1072,6 +1212,22 @@ pub enum VotingError {
     QuestionTooLong,
     #[msg("You rejoined after committing. You can't reveal this vote.")]
     RejoinedAfterCommit,
+    #[msg("This address has already joined the network.")]
+    AlreadyJoined,
+    #[msg("You are not in the list of pending joiners.")]
+    NotInvited,
+    #[msg("Invalid invite address.")]
+    InvalidInviter,
+    #[msg("You have no invite tokens remaining.")]
+    NoInviteTokens,
+    #[msg("This address has already invited.")]
+    AlreadyInvited,
+    #[msg("Invite limit reached. Please wait for pending invites to be used.")]
+    InviteLimitReached,
+    #[msg("Another action is already in progress.")]
+    ActionInProgress,
+    #[msg("Invalid invitee address.")]
+    InvalidInvitee,
 }
 
 #[cfg(not(feature = "no-entrypoint"))]
@@ -1087,7 +1243,7 @@ policy: "https://truth.it.com/security-policy",
 // Optional Fields
 preferred_languages: "en",
 source_code: "https://github.com/Vermont-Secure-Computing/truth-net",
-source_revision: "4sC1fceX7osnaP8JkY4AfgK5tSFSfS44rXMhX361WEPF",
+source_revision: "FFL71XjBkjq5gce7EtpB7Wa5p8qnRNueLKSzM4tkEMoc",
 source_release: "",
 encryption: "",
 auditors: "vtscc.org",

@@ -5,7 +5,7 @@ resolution = true
 skip-lint = false
 
 [programs.mainnet]
-truth_project = "4sC1fceX7osnaP8JkY4AfgK5tSFSfS44rXMhX361WEPF"
+truth_project = "FFL71XjBkjq5gce7EtpB7Wa5p8qnRNueLKSzM4tkEMoc"
 
 [registry]
 url = "https://api.apr.dev"

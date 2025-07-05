@@ -1,5 +1,5 @@
 {
-  "address": "4sC1fceX7osnaP8JkY4AfgK5tSFSfS44rXMhX361WEPF",
+  "address": "FFL71XjBkjq5gce7EtpB7Wa5p8qnRNueLKSzM4tkEMoc",
   "metadata": {
     "name": "truth_network",
     "version": "0.1.0",
@@ -465,6 +465,51 @@
       "args": []
     },
     {
+      "name": "delete_invite",
+      "discriminator": [
+        233,
+        190,
+        128,
+        59,
+        23,
+        30,
+        144,
+        78
+      ],
+      "accounts": [
+        {
+          "name": "invite",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  110,
+                  118,
+                  105,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "invite.invitee",
+                "account": "Invite"
+              }
+            ]
+          }
+        },
+        {
+          "name": "inviter",
+          "writable": true,
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "drain_unclaimed_reward",
       "discriminator": [
         185,
@@ -626,6 +671,56 @@
       "args": []
     },
     {
+      "name": "initialize_global_state",
+      "discriminator": [
+        232,
+        254,
+        209,
+        244,
+        123,
+        89,
+        154,
+        207
+      ],
+      "accounts": [
+        {
+          "name": "global_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  108,
+                  111,
+                  98,
+                  97,
+                  108,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "join_network",
       "discriminator": [
         246,
@@ -638,6 +733,31 @@
         30
       ],
       "accounts": [
+        {
+          "name": "global_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  108,
+                  111,
+                  98,
+                  97,
+                  108,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
         {
           "name": "user_record",
           "writable": true,
@@ -667,26 +787,8 @@
           }
         },
         {
-          "name": "vault",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  118,
-                  97,
-                  117,
-                  108,
-                  116
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "user"
-              }
-            ]
-          }
+          "name": "invite",
+          "optional": true
         },
         {
           "name": "user",
@@ -714,28 +816,6 @@
       ],
       "accounts": [
         {
-          "name": "vault",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  118,
-                  97,
-                  117,
-                  108,
-                  116
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "user"
-              }
-            ]
-          }
-        },
-        {
           "name": "user_record",
           "writable": true,
           "pda": {
@@ -774,6 +854,87 @@
         }
       ],
       "args": []
+    },
+    {
+      "name": "nominate_invitee",
+      "discriminator": [
+        84,
+        248,
+        9,
+        36,
+        106,
+        135,
+        159,
+        234
+      ],
+      "accounts": [
+        {
+          "name": "invite",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  110,
+                  118,
+                  105,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "nominee"
+              }
+            ]
+          }
+        },
+        {
+          "name": "user_record",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  117,
+                  115,
+                  101,
+                  114,
+                  95,
+                  114,
+                  101,
+                  99,
+                  111,
+                  114,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "inviter"
+              }
+            ]
+          }
+        },
+        {
+          "name": "inviter",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "nominee",
+          "type": "pubkey"
+        }
+      ]
     },
     {
       "name": "reclaim_commit_or_loser_rent",
@@ -938,6 +1099,32 @@
   ],
   "accounts": [
     {
+      "name": "GlobalState",
+      "discriminator": [
+        163,
+        46,
+        74,
+        168,
+        216,
+        123,
+        133,
+        98
+      ]
+    },
+    {
+      "name": "Invite",
+      "discriminator": [
+        230,
+        17,
+        253,
+        74,
+        50,
+        78,
+        85,
+        101
+      ]
+    },
+    {
       "name": "Question",
       "discriminator": [
         111,
@@ -1021,156 +1208,223 @@
     },
     {
       "code": 6003,
-      "name": "AlreadyJoined",
-      "msg": "You have already joined the network."
-    },
-    {
-      "code": 6004,
       "name": "AlreadyInitialized",
       "msg": "Question counter already exists."
     },
     {
-      "code": 6005,
+      "code": 6004,
       "name": "AlreadyVoted",
       "msg": "You have already voted on this question."
     },
     {
-      "code": 6006,
+      "code": 6005,
       "name": "AlreadyRevealed",
       "msg": "You have already revealed your vote."
     },
     {
-      "code": 6007,
+      "code": 6006,
       "name": "InvalidReveal",
       "msg": "Invalid voting reveal."
     },
     {
-      "code": 6008,
+      "code": 6007,
       "name": "NotJoined",
-      "msg": "You have already leaved the network."
+      "msg": "You have already left the network."
     },
     {
-      "code": 6009,
+      "code": 6008,
       "name": "RentNotExpiredOrVotesExist",
       "msg": "Rent period has not expired or votes have been committed."
     },
     {
-      "code": 6010,
+      "code": 6009,
       "name": "InvalidTimeframe",
       "msg": "Invalid timeframe."
     },
     {
-      "code": 6011,
+      "code": 6010,
       "name": "CommitPhaseEnded",
       "msg": "Commit phase ended."
     },
     {
-      "code": 6012,
+      "code": 6011,
       "name": "RevealPhaseEnded",
       "msg": "Reveal phase ended."
     },
     {
-      "code": 6013,
+      "code": 6012,
       "name": "NotEligible",
       "msg": "You're not eligible"
     },
     {
-      "code": 6014,
+      "code": 6013,
       "name": "AlreadyClaimed",
       "msg": "Already claimed."
     },
     {
-      "code": 6015,
+      "code": 6014,
       "name": "NoEligibleVoters",
       "msg": "No eligible voters."
     },
     {
-      "code": 6016,
+      "code": 6015,
       "name": "InvalidVaultAccount",
       "msg": "Invalid vault account"
     },
     {
-      "code": 6017,
+      "code": 6016,
       "name": "InsufficientFunds",
       "msg": "Insufficient funds."
     },
     {
-      "code": 6018,
+      "code": 6017,
       "name": "Overflow",
       "msg": "Overflow"
     },
     {
-      "code": 6019,
+      "code": 6018,
       "name": "InsufficientMajority",
       "msg": "Winning votes do not meet the required 51% majority."
     },
     {
-      "code": 6020,
+      "code": 6019,
       "name": "QuestionIdMismatch",
       "msg": "Question ID mismatch."
     },
     {
-      "code": 6021,
+      "code": 6020,
       "name": "NotPartOfVoterList",
       "msg": "Not a part of the voters list."
     },
     {
-      "code": 6022,
+      "code": 6021,
       "name": "RemainingRewardExists",
       "msg": "Remaining reward exists, cannot delete."
     },
     {
-      "code": 6023,
+      "code": 6022,
       "name": "QuestionTooShort",
       "msg": "Question must be at least 10 characters long."
     },
     {
-      "code": 6024,
+      "code": 6023,
       "name": "RewardTooSmall",
       "msg": "Reward must be at least 0.05 SOL."
     },
     {
-      "code": 6025,
+      "code": 6024,
       "name": "RevealPhaseNotOver",
       "msg": "Reveal phase is not yet over."
     },
     {
-      "code": 6026,
+      "code": 6025,
       "name": "CannotDrainReward",
       "msg": "Cannot drain: commits or reveals exist or phases not ended."
     },
     {
-      "code": 6027,
+      "code": 6026,
       "name": "CannotDeleteQuestion",
       "msg": "Cannot delete: question still has active or unclaimed participation."
     },
     {
-      "code": 6028,
+      "code": 6027,
       "name": "RentNotExpired",
       "msg": "Rent has not yet expired."
     },
     {
-      "code": 6029,
+      "code": 6028,
       "name": "AlreadyEligibleOrWinner",
-      "msg": "You were a winner or already eligible for reward."
+      "msg": "You were already eligible for a reward or were a winner."
     },
     {
-      "code": 6030,
+      "code": 6029,
       "name": "AlreadyDrained",
       "msg": "Vault is already drained."
     },
     {
-      "code": 6031,
+      "code": 6030,
       "name": "QuestionTooLong",
       "msg": "The question is too long."
     },
     {
-      "code": 6032,
+      "code": 6031,
       "name": "RejoinedAfterCommit",
       "msg": "You rejoined after committing. You can't reveal this vote."
+    },
+    {
+      "code": 6032,
+      "name": "AlreadyJoined",
+      "msg": "This address has already joined the network."
+    },
+    {
+      "code": 6033,
+      "name": "NotInvited",
+      "msg": "You are not in the list of pending joiners."
+    },
+    {
+      "code": 6034,
+      "name": "InvalidInviter",
+      "msg": "Invalid invite address."
+    },
+    {
+      "code": 6035,
+      "name": "NoInviteTokens",
+      "msg": "You have no invite tokens remaining."
+    },
+    {
+      "code": 6036,
+      "name": "AlreadyInvited",
+      "msg": "This address has already invited."
+    },
+    {
+      "code": 6037,
+      "name": "InviteLimitReached",
+      "msg": "Invite limit reached. Please wait for pending invites to be used."
+    },
+    {
+      "code": 6038,
+      "name": "ActionInProgress",
+      "msg": "Another action is already in progress."
+    },
+    {
+      "code": 6039,
+      "name": "InvalidInvitee",
+      "msg": "Invalid invitee address."
     }
   ],
   "types": [
+    {
+      "name": "GlobalState",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "truth_provider_count",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Invite",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "invitee",
+            "type": "pubkey"
+          },
+          {
+            "name": "inviter",
+            "type": "pubkey"
+          },
+          {
+            "name": "created_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
     {
       "name": "Question",
       "type": {
@@ -1205,15 +1459,15 @@
             "type": "string"
           },
           {
+            "name": "created_at",
+            "type": "i64"
+          },
+          {
             "name": "commit_end_time",
             "type": "i64"
           },
           {
             "name": "reveal_end_time",
-            "type": "i64"
-          },
-          {
-            "name": "rent_expiration",
             "type": "i64"
           },
           {
@@ -1230,6 +1484,10 @@
           },
           {
             "name": "committed_voters",
+            "type": "u64"
+          },
+          {
+            "name": "revealed_voters_count",
             "type": "u64"
           },
           {
@@ -1289,6 +1547,10 @@
             "type": "bool"
           },
           {
+            "name": "action_in_progress",
+            "type": "bool"
+          },
+          {
             "name": "bump",
             "type": "u8"
           }
@@ -1335,6 +1597,14 @@
           {
             "name": "total_correct_votes",
             "type": "u64"
+          },
+          {
+            "name": "invite_correct_votes",
+            "type": "u64"
+          },
+          {
+            "name": "invite_tokens",
+            "type": "u8"
           },
           {
             "name": "created_at",

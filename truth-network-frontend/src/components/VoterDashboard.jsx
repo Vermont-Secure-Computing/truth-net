@@ -293,7 +293,7 @@ const VoterDashboard = () => {
             })
             .rpc();
       
-          toast.success(`Invite deleted! Tx: ${tx.slice(0,6)}...${tx.slice(-6)}`, {
+          toast.success(`Claim invitation refund Tx: ${tx.slice(0,6)}...${tx.slice(-6)}`, {
             position: "top-center",
             autoClose: 6000,
             onClick: () => window.open(`https://solscan.io/tx/${tx}`, "_blank"),
@@ -416,7 +416,7 @@ const VoterDashboard = () => {
                         onClick={() => deleteInvite(invite.account.invitee)}
                         className="px-3 py-1 bg-red-600 text-white text-sm rounded-md hover:bg-red-700"
                         >
-                        Delete Invite
+                        Claim Invitation Refund 
                         </button>
                     ))}
                 </div>
