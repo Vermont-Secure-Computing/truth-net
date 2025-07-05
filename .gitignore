@@ -23,3 +23,4 @@ truth-network-frontend/*.njsproj
 truth-network-frontend/*.sln
 truth-network-frontend/*.sw?
 
+target/
