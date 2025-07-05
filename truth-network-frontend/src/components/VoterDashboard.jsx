@@ -23,6 +23,8 @@ const VoterDashboard = () => {
     const [nomineeInput, setNomineeInput] = useState("");
     const [userRecord, setUserRecord] = useState(null);
     const [nomineeError, setNomineeError] = useState("");
+    const [myInvites, setMyInvites] = useState([]);
+    const [loadingInvites, setLoadingInvites] = useState(false);
 
     
     const { truthNetworkIDL } = getIdls();
@@ -48,6 +50,7 @@ const VoterDashboard = () => {
     useEffect(() => {
         if (program && publicKey) {
             fetchData();
+            fetchMyInvites();
         }
     }, [program]);
 
@@ -192,6 +195,44 @@ const VoterDashboard = () => {
         }
     };
 
+    const fetchMyInvites = async () => {
+        if (!program || !publicKey) return;
+        setLoadingInvites(true);
+      
+        try {
+          // Fetch all invite accounts
+          const allInvites = await program.account.invite.all();
+      
+          // Filter invites you created
+          const myCreatedInvites = allInvites.filter(
+            (i) => i.account.inviter.toBase58() === publicKey.toBase58()
+          );
+      
+          // For each invite, check if the user has joined
+          const invitesWithUsage = await Promise.all(
+            myCreatedInvites.map(async (invite) => {
+              const [userRecordPDA] = web3.PublicKey.findProgramAddressSync(
+                [Buffer.from("user_record"), invite.account.invitee.toBuffer()],
+                PROGRAM_ID
+              );
+              const info = await connection.getAccountInfo(userRecordPDA);
+              const hasJoined = !!info;
+              return {
+                invite,
+                hasJoined,
+              };
+            })
+          );
+      
+          setMyInvites(invitesWithUsage);
+        } catch (err) {
+          console.error("Failed to fetch invites", err);
+        } finally {
+          setLoadingInvites(false);
+        }
+      };
+      
+
     const nominateInvitee = async () => {
         if (!nomineeInput.trim()) {
           toast.error("Please enter a wallet address.", { position: "top-center" });
@@ -234,6 +275,38 @@ const VoterDashboard = () => {
           console.error("Nominate error", error);
         }
       };
+
+      const deleteInvite = async (inviteePubkey) => {
+        if (!inviteePubkey) return;
+      
+        try {
+          const [invitePDA] = web3.PublicKey.findProgramAddressSync(
+            [Buffer.from("invite"), inviteePubkey.toBuffer()],
+            PROGRAM_ID
+          );
+      
+          const tx = await program.methods
+            .deleteInvite()
+            .accounts({
+              invite: invitePDA,
+              inviter: publicKey,
+            })
+            .rpc();
+      
+          toast.success(`Invite deleted! Tx: ${tx.slice(0,6)}...${tx.slice(-6)}`, {
+            position: "top-center",
+            autoClose: 6000,
+            onClick: () => window.open(`https://solscan.io/tx/${tx}`, "_blank"),
+          });
+      
+          // Refresh list
+          fetchMyInvites();
+        } catch (err) {
+          console.error("Delete invite failed", err);
+          toast.error(`Delete failed: ${err.message}`);
+        }
+      };
+      
       
     
     const fetchUserRecord = async () => {
@@ -319,18 +392,36 @@ const VoterDashboard = () => {
                 )}
             </div>
             <div className="mb-6 flex justify-end">
-            <button
-                onClick={() => setNominateModalOpen(true)}
-                disabled={!userRecord || userRecord.inviteTokens === 0}
-                className={`px-4 py-2 rounded-md transition duration-200 ${
-                    !userRecord || userRecord.inviteTokens === 0
-                    ? "bg-gray-400 cursor-not-allowed"
-                    : "bg-purple-600 text-white hover:bg-purple-700"
-                }`}
-                >
-                Nominate Invitee
-            </button>
+                <button
+                    onClick={() => setNominateModalOpen(true)}
+                    disabled={!userRecord || userRecord.inviteTokens === 0}
+                    className={`px-4 py-2 rounded-md transition duration-200 ${
+                        !userRecord || userRecord.inviteTokens === 0
+                        ? "bg-gray-400 cursor-not-allowed"
+                        : "bg-purple-600 text-white hover:bg-purple-700"
+                    }`}
+                    >
+                    Nominate Invitee
+                </button>
+
             </div>
+
+            <div className="mt-6">
+                <div className="space-y-3">
+                    {myInvites
+                    .filter(({ hasJoined }) => hasJoined)
+                    .map(({ invite }, idx) => (
+                        <button
+                        key={idx}
+                        onClick={() => deleteInvite(invite.account.invitee)}
+                        className="px-3 py-1 bg-red-600 text-white text-sm rounded-md hover:bg-red-700"
+                        >
+                        Delete Invite
+                        </button>
+                    ))}
+                </div>
+            </div>
+
 
             <h3 className="text-xl font-semibold mb-4">Voted Events:</h3>
             {questions.length > 0 ? (

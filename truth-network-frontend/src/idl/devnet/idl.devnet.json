@@ -1,5 +1,5 @@
 {
-  "address": "D2AZ5UpTVD6zmWBpxhSKLCGJVAcoBGy4J9ZYxRKqLfwx",
+  "address": "31wdq6EJgHKRjZotAjc6vkuJ7aRyQPauwmgadPiEm8EY",
   "metadata": {
     "name": "truth_network",
     "version": "0.1.0",
@@ -460,6 +460,51 @@
         {
           "name": "system_program",
           "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "delete_invite",
+      "discriminator": [
+        233,
+        190,
+        128,
+        59,
+        23,
+        30,
+        144,
+        78
+      ],
+      "accounts": [
+        {
+          "name": "invite",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  110,
+                  118,
+                  105,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "invite.invitee",
+                "account": "Invite"
+              }
+            ]
+          }
+        },
+        {
+          "name": "inviter",
+          "writable": true,
+          "signer": true
         }
       ],
       "args": []
@@ -1184,7 +1229,7 @@
     {
       "code": 6007,
       "name": "NotJoined",
-      "msg": "You have already leaved the network."
+      "msg": "You have already left the network."
     },
     {
       "code": 6008,
@@ -1289,7 +1334,7 @@
     {
       "code": 6028,
       "name": "AlreadyEligibleOrWinner",
-      "msg": "You were a winner or already eligible for reward."
+      "msg": "You were already eligible for a reward or were a winner."
     },
     {
       "code": 6029,
