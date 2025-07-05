@@ -1,1 +1,0 @@
-{"rustc":9296723627568649182,"features":"","declared_features":"","target":0,"profile":0,"path":0,"deps":[[14131061446229887432,"build_script_build",false,10999419477495239562]],"local":[{"RerunIfChanged":{"output":"debug/build/zerocopy-8437fc01e7ffa194/output","paths":["build.rs","Cargo.toml"]}}],"rustflags":["--cfg","procmacro2_semver_exempt"],"config":0,"compile_kind":0}
