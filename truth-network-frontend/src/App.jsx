@@ -137,7 +137,7 @@ const App = () => {
                     className="h-6 w-auto object-contain"
                 />
                 <sup className="text-xs text-gray-600">
-                  {import.meta.env.VITE_NETWORK === "mainnet" ? "Mainnet" : "Devnet"}
+                  coucal
                 </sup>
             </a>
             <span
@@ -162,16 +162,52 @@ const App = () => {
               {publicKey && <button onClick={() => navigate("/dashboard")} className="px-4 py-2 rounded-md bg-white hover:bg-gray-300">Dashboard</button>}
               <button onClick={() => navigate("/voters")} className="px-4 py-2 rounded-md bg-white hover:bg-gray-300">Voters</button>
               <button onClick={() => navigate("/instructions")} className="px-4 py-2 rounded-md bg-white hover:bg-gray-300">Instructions</button>
-              <a
-                href={import.meta.env.VITE_NETWORK === "mainnet" 
-                  ? "https://devnet.truth.it.com" 
-                  : "https://truth.it.com"}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-4 py-2 rounded-md bg-white hover:bg-gray-300 text-black"
-              >
-                {import.meta.env.VITE_NETWORK === "mainnet" ? "Open Devnet" : "Open Mainnet"}
-              </a>
+              <div className="relative group">
+                <button
+                  className="px-4 py-2 rounded-md bg-white hover:bg-gray-300 text-black flex items-center"
+                >
+                  <span>Network Sites</span>
+                  <svg
+                    className="ml-1 h-4 w-4"
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.25a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                </button>
+                <div className="absolute left-0 mt-2 w-48 rounded-md shadow-lg bg-white border opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-20">
+                  <a
+                    href="https://truth.it.com"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block px-4 py-2 text-black hover:bg-gray-100"
+                  >
+                    truth.it.com (Mainnet)
+                  </a>
+                  <a
+                    href="https://devnet.truth.it.com"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block px-4 py-2 text-black hover:bg-gray-100"
+                  >
+                    devnet.truth.it.com (Devnet)
+                  </a>
+                  <a
+                    href="https://coucal.truth.it.com"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block px-4 py-2 text-black hover:bg-gray-100"
+                  >
+                    coucal.truth.it.com (Mainnet - previous)
+                  </a>
+                </div>
+              </div>
+
 
               <WalletMultiButton className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md" />
             </nav>
@@ -192,23 +228,79 @@ const App = () => {
   
             {mobileMenuOpen && (
               <div className="absolute top-full left-0 w-full md:hidden px-6 py-4 space-y-2 bg-gray-100 border-b z-10">
-                <button onClick={() => { navigate("/"); setMobileMenuOpen(false); }} className="block w-full text-left px-4 py-2 rounded-md bg-white hover:bg-gray-300">Home</button>
-                {publicKey && <button onClick={() => { navigate("/dashboard"); setMobileMenuOpen(false); }} className="block w-full text-left px-4 py-2 rounded-md bg-white hover:bg-gray-300">Dashboard</button>}
-                <button onClick={() => { navigate("/voters"); setMobileMenuOpen(false); }} className="block w-full text-left px-4 py-2 rounded-md bg-white hover:bg-gray-300">Voters</button>
-                <button onClick={() => { navigate("/instructions"); setMobileMenuOpen(false); }} className="block w-full text-left px-4 py-2 rounded-md bg-white hover:bg-gray-300">Instructions</button>
-                <a
-                  href="https://devnet.truth.it.com"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block w-full text-left px-4 py-2 rounded-md bg-white hover:bg-gray-300 text-black"
+                <button
+                  onClick={() => {
+                    navigate("/");
+                    setMobileMenuOpen(false);
+                  }}
+                  className="block w-full text-left px-4 py-2 rounded-md bg-white hover:bg-gray-300"
                 >
-                  Open Devnet
-                </a>
+                  Home
+                </button>
+                {publicKey && (
+                  <button
+                    onClick={() => {
+                      navigate("/dashboard");
+                      setMobileMenuOpen(false);
+                    }}
+                    className="block w-full text-left px-4 py-2 rounded-md bg-white hover:bg-gray-300"
+                  >
+                    Dashboard
+                  </button>
+                )}
+                <button
+                  onClick={() => {
+                    navigate("/voters");
+                    setMobileMenuOpen(false);
+                  }}
+                  className="block w-full text-left px-4 py-2 rounded-md bg-white hover:bg-gray-300"
+                >
+                  Voters
+                </button>
+                <button
+                  onClick={() => {
+                    navigate("/instructions");
+                    setMobileMenuOpen(false);
+                  }}
+                  className="block w-full text-left px-4 py-2 rounded-md bg-white hover:bg-gray-300"
+                >
+                  Instructions
+                </button>
+
+                {/* NEW: Network Links */}
+                <div className="border-t border-gray-300 pt-2">
+                  <a
+                    href="https://truth.it.com"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block w-full text-left px-4 py-2 rounded-md bg-white hover:bg-gray-300 text-black"
+                  >
+                    truth.it.com (Mainnet)
+                  </a>
+                  <a
+                    href="https://devnet.truth.it.com"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block w-full text-left px-4 py-2 rounded-md bg-white hover:bg-gray-300 text-black"
+                  >
+                    devnet.truth.it.com
+                  </a>
+                  <a
+                    href="https://coucal.truth.it.com"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block w-full text-left px-4 py-2 rounded-md bg-white hover:bg-gray-300 text-black"
+                  >
+                    coucal.truth.it.com (Previous)
+                  </a>
+                </div>
+
                 <div className="pt-2">
                   <WalletMultiButton className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-md" />
                 </div>
               </div>
             )}
+
           </div>
         </header>
   
