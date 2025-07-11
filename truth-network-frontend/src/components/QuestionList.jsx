@@ -161,10 +161,52 @@ const QuestionsList = ({ refreshKey }) => {
   
       setQuestions([...activeQuestions, ...endedQuestions]);
     } catch (err) {
-      toast.error(`Error fetching questions: ${err.message}`, {
-        position: "top-center",
-        autoClose: 5000,
-      });
+      if (
+        err.message.includes("ECONNREFUSED") ||
+        err.message.includes("fetch failed") ||
+        err.message.includes("NetworkError") ||
+        err.message.includes("Failed to fetch") ||
+        err.message.includes("429")
+      ) {
+        toast.error(
+          <>
+            <div className="font-semibold">⚠ Solana RPC Connection Error</div>
+            <div>{err.message}</div>
+            <div className="mt-2">
+              You can try switching to a different RPC endpoint.
+              <br />
+              • Public RPCs:{" "}
+              <a
+                href="https://www.comparenodes.com/library/public-endpoints/solana/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline text-blue-500"
+              >
+                View Public Solana RPCs
+              </a>
+              <br />
+              • Paid RPCs (faster):{" "}
+              <a
+                href="https://www.helius.dev/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline text-blue-500"
+              >
+                Helius
+              </a>
+            </div>
+          </>,
+          {
+            position: "top-center",
+            autoClose: 12000,
+          }
+        );
+      } else {
+        toast.error(`Error fetching questions: ${err.message}`, {
+          position: "top-center",
+          autoClose: 5000,
+        });
+      }
     } finally {
       setLoading(false);
     }
