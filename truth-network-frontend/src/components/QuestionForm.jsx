@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { PublicKey, Connection, clusterApiUrl } from "@solana/web3.js";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { Program, AnchorProvider, web3, BN } from "@coral-xyz/anchor";
@@ -10,7 +10,7 @@ import "react-datepicker/dist/react-datepicker.css";
 import { getConstants } from "../constants";
 import { getIdls } from "../idl";
 
-const { PROGRAM_ID, DEFAULT_RPC_URL } = getConstants();
+const { PROGRAM_ID, getWorkingRpcUrl } = getConstants();
 
 
 
@@ -24,14 +24,16 @@ const QuestionForm = ({ triggerRefresh, onClose }) => {
   const [showModal, setShowModal] = useState(false);
   const [pendingCreate, setPendingCreate] = useState(false);
   // const [program, setProgram] = useState(null);
-  const [connection] = useState(() => new web3.Connection(DEFAULT_RPC_URL, "confirmed"));
+  const [connection, setConnection] = useState(null);
   const { truthNetworkIDL } = getIdls();
   const wallet = { publicKey, signTransaction, signAllTransactions };
   const provider = useMemo(() => {
-    return new AnchorProvider(connection, wallet, { preflightCommitment: "processed" });
+      if (!connection) return null;
+      return new AnchorProvider(connection, wallet, { preflightCommitment: "processed" });
   }, [connection, wallet]);
   const program = useMemo(() => {
-    return new Program(truthNetworkIDL, provider);
+      if (!provider) return null;
+      return new Program(truthNetworkIDL, provider);
   }, [truthNetworkIDL, provider]);
   // const program = new Program(idl, provider);
   const navigate = useNavigate();
@@ -57,6 +59,14 @@ const QuestionForm = ({ triggerRefresh, onClose }) => {
   
   //   setupProgram();
   // }, [publicKey, signTransaction, signAllTransactions]);
+
+  useEffect(() => {
+      (async () => {
+          const rpc = await getWorkingRpcUrl();
+          const conn = new web3.Connection(rpc, "confirmed");
+          setConnection(conn);
+      })();
+  }, []);
 
   const createQuestion = async () => {
     if (!publicKey) {

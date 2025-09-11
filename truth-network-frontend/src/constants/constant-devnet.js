@@ -1,22 +1,84 @@
-import { PublicKey } from "@solana/web3.js";
+import { Connection, PublicKey } from "@solana/web3.js";
 
-// Fee receiver hardcoded on-chain
-export const FEE_RECEIVER = new PublicKey("CQaZgx5jqQrz7c8shCG3vJLiiPGPrawSGhvkgXtGyxL");
+// Devnet RPC list with fallback
+export const RPC_LIST = [
+  "https://api.devnet.solana.com",
+  "https://solana-devnet.api.onfinality.io/public",
+  "https://solana-devnet.drpc.org",
+  "https://rpc.ankr.com/solana_devnet",
+  "https://solana-devnet.g.alchemy.com/public"
+];
 
-// Program ID
-export const PROGRAM_ID = new PublicKey("31wdq6EJgHKRjZotAjc6vkuJ7aRyQPauwmgadPiEm8EY");
+// Default (used before checking others)
+// Default fallback
+export const DEFAULT_RPC_URL =
+  localStorage.getItem("solana_rpc_url") || RPC_LIST[0];
 
-export const DEFAULT_RPC_URL = localStorage.getItem("solana_rpc_url") || "https://api.devnet.solana.com";
+/**
+ * Checks if a given RPC URL is healthy (responds with version).
+ */
+export const checkRpcHealth = async (rpcUrl) => {
+  try {
+    const conn = new Connection(rpcUrl, { commitment: "processed" });
+    const version = await conn.getVersion();
+    return !!version["solana-core"];
+  } catch (err) {
+    console.warn(`[RPC Health] ${rpcUrl} failed:`, err?.message || err);
+    return false;
+  }
+};
 
+/**
+ * Returns a working RPC URL.
+ * - Uses user-defined one if provided and healthy.
+ * - Otherwise, rotates through known list using round-robin.
+ */
+export const getWorkingRpcUrl = async () => {
+  const userDefined = localStorage.getItem("solana_rpc_url");
 
-// Function to reset the RPC to default (optional, if you want a reset button later)
+  // 1. User-defined but NOT in default list
+  if (userDefined && !RPC_LIST.includes(userDefined)) {
+    const healthy = await checkRpcHealth(userDefined);
+    if (healthy) return userDefined;
+
+    // If unhealthy, fallback to round-robin
+    console.warn("[RPC] Custom user RPC unhealthy, removing...");
+    localStorage.removeItem("solana_rpc_url");
+  }
+
+  // 2. Round-robin fallback among RPC_LIST
+  const lastIndex = parseInt(localStorage.getItem("rpc_index") || "0", 10);
+  const total = RPC_LIST.length;
+
+  for (let i = 0; i < total; i++) {
+    const index = (lastIndex + i) % total;
+    const rpc = RPC_LIST[index];
+
+    if (await checkRpcHealth(rpc)) {
+      // Set next index for next round
+      localStorage.setItem("rpc_index", ((index + 1) % total).toString());
+
+      // Optional: save to localStorage only if not already user-defined
+      localStorage.setItem("solana_rpc_url", rpc);
+
+      return rpc;
+    }
+  }
+
+  // 3. Fallback to the first RPC (even if unhealthy)
+  console.warn("[RPC] No healthy RPC found. Using fallback.");
+  return RPC_LIST[0];
+};
+
+// Optional: manual reset
 export const resetRpcUrl = () => {
   localStorage.removeItem("solana_rpc_url");
 };
 
-// Export explorer devnet
+// Constants
+export const FEE_RECEIVER = new PublicKey("CQaZgx5jqQrz7c8shCG3vJLiiPGPrawSGhvkgXtGyxL");
+export const PROGRAM_ID = new PublicKey("31wdq6EJgHKRjZotAjc6vkuJ7aRyQPauwmgadPiEm8EY");
+
+// Explorer formatter
 export const getExplorerTxUrl = (tx) =>
   `https://explorer.solana.com/tx/${tx}?cluster=devnet`;
-
-
-

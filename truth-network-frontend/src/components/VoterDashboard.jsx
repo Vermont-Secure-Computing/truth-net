@@ -5,8 +5,9 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import { getConstants } from "../constants";
 import { getIdls } from "../idl";
+import { confirmTransactionOnAllRpcs } from "../utils/confirmWithFallback";
 
-const { DEFAULT_RPC_URL, PROGRAM_ID, getRpcUrl } = getConstants();
+const { getWorkingRpcUrl, PROGRAM_ID, getExplorerTxUrl } = getConstants();
 
 
 
@@ -18,7 +19,7 @@ const VoterDashboard = () => {
     const [totalRevealedVotes, setTotalRevealedVotes] = useState(0);
     const [totalCorrectVotes, setTotalCorrectVotes] = useState(0);
     const [voterReputation, setVoterReputation] = useState(0);
-    const [connection] = useState(() => new web3.Connection(DEFAULT_RPC_URL, "confirmed"));
+    const [connection, setConnection] = useState(null);
     const [nominateModalOpen, setNominateModalOpen] = useState(false);
     const [nomineeInput, setNomineeInput] = useState("");
     const [userRecord, setUserRecord] = useState(null);
@@ -36,23 +37,32 @@ const VoterDashboard = () => {
           signAllTransactions: wallet.adapter.signAllTransactions,
         };
       }, [wallet, publicKey]);
+
+    useEffect(() => {
+        (async () => {
+            const url = await getWorkingRpcUrl();
+            const conn = new web3.Connection(url, "confirmed");
+            setConnection(conn);
+        })();               
+    }, []);
     
-      const provider = useMemo(() => {
-        if (!wallet?.adapter || !publicKey) return undefined;
-        return new AnchorProvider(connection, wallet.adapter, { preflightCommitment: "processed" });
-      }, [connection, wallet, publicKey]);
+    const provider = useMemo(() => {
+        if (!wallet?.adapter || !publicKey || !connection) return null;
+        return new AnchorProvider(connection, wallet.adapter, { preflightCommitment: "processed" });    
+    }, [connection, wallet, publicKey]);
       
     const program = useMemo(() => {
-        if (!provider) return undefined;
+        if (!provider) return null;
         return new Program(truthNetworkIDL, provider);
     }, [truthNetworkIDL, provider]);
 
     useEffect(() => {
         if (program && publicKey) {
-            fetchData();
-            fetchMyInvites();
+          fetchData();
+          fetchUserRecord();
+          fetchMyInvites();
         }
-    }, [program]);
+      }, [program, publicKey]);
 
     const fetchData = async () => {
         if (!program || !publicKey) {
@@ -233,103 +243,187 @@ const VoterDashboard = () => {
       };
       
 
-    const nominateInvitee = async () => {
+      const nominateInvitee = async () => {
         if (!nomineeInput.trim()) {
-          toast.error("Please enter a wallet address.", { position: "top-center" });
-          return;
+            toast.error("Please enter a wallet address.", { position: "top-center" });
+            return;
         }
+    
+        try {
+            const nomineePubkey = new web3.PublicKey(nomineeInput.trim());
+    
+            const [invitePDA] = web3.PublicKey.findProgramAddressSync(
+                [Buffer.from("invite"), nomineePubkey.toBuffer()],
+                PROGRAM_ID
+            );
+    
+            const [userRecordPDA] = web3.PublicKey.findProgramAddressSync(
+                [Buffer.from("user_record"), publicKey.toBuffer()],
+                PROGRAM_ID
+            );
+    
+            const tx = await program.methods
+                .nominateInvitee(nomineePubkey)
+                .accounts({
+                    invite: invitePDA,
+                    userRecord: userRecordPDA,
+                    inviter: publicKey,
+                    systemProgram: web3.SystemProgram.programId,
+                })
+                .rpc();
+    
+            const confirmed = await confirmTransactionOnAllRpcs(tx);
+    
+            if (confirmed) {
+                toast.success(
+                    <div>
+                        Invitee nominated.{" "}
+                        <a
+                            href={getExplorerTxUrl(tx)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="underline text-blue-500"
+                        >
+                            View on Explorer
+                        </a>
+                    </div>,
+                    {
+                        position: "top-center",
+                        autoClose: 6000,
+                    }
+                );
+            } else {
+                toast.warning(
+                    <div>
+                        Transaction sent, but not yet confirmed.{" "}
+                        <a
+                            href={getExplorerTxUrl(tx)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="underline text-yellow-600"
+                        >
+                            Check Explorer
+                        </a>
+                    </div>,
+                    {
+                        position: "top-center",
+                        autoClose: 6000,
+                    }
+                );
+            }
+    
+            setNominateModalOpen(false);
+            setNomineeInput("");
+        } catch (error) {
+            toast.error(`Failed to nominate: ${error.message}`, {
+                position: "top-center",
+                autoClose: 6000,
+            });
+            console.error("Nominate error", error);
+        }
+    };    
+
+    const deleteInvite = async (inviteePubkey) => {
+        if (!inviteePubkey) return;
+    
+        let tx = null;
+    
+        try {
+            const [invitePDA] = web3.PublicKey.findProgramAddressSync(
+                [Buffer.from("invite"), inviteePubkey.toBuffer()],
+                PROGRAM_ID
+            );
+    
+            tx = await program.methods
+                .deleteInvite()
+                .accounts({
+                    invite: invitePDA,
+                    inviter: publicKey,
+                })
+                .rpc();
+    
+            const confirmed = await confirmTransactionOnAllRpcs(tx);
+    
+            if (confirmed) {
+                toast.success(
+                    <div>
+                        Invitation refund claimed.{" "}
+                        <a
+                            href={getExplorerTxUrl(tx)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="underline text-blue-500"
+                        >
+                            View on Explorer
+                        </a>
+                    </div>,
+                    {
+                        position: "top-center",
+                        autoClose: 6000,
+                    }
+                );
+            } else {
+                toast.warning(
+                    <div>
+                        Transaction sent but not confirmed yet.{" "}
+                        <a
+                            href={getExplorerTxUrl(tx)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="underline text-yellow-600"
+                        >
+                            Check Explorer
+                        </a>
+                    </div>,
+                    {
+                        position: "top-center",
+                        autoClose: 6000,
+                    }
+                );
+            }
+    
+            fetchMyInvites(); // Refresh list after success
+        } catch (err) {
+            console.error("Delete invite failed", err);
+            toast.error(`Delete failed: ${err.message}`, {
+                position: "top-center",
+            });
+        }
+    };
+    
+      
+      
+    
+    const fetchUserRecord = async () => {
+        if (!program || !publicKey) return;
       
         try {
-          const nomineePubkey = new web3.PublicKey(nomineeInput.trim());
-      
-          const [invitePDA] = web3.PublicKey.findProgramAddressSync(
-            [Buffer.from("invite"), nomineePubkey.toBuffer()],
-            PROGRAM_ID
-          );
-      
           const [userRecordPDA] = web3.PublicKey.findProgramAddressSync(
             [Buffer.from("user_record"), publicKey.toBuffer()],
             PROGRAM_ID
           );
       
-          const tx = await program.methods
-            .nominateInvitee(nomineePubkey)
-            .accounts({
-              invite: invitePDA,
-              userRecord: userRecordPDA,
-              inviter: publicKey,
-              systemProgram: web3.SystemProgram.programId,
-            })
-            .rpc();
+          const info = await connection.getAccountInfo(userRecordPDA);
+          if (!info) {
+            console.warn("UserRecord account does not exist at:", userRecordPDA.toBase58());
+            setUserRecord(null);
+            return;
+          }
       
-          toast.success(`Invitee nominated! Tx: ${tx.slice(0, 6)}...${tx.slice(-6)}`, {
-            position: "top-center",
-            autoClose: 6000,
-            onClick: () => window.open(`https://solscan.io/tx/${tx}`, "_blank"),
-          });
-      
-          setNominateModalOpen(false);
-          setNomineeInput("");
-        } catch (error) {
-          toast.error(`Failed to nominate: ${error.message}`, { position: "top-center" });
-          console.error("Nominate error", error);
-        }
-      };
-
-      const deleteInvite = async (inviteePubkey) => {
-        if (!inviteePubkey) return;
-      
-        try {
-          const [invitePDA] = web3.PublicKey.findProgramAddressSync(
-            [Buffer.from("invite"), inviteePubkey.toBuffer()],
-            PROGRAM_ID
-          );
-      
-          const tx = await program.methods
-            .deleteInvite()
-            .accounts({
-              invite: invitePDA,
-              inviter: publicKey,
-            })
-            .rpc();
-      
-          toast.success(`Claim invitation refund Tx: ${tx.slice(0,6)}...${tx.slice(-6)}`, {
-            position: "top-center",
-            autoClose: 6000,
-            onClick: () => window.open(`https://solscan.io/tx/${tx}`, "_blank"),
-          });
-      
-          // Refresh list
-          fetchMyInvites();
-        } catch (err) {
-          console.error("Delete invite failed", err);
-          toast.error(`Delete failed: ${err.message}`);
-        }
-      };
-      
-      
-    
-    const fetchUserRecord = async () => {
-        const [userRecordPDA] = web3.PublicKey.findProgramAddressSync(
-          [Buffer.from("user_record"), publicKey.toBuffer()],
-          PROGRAM_ID
-        );
-        try {
           const userRecordAccount = await program.account.userRecord.fetch(userRecordPDA);
           setUserRecord(userRecordAccount);
       
-          // Check inviter safely
           if (userRecordAccount?.inviter) {
             console.log("userRecord.inviter:", userRecordAccount.inviter.toBase58());
           } else {
             console.log("userRecord has no inviter field.");
           }
-      
         } catch (err) {
           console.error("Failed to fetch user record", err);
-          setUserRecord(null); // clear any previous state
+          setUserRecord(null);
         }
       };
+      
 
     useEffect(() => {
         if (!publicKey) return;

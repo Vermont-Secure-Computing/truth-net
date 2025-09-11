@@ -9,8 +9,9 @@ import "react-toastify/dist/ReactToastify.css";
 import CommitReveal from "./CommitReveal";
 import { getConstants } from "../constants";
 import { getIdls } from "../idl";
+import { confirmTransactionOnAllRpcs } from "../utils/confirmWithFallback";
 
-const { PROGRAM_ID, DEFAULT_RPC_URL, getExplorerTxUrl, FEE_RECEIVER } = getConstants();
+const { PROGRAM_ID, getWorkingRpcUrl, getExplorerTxUrl, FEE_RECEIVER } = getConstants();
 
 
 const QuestionDetail = () => {
@@ -30,16 +31,18 @@ const QuestionDetail = () => {
     const [hasReclaimed, setHasReclaimed] = useState(false);
     const [reclaiming, setReclaiming] = useState(false);
     const [snapshotTriggered, setSnapshotTriggered] = useState(false);
-    const [connection] = useState(() => new web3.Connection(DEFAULT_RPC_URL, "confirmed"));
+    const [connection, setConnection] = useState(null);
     // const [program, setProgram] = useState(null);
     const { truthNetworkIDL } = getIdls();
     const wallet = { publicKey, signTransaction, signAllTransactions };
     const provider = useMemo(() => {
+        if (!connection) return null;
         return new AnchorProvider(connection, wallet, { preflightCommitment: "processed" });
-      }, [connection, wallet]);
-      const program = useMemo(() => {
+    }, [connection, wallet]);
+    const program = useMemo(() => {
+        if (!provider) return null;
         return new Program(truthNetworkIDL, provider);
-      }, [truthNetworkIDL, provider]);
+    }, [truthNetworkIDL, provider]);
 
     const navigate = useNavigate();
     const now = Math.floor(Date.now() / 1000);
@@ -63,6 +66,14 @@ const QuestionDetail = () => {
       
         checkMembership();
       }, [program, publicKey, id]);
+
+    useEffect(() => {
+        (async () => {
+            const rpc = await getWorkingRpcUrl();
+            const conn = new web3.Connection(rpc, "confirmed");
+            setConnection(conn);
+        })();
+    }, []);
 
     const checkMembership = async () => {
         try {
@@ -206,6 +217,8 @@ const QuestionDetail = () => {
             return;
         }
     
+        let tx = null;
+    
         try {
             setClaiming(true);
             toast.info("Processing reward claim...", { position: "top-center" });
@@ -228,7 +241,7 @@ const QuestionDetail = () => {
     
             const txSig = web3.Keypair.generate().publicKey.toBase58();
     
-            const tx = await program.methods
+            tx = await program.methods
                 .claimReward(txSig)
                 .accounts({
                     question: questionPublicKey,
@@ -241,37 +254,87 @@ const QuestionDetail = () => {
                 })
                 .rpc();
     
-            toast.success(`Reward claimed! Tx: ${tx.slice(0, 6)}...${tx.slice(-6)}`, {
-                position: "top-center",
-                autoClose: 5000,
-                onClick: () =>
-                    window.open(getExplorerTxUrl(tx), "_blank"),
-            });
+            const confirmed = await confirmTransactionOnAllRpcs(tx);
     
-            // Manually update state to avoid waiting for fetch
+            if (confirmed) {
+                toast.success(
+                    <div>
+                        Reward claimed!{" "}
+                        <a
+                            href={getExplorerTxUrl(tx)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="underline text-blue-500"
+                        >
+                            View on Explorer
+                        </a>
+                    </div>,
+                    { position: "top-center", autoClose: 5000 }
+                );
+            } else {
+                toast.warn(
+                    <div>
+                        Transaction sent but not yet confirmed.{" "}
+                        <a
+                            href={getExplorerTxUrl(tx)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="underline text-yellow-500"
+                        >
+                            Check Explorer
+                        </a>
+                    </div>,
+                    { position: "top-center", autoClose: 7000 }
+                );
+            }
+    
+            // Update local state
             setUserVoterRecord((prev) => ({
                 ...prev,
                 claimed: true,
             }));
             setIsEligibleToClaim(false);
     
-            // Persist tx ID
+            // Save to localStorage
             localStorage.setItem(`claim_tx_${id}_${publicKey.toString()}`, tx);
     
-            // Optionally: refresh everything
+            // Refresh the question data
             fetchQuestion();
         } catch (error) {
-            toast.error(`Error claiming reward: ${error.message}`, {
-                position: "top-center",
-                autoClose: 5000,
-            });
+            console.error("Claim error:", error);
+    
+            const errorMsg = error?.message || "";
+            const knownErrors = [
+                "AlreadyClaimed",
+                "RewardAlreadyClaimed",
+                "VoterNotEligible",
+                "InvalidVault",
+            ];
+    
+            if (knownErrors.some(e => errorMsg.includes(e))) {
+                toast.warning(`Claim failed: ${errorMsg}`, { position: "top-center" });
+            } else if (tx) {
+                toast.info("Transaction sent. Please verify on Explorer.", {
+                    position: "top-center",
+                    autoClose: 7000,
+                    onClick: () => window.open(getExplorerTxUrl(tx), "_blank"),
+                });
+            } else {
+                toast.error(`Error claiming reward: ${errorMsg || "Unknown error"}`, {
+                    position: "top-center",
+                    autoClose: 6000,
+                });
+            }
         } finally {
             setClaiming(false);
         }
     };
     
+    
 
     const handleDeleteQuestion = async () => {
+        let tx = null;
+    
         try {
             if (!publicKey) {
                 toast.warning("Connect wallet first.");
@@ -281,19 +344,22 @@ const QuestionDetail = () => {
             setDeleting(true);
     
             const questionPublicKey = new PublicKey(id);
+    
             const [vaultPDA] = await PublicKey.findProgramAddress(
                 [Buffer.from("vault"), questionPublicKey.toBuffer()],
                 PROGRAM_ID
             );
+    
             const questionIdNumber = question.idNumber;
             const questionIdBuffer = Buffer.alloc(8);
             questionIdBuffer.writeBigUInt64LE(BigInt(questionIdNumber));
+    
             const [questionPDA] = await PublicKey.findProgramAddress(
                 [Buffer.from("question"), publicKey.toBuffer(), questionIdBuffer],
                 PROGRAM_ID
             );
     
-            const tx = await program.methods
+            tx = await program.methods
                 .deleteExpiredQuestion()
                 .accounts({
                     question: questionPDA,
@@ -303,26 +369,60 @@ const QuestionDetail = () => {
                 })
                 .rpc();
     
-            toast.success(`Question deleted! Tx: ${tx.slice(0, 6)}...${tx.slice(-6)}`, {
-                onClick: () =>
-                    window.open(getExplorerTxUrl(tx), "_blank"),
-            });
+            const confirmed = await confirmTransactionOnAllRpcs(tx);
     
-            // Redirect after a short delay
-            setTimeout(() => {
-                navigate("/");
-            }, 2000);
+            if (confirmed) {
+                toast.success(
+                    <div>
+                        Question deleted.{" "}
+                        <a
+                            href={getExplorerTxUrl(tx)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="underline text-blue-500"
+                        >
+                            View on Explorer
+                        </a>
+                    </div>,
+                    { position: "top-center", autoClose: 5000 }
+                );
+    
+                setTimeout(() => {
+                    navigate("/");
+                }, 2000);
+            } else {
+                toast.warning(
+                    <div>
+                        Deletion tx sent, but not yet confirmed.{" "}
+                        <a
+                            href={getExplorerTxUrl(tx)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="underline text-yellow-600"
+                        >
+                            Check Explorer
+                        </a>
+                    </div>,
+                    { position: "top-center", autoClose: 7000 }
+                );
+            }
+    
         } catch (error) {
             console.error("Delete failed:", error);
-            toast.error(`Delete failed: ${error.message}`);
+            toast.error(`Delete failed: ${error.message}`, {
+                position: "top-center",
+            });
         } finally {
             setDeleting(false);
         }
     };
     
+    
     const handleDrainUnclaimedReward = async () => {
+        let tx = null;
         try {
             setDraining(true);
+    
             const questionPublicKey = new PublicKey(id);
             const questionIdBuffer = Buffer.alloc(8);
             questionIdBuffer.writeBigUInt64LE(BigInt(question.idNumber));
@@ -337,7 +437,7 @@ const QuestionDetail = () => {
                 PROGRAM_ID
             );
     
-            const tx = await program.methods
+            tx = await program.methods
                 .drainUnclaimedReward()
                 .accounts({
                     question: questionPDA,
@@ -347,28 +447,72 @@ const QuestionDetail = () => {
                 })
                 .rpc();
     
-            toast.success(`Reward claimed! Tx: ${tx.slice(0, 6)}...${tx.slice(-6)}`, {
-                position: "top-center",
-                autoClose: 6000,
-                onClick: () => window.open(getExplorerTxUrl(tx), "_blank"),
-            });
-            setHasDrained(true);
-            fetchQuestion();
+            const confirmed = await confirmTransactionOnAllRpcs(tx);
+    
+            if (confirmed) {
+                toast.success(
+                    <div>
+                        Reward drained.{" "}
+                        <a
+                            href={getExplorerTxUrl(tx)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="underline text-blue-500"
+                        >
+                            View on Explorer
+                        </a>
+                    </div>,
+                    { position: "top-center", autoClose: 6000 }
+                );
+    
+                setHasDrained(true);
+                fetchQuestion();
+            } else {
+                toast.warning(
+                    <div>
+                        Transaction sent but not yet confirmed.{" "}
+                        <a
+                            href={getExplorerTxUrl(tx)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="underline text-yellow-600"
+                        >
+                            Check Explorer
+                        </a>
+                    </div>,
+                    { position: "top-center", autoClose: 7000 }
+                );
+            }
         } catch (error) {
-            console.error("Drain failed:", error);
-            toast.error(`Drain failed: ${error.message}`);
+            console.error("Sending transaction failed:", error);
+    
+            if (tx) {
+                toast.info("Transaction sent. Check Explorer to confirm.", {
+                    position: "top-center",
+                    autoClose: 7000,
+                    onClick: () => window.open(getExplorerTxUrl(tx), "_blank"),
+                });
+            } else {
+                toast.error(`Sending transaction failed: ${error?.message || "Unknown error"}`, {
+                    position: "top-center",
+                    autoClose: 6000,
+                });
+            }
         } finally {
             setDraining(false);
         }
     };
     
-    const handleReclaimRent = async () => {
-        try {
-            if (!publicKey) {
-                toast.warn("Please connect your wallet.");
-                return;
-            }
     
+    const handleReclaimRent = async () => {
+        if (!publicKey) {
+            toast.warn("Please connect your wallet.");
+            return;
+        }
+    
+        let tx = null;
+    
+        try {
             setReclaiming(true);
     
             const questionPublicKey = new PublicKey(id);
@@ -379,12 +523,13 @@ const QuestionDetail = () => {
     
             const questionIdBuffer = Buffer.alloc(8);
             questionIdBuffer.writeBigUInt64LE(BigInt(question.idNumber));
+    
             const [questionPDA] = await PublicKey.findProgramAddress(
                 [Buffer.from("question"), new PublicKey(question.asker).toBuffer(), questionIdBuffer],
                 PROGRAM_ID
             );
     
-            const tx = await program.methods
+            tx = await program.methods
                 .reclaimCommitOrLoserRent()
                 .accounts({
                     voter: publicKey,
@@ -393,26 +538,65 @@ const QuestionDetail = () => {
                 })
                 .rpc();
     
-            toast.success(`Rent reclaimed! Tx: ${tx.slice(0, 6)}...${tx.slice(-6)}`, {
-                onClick: () =>
-                    window.open(getExplorerTxUrl(tx), "_blank"),
-            });
+            const confirmed = await confirmTransactionOnAllRpcs(tx);
     
-            // Wait for confirmation before refresh
-            await connection.confirmTransaction(tx, "confirmed");
+            if (confirmed) {
+                toast.success(
+                    <div>
+                        Rent reclaimed.{" "}
+                        <a
+                            href={getExplorerTxUrl(tx)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="underline text-blue-500"
+                        >
+                            View on Explorer
+                        </a>
+                    </div>,
+                    {
+                        position: "top-center",
+                        autoClose: 6000,
+                    }
+                );
+            } else {
+                toast.warning(
+                    <div>
+                        Transaction sent but not yet confirmed.{" "}
+                        <a
+                            href={getExplorerTxUrl(tx)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="underline text-yellow-600"
+                        >
+                            Check Explorer
+                        </a>
+                    </div>,
+                    { position: "top-center", autoClose: 7000 }
+                );
+            }
     
-            // Delay state refresh just slightly to give chain time to update
+            // Slight delay before refreshing state
             setTimeout(() => {
-                fetchQuestion(); // properly refetch after confirmed reclaim
-            }, 500); // You can tweak this delay if needed
-    
+                fetchQuestion();
+            }, 500);
         } catch (error) {
             console.error("Reclaim failed:", error);
-            toast.error(`Reclaim failed: ${error.message}`);
+    
+            if (tx) {
+                toast.info("Transaction sent. Check Explorer to confirm.", {
+                    position: "top-center",
+                    onClick: () => window.open(getExplorerTxUrl(tx), "_blank"),
+                });
+            } else {
+                toast.error(`Reclaim failed: ${error?.message || "Unknown error"}`, {
+                    position: "top-center",
+                });
+            }
         } finally {
             setReclaiming(false);
         }
     };
+    
         
     
     const copyToClipboard = () => {
