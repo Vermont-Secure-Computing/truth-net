@@ -2,13 +2,9 @@ import { Connection, PublicKey } from "@solana/web3.js";
 
 export const RPC_LIST = [
   "https://go.getblock.us/86aac42ad4484f3c813079afc201451c",
-  "https://solana-rpc.publicnode.com",
-  "https://solana.drpc.org/",
   "https://solana.rpc.grove.city/v1/01fdb492",
   "https://solana.leorpc.com/?api_key=FREE",
   "https://public.rpc.solanavibestation.com/",
-  "https://solana.therpc.io",
-  "https://api.blockeden.xyz/solana/KeCh6p22EX5AeRHxMSmc",
   "https://solana.api.onfinality.io/public"
 ];
 
@@ -38,17 +34,24 @@ export const checkRpcHealth = async (rpcUrl) => {
 export const getWorkingRpcUrl = async () => {
   const userDefined = localStorage.getItem("solana_rpc_url");
 
-  // 1. User-defined but NOT in default list
+  // 1. User-defined custom RPC (not in our round-robin list)
   if (userDefined && !RPC_LIST.includes(userDefined)) {
     const healthy = await checkRpcHealth(userDefined);
     if (healthy) return userDefined;
 
-    // If unhealthy, fallback to round-robin
     console.warn("[RPC] Custom user RPC unhealthy, removing...");
     localStorage.removeItem("solana_rpc_url");
   }
 
-  // 2. Round-robin fallback among RPC_LIST
+  // 2. Reuse last working known RPC (even if from RPC_LIST)
+  if (userDefined && RPC_LIST.includes(userDefined)) {
+    const healthy = await checkRpcHealth(userDefined);
+    if (healthy) return userDefined;
+
+    console.warn(`[RPC] Previous working RPC unhealthy: ${userDefined}`);
+  }
+
+  // 3. Round-robin among RPC_LIST, starting from saved index
   const lastIndex = parseInt(localStorage.getItem("rpc_index") || "0", 10);
   const total = RPC_LIST.length;
 
@@ -57,20 +60,23 @@ export const getWorkingRpcUrl = async () => {
     const rpc = RPC_LIST[index];
 
     if (await checkRpcHealth(rpc)) {
-      // Set next index for next round
+      // Set next index for future attempts
       localStorage.setItem("rpc_index", ((index + 1) % total).toString());
 
-      // Optional: save to localStorage only if not already user-defined
+      // Save as currently working RPC
       localStorage.setItem("solana_rpc_url", rpc);
 
       return rpc;
     }
   }
 
-  // 3. Fallback to the first RPC (even if unhealthy)
-  console.warn("[RPC] No healthy RPC found. Using fallback.");
-  return RPC_LIST[0];
+  // 4. All failed — fallback to first (even if unhealthy)
+  console.error("[RPC] All RPC endpoints unhealthy, falling back to default");
+  const fallback = RPC_LIST[0];
+  localStorage.setItem("solana_rpc_url", fallback);
+  return fallback;
 };
+
 
 /**
  * Clears custom user RPC (used for debug or refresh).
