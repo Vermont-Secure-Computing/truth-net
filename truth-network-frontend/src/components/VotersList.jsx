@@ -7,7 +7,7 @@ import BN from "bn.js";
 import { getConstants } from "../constants";
 import "react-toastify/dist/ReactToastify.css";
 
-const { PROGRAM_ID, DEFAULT_RPC_URL } = getConstants();
+const { PROGRAM_ID, getWorkingRpcUrl } = getConstants();
 const clusterParam = import.meta.env.VITE_NETWORK === "mainnet" ? "" : "?cluster=devnet";
 // Define UserRecord structure
 class UserRecord {
@@ -41,12 +41,23 @@ const VotersList = () => {
   const [voters, setVoters] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
   const votersPerPage = 50;
+  const [connection, setConnection] = useState(null);
 
-  const connection = new Connection(DEFAULT_RPC_URL, "confirmed");
+  // const connection = new Connection(DEFAULT_RPC_URL, "confirmed");
 
   useEffect(() => {
-    fetchVoters();
+      (async () => {
+          const url = await getWorkingRpcUrl();
+          const conn = new Connection(url, "confirmed");
+          setConnection(conn);
+      })();
   }, []);
+
+  useEffect(() => {
+    if (connection) {
+      fetchVoters();
+    }
+  }, [connection]);
 
   const fetchVoters = async () => {
     try {

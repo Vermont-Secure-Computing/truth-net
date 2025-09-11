@@ -8,7 +8,7 @@ import "react-toastify/dist/ReactToastify.css";
 import { getConstants } from "../constants";
 import { getIdls } from "../idl";
 
-const { PROGRAM_ID, DEFAULT_RPC_URL } = getConstants();
+const { PROGRAM_ID, getWorkingRpcUrl } = getConstants();
 
 const QuestionsList = ({ refreshKey }) => {
   const [questions, setQuestions] = useState([]);
@@ -20,7 +20,7 @@ const QuestionsList = ({ refreshKey }) => {
 
   const navigate = useNavigate();
   const { publicKey, signTransaction, signAllTransactions } = useWallet();
-  const [connection] = useState(() => new web3.Connection(DEFAULT_RPC_URL, "confirmed"));
+  const [connection, setConnection] = useState(null);
   // const [program, setProgram] = useState(null);
   const { truthNetworkIDL } = getIdls();
   const wallet = useMemo(() => ({
@@ -29,31 +29,43 @@ const QuestionsList = ({ refreshKey }) => {
     signTransaction: async (tx) => tx,
   }), [publicKey]);
   const provider = useMemo(() => {
-    return new AnchorProvider(connection, wallet, { preflightCommitment: "processed" });
+      if (!connection) return null;
+      return new AnchorProvider(connection, wallet, { preflightCommitment: "processed" });
   }, [connection, wallet]);
+
   const program = useMemo(() => {
-    return new Program(truthNetworkIDL, provider);
+      if (!provider) return null;
+      return new Program(truthNetworkIDL, provider);
   }, [truthNetworkIDL, provider]);
+
 
   
   useEffect(() => {
-    if (!program) return;
+    if (!program || !connection) return;
   
-    // Always fetch when refreshKey changes
     fetchQuestions();
-  
-  }, [refreshKey, program]);
-  
-  useEffect(() => {
-    if (!program) return;
   
     // Set up polling only once
     const interval = setInterval(() => {
       fetchQuestions();
-    }, 300000); // 5 minutes
+    }, 300000);
   
     return () => clearInterval(interval);
-  }, [program]);
+  }, [program, connection]);
+
+  useEffect(() => {
+      (async () => {
+          const url = await getWorkingRpcUrl();
+          const conn = new web3.Connection(url, "confirmed");
+          setConnection(conn);
+      })();
+  }, []);
+  
+  // Separate effect only if you expect refreshKey changes later
+  useEffect(() => {
+    if (!program || !connection || !refreshKey) return;
+    fetchQuestions();
+  }, [refreshKey, program, connection]);
 
   const fetchQuestions = async () => {
     try {
@@ -170,7 +182,7 @@ const QuestionsList = ({ refreshKey }) => {
       ) {
         toast.error(
           <>
-            <div className="font-semibold">⚠ Solana RPC Connection Error</div>
+            <div className="font-semibold">Solana RPC Connection Error</div>
             <div>{err.message}</div>
             <div className="mt-2">
               You can try switching to a different RPC endpoint.
@@ -197,6 +209,7 @@ const QuestionsList = ({ refreshKey }) => {
             </div>
           </>,
           {
+            toastId: "solana-rpc-error",
             position: "top-center",
             autoClose: 12000,
           }
