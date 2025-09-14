@@ -240,158 +240,153 @@ const VoterDashboard = () => {
         } finally {
           setLoadingInvites(false);
         }
-      };
+    };
       
 
-      const nominateInvitee = async () => {
+    const nominateInvitee = async () => {
         if (!nomineeInput.trim()) {
-            toast.error("Please enter a wallet address.", { position: "top-center" });
-            return;
+          toast.error("Please enter a wallet address.", { position: "top-center" });
+          return;
         }
-    
+      
         try {
-            const nomineePubkey = new web3.PublicKey(nomineeInput.trim());
-    
-            const [invitePDA] = web3.PublicKey.findProgramAddressSync(
-                [Buffer.from("invite"), nomineePubkey.toBuffer()],
-                PROGRAM_ID
+          const nomineePubkey = new web3.PublicKey(nomineeInput.trim());
+      
+          const [invitePDA] = web3.PublicKey.findProgramAddressSync(
+            [Buffer.from("invite"), nomineePubkey.toBuffer()],
+            PROGRAM_ID
+          );
+      
+          const [userRecordPDA] = web3.PublicKey.findProgramAddressSync(
+            [Buffer.from("user_record"), publicKey.toBuffer()],
+            PROGRAM_ID
+          );
+      
+          const tx = await program.methods
+            .nominateInvitee(nomineePubkey)
+            .accounts({
+              invite: invitePDA,
+              userRecord: userRecordPDA,
+              inviter: publicKey,
+              systemProgram: web3.SystemProgram.programId,
+            })
+            .transaction();
+      
+          tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+          tx.feePayer = publicKey;
+      
+          const signedTx = await signTransaction(tx);
+          const sig = await connection.sendRawTransaction(signedTx.serialize());
+          const confirmed = await confirmTransactionOnAllRpcs(sig);
+      
+          if (confirmed) {
+            toast.success(
+              <div>
+                Invitee nominated.{" "}
+                <a
+                  href={getExplorerTxUrl(sig)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline text-blue-500"
+                >
+                  View on Explorer
+                </a>
+              </div>,
+              { position: "top-center", autoClose: 6000 }
             );
-    
-            const [userRecordPDA] = web3.PublicKey.findProgramAddressSync(
-                [Buffer.from("user_record"), publicKey.toBuffer()],
-                PROGRAM_ID
+          } else {
+            toast.warning(
+              <div>
+                Transaction sent, not yet confirmed.{" "}
+                <a
+                  href={getExplorerTxUrl(sig)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline text-yellow-600"
+                >
+                  Check Explorer
+                </a>
+              </div>,
+              { position: "top-center", autoClose: 6000 }
             );
-    
-            const tx = await program.methods
-                .nominateInvitee(nomineePubkey)
-                .accounts({
-                    invite: invitePDA,
-                    userRecord: userRecordPDA,
-                    inviter: publicKey,
-                    systemProgram: web3.SystemProgram.programId,
-                })
-                .rpc();
-    
-            const confirmed = await confirmTransactionOnAllRpcs(tx);
-    
-            if (confirmed) {
-                toast.success(
-                    <div>
-                        Invitee nominated.{" "}
-                        <a
-                            href={getExplorerTxUrl(tx)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="underline text-blue-500"
-                        >
-                            View on Explorer
-                        </a>
-                    </div>,
-                    {
-                        position: "top-center",
-                        autoClose: 6000,
-                    }
-                );
-            } else {
-                toast.warning(
-                    <div>
-                        Transaction sent, but not yet confirmed.{" "}
-                        <a
-                            href={getExplorerTxUrl(tx)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="underline text-yellow-600"
-                        >
-                            Check Explorer
-                        </a>
-                    </div>,
-                    {
-                        position: "top-center",
-                        autoClose: 6000,
-                    }
-                );
-            }
-    
-            setNominateModalOpen(false);
-            setNomineeInput("");
+          }
+      
+          setNominateModalOpen(false);
+          setNomineeInput("");
         } catch (error) {
-            toast.error(`Failed to nominate: ${error.message}`, {
-                position: "top-center",
-                autoClose: 6000,
-            });
-            console.error("Nominate error", error);
+          toast.error(`Failed to nominate: ${error.message}`, {
+            position: "top-center",
+            autoClose: 6000,
+          });
+          console.error("Nominate error", error);
         }
-    };    
+    };
+          
 
     const deleteInvite = async (inviteePubkey) => {
         if (!inviteePubkey) return;
-    
-        let tx = null;
-    
+      
         try {
-            const [invitePDA] = web3.PublicKey.findProgramAddressSync(
-                [Buffer.from("invite"), inviteePubkey.toBuffer()],
-                PROGRAM_ID
+          const [invitePDA] = web3.PublicKey.findProgramAddressSync(
+            [Buffer.from("invite"), inviteePubkey.toBuffer()],
+            PROGRAM_ID
+          );
+      
+          const tx = await program.methods
+            .deleteInvite()
+            .accounts({
+              invite: invitePDA,
+              inviter: publicKey,
+            })
+            .transaction();
+      
+          tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+          tx.feePayer = publicKey;
+      
+          const signedTx = await signTransaction(tx);
+          const sig = await connection.sendRawTransaction(signedTx.serialize());
+          const confirmed = await confirmTransactionOnAllRpcs(sig);
+      
+          if (confirmed) {
+            toast.success(
+              <div>
+                Invitation refund claimed.{" "}
+                <a
+                  href={getExplorerTxUrl(sig)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline text-blue-500"
+                >
+                  View on Explorer
+                </a>
+              </div>,
+              { position: "top-center", autoClose: 6000 }
             );
-    
-            tx = await program.methods
-                .deleteInvite()
-                .accounts({
-                    invite: invitePDA,
-                    inviter: publicKey,
-                })
-                .rpc();
-    
-            const confirmed = await confirmTransactionOnAllRpcs(tx);
-    
-            if (confirmed) {
-                toast.success(
-                    <div>
-                        Invitation refund claimed.{" "}
-                        <a
-                            href={getExplorerTxUrl(tx)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="underline text-blue-500"
-                        >
-                            View on Explorer
-                        </a>
-                    </div>,
-                    {
-                        position: "top-center",
-                        autoClose: 6000,
-                    }
-                );
-            } else {
-                toast.warning(
-                    <div>
-                        Transaction sent but not confirmed yet.{" "}
-                        <a
-                            href={getExplorerTxUrl(tx)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="underline text-yellow-600"
-                        >
-                            Check Explorer
-                        </a>
-                    </div>,
-                    {
-                        position: "top-center",
-                        autoClose: 6000,
-                    }
-                );
-            }
-    
-            fetchMyInvites(); // Refresh list after success
+          } else {
+            toast.warning(
+              <div>
+                Transaction sent but not confirmed yet.{" "}
+                <a
+                  href={getExplorerTxUrl(sig)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline text-yellow-600"
+                >
+                  Check Explorer
+                </a>
+              </div>,
+              { position: "top-center", autoClose: 6000 }
+            );
+          }
+      
+          fetchMyInvites(); // Refresh after success
         } catch (err) {
-            console.error("Delete invite failed", err);
-            toast.error(`Delete failed: ${err.message}`, {
-                position: "top-center",
-            });
+          console.error("Delete invite failed", err);
+          toast.error(`Delete failed: ${err.message}`, {
+            position: "top-center",
+          });
         }
     };
-    
-      
       
     
     const fetchUserRecord = async () => {

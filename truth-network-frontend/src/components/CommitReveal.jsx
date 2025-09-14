@@ -88,159 +88,186 @@ const CommitReveal = ({ question, onClose, refreshQuestions }) => {
 
     const commitVote = async () => {
         if (!publicKey || !password || !program) return;
-
+      
+        let sig = null;
+      
         try {
-            setLoading(true);
-            const commitment = Buffer.from(keccak256(selectedOption + password), "hex");
-            const questionPubKey = new PublicKey(question.id);
-
-            const [voterRecordPDA] = PublicKey.findProgramAddressSync([
-                Buffer.from("vote"),
-                publicKey.toBuffer(),
-                questionPubKey.toBuffer(),
-            ], PROGRAM_ID);
-
-            const [userRecordPDA] = PublicKey.findProgramAddressSync([
-                Buffer.from("user_record"),
-                publicKey.toBuffer(),
-            ], PROGRAM_ID);
-
-            const tx = await program.methods.commitVote(commitment).accounts({
-                voter: publicKey,
-                question: questionPubKey,
-                voterRecord: voterRecordPDA,
-                userRecord: userRecordPDA,
-                systemProgram: web3.SystemProgram.programId,
-            }).rpc();
-
-            const confirmed = await confirmTransactionOnAllRpcs(tx);
-
-            if (confirmed) {
-                toast.success(
-                    <div>
-                        Vote committed!{" "}
-                        <a
-                            href={getExplorerTxUrl(tx)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="underline text-blue-500"
-                        >
-                            View on Explorer
-                        </a>
-                    </div>,
-                    { position: "top-center", autoClose: 5000 }
-                );
-            } else {
-                toast.warn(
-                    <div>
-                        Vote sent but not confirmed yet.{" "}
-                        <a
-                            href={getExplorerTxUrl(tx)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="underline text-yellow-500"
-                        >
-                            Check Explorer
-                        </a>
-                    </div>,
-                    { position: "top-center", autoClose: 8000 }
-                );
-            }
-
-
-            setHasCommitted(true);
-            setCanReveal(true);
-            if (refreshQuestions) refreshQuestions();
+          setLoading(true);
+          const commitment = Buffer.from(keccak256(selectedOption + password), "hex");
+          const questionPubKey = new PublicKey(question.id);
+      
+          const [voterRecordPDA] = PublicKey.findProgramAddressSync(
+            [Buffer.from("vote"), publicKey.toBuffer(), questionPubKey.toBuffer()],
+            PROGRAM_ID
+          );
+      
+          const [userRecordPDA] = PublicKey.findProgramAddressSync(
+            [Buffer.from("user_record"), publicKey.toBuffer()],
+            PROGRAM_ID
+          );
+      
+          // --- Build tx ---
+          const tx = await program.methods
+            .commitVote(commitment)
+            .accounts({
+              voter: publicKey,
+              question: questionPubKey,
+              voterRecord: voterRecordPDA,
+              userRecord: userRecordPDA,
+              systemProgram: web3.SystemProgram.programId,
+            })
+            .transaction();
+      
+          // Add blockhash + fee payer
+          tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+          tx.feePayer = publicKey;
+      
+          // Sign & send
+          const signedTx = await signTransaction(tx);
+          sig = await connection.sendRawTransaction(signedTx.serialize());
+      
+          // Confirm
+          const confirmed = await confirmTransactionOnAllRpcs(sig);
+      
+          if (confirmed) {
+            toast.success(
+              <div>
+                Vote committed!{" "}
+                <a
+                  href={getExplorerTxUrl(sig)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline text-blue-500"
+                >
+                  View on Explorer
+                </a>
+              </div>,
+              { position: "top-center", autoClose: 5000 }
+            );
+          } else {
+            toast.warn(
+              <div>
+                Vote sent but not confirmed yet.{" "}
+                <a
+                  href={getExplorerTxUrl(sig)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline text-yellow-500"
+                >
+                  Check Explorer
+                </a>
+              </div>,
+              { position: "top-center", autoClose: 8000 }
+            );
+          }
+      
+          setHasCommitted(true);
+          setCanReveal(true);
+          if (refreshQuestions) refreshQuestions();
         } catch (e) {
-            console.error("Commit error:", e);
-            if (e?.message?.includes("already in use") || e?.message?.includes("failed to find vote")) {
-                toast.warn("Vote may already be committed. Check Explorer to verify.");
-            } else {
-                toast.error("Commit failed: " + (e?.message || "Unknown error"));
-            }
+          console.error("Commit error:", e);
+          if (e?.message?.includes("already in use") || e?.message?.includes("failed to find vote")) {
+            toast.warn("Vote may already be committed. Check Explorer to verify.");
+          } else {
+            toast.error("Commit failed: " + (e?.message || "Unknown error"));
+          }
         } finally {
-            setTimeout(() => {
-                setLoading(false);
-                setPassword("");
-            }, 500);
+          setTimeout(() => {
+            setLoading(false);
+            setPassword("");
+          }, 500);
         }
-    };
+    };      
 
     const revealVote = async () => {
         if (!publicKey || !password || !program) return;
-
+      
+        let sig = null;
+      
         try {
-            setLoading(true);
-            const questionPubKey = new PublicKey(question.id);
-
-            const [voterRecordPDA] = PublicKey.findProgramAddressSync([
-                Buffer.from("vote"),
-                publicKey.toBuffer(),
-                questionPubKey.toBuffer(),
-            ], PROGRAM_ID);
-
-            const [userRecordPDA] = PublicKey.findProgramAddressSync([
-                Buffer.from("user_record"),
-                publicKey.toBuffer(),
-            ], PROGRAM_ID);
-
-            const tx = await program.methods.revealVote(password).accounts({
-                voter: publicKey,
-                question: questionPubKey,
-                voterRecord: voterRecordPDA,
-                userRecord: userRecordPDA,
-            }).rpc();
-
-            const confirmed = await confirmTransactionOnAllRpcs(tx);
-
-            if (confirmed) {
-                toast.success(
-                    <div>
-                        Vote revealed!{" "}
-                        <a
-                            href={getExplorerTxUrl(tx)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="underline text-blue-500"
-                        >
-                            View on Explorer
-                        </a>
-                    </div>,
-                    { position: "top-center", autoClose: 5000 }
-                );
-            } else {
-                toast.warn(
-                    <div>
-                        Transaction sent but not yet confirmed.{" "}
-                        <a
-                            href={getExplorerTxUrl(tx)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="underline text-yellow-500"
-                        >
-                            Check Explorer
-                        </a>
-                    </div>,
-                    { position: "top-center", autoClose: 8000 }
-                );
-            }
-
-
-            setCanReveal(false);
+          setLoading(true);
+          const questionPubKey = new PublicKey(question.id);
+      
+          const [voterRecordPDA] = PublicKey.findProgramAddressSync(
+            [Buffer.from("vote"), publicKey.toBuffer(), questionPubKey.toBuffer()],
+            PROGRAM_ID
+          );
+      
+          const [userRecordPDA] = PublicKey.findProgramAddressSync(
+            [Buffer.from("user_record"), publicKey.toBuffer()],
+            PROGRAM_ID
+          );
+      
+          // --- Build tx ---
+          const tx = await program.methods
+            .revealVote(password)
+            .accounts({
+              voter: publicKey,
+              question: questionPubKey,
+              voterRecord: voterRecordPDA,
+              userRecord: userRecordPDA,
+            })
+            .transaction();
+      
+          // Add blockhash + fee payer
+          tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+          tx.feePayer = publicKey;
+      
+          // Sign & send
+          const signedTx = await signTransaction(tx);
+          sig = await connection.sendRawTransaction(signedTx.serialize());
+      
+          // Confirm
+          const confirmed = await confirmTransactionOnAllRpcs(sig);
+      
+          if (confirmed) {
+            toast.success(
+              <div>
+                Vote revealed!{" "}
+                <a
+                  href={getExplorerTxUrl(sig)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline text-blue-500"
+                >
+                  View on Explorer
+                </a>
+              </div>,
+              { position: "top-center", autoClose: 5000 }
+            );
+          } else {
+            toast.warn(
+              <div>
+                Transaction sent but not yet confirmed.{" "}
+                <a
+                  href={getExplorerTxUrl(sig)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline text-yellow-500"
+                >
+                  Check Explorer
+                </a>
+              </div>,
+              { position: "top-center", autoClose: 8000 }
+            );
+          }
+      
+          setCanReveal(false);
         } catch (e) {
-            console.error("Reveal error:", e);
-            if (e?.message?.includes("InvalidReveal")) {
-                toast.error("Wrong password. Try again.");
-            } else {
-                toast.error("Reveal failed: " + (e?.message || "Unknown error"));
-            }
+          console.error("Reveal error:", e);
+          if (e?.message?.includes("InvalidReveal")) {
+            toast.error("Wrong password. Try again.");
+          } else {
+            toast.error("Reveal failed: " + (e?.message || "Unknown error"));
+          }
         } finally {
-            setTimeout(() => {
-                setLoading(false);
-                setPassword("");
-            }, 500);
+          setTimeout(() => {
+            setLoading(false);
+            setPassword("");
+          }, 500);
         }
     };
+      
 
     const now = Date.now() / 1000;
     const isCommitTimeOver = now > question.commitEndTime;
@@ -283,30 +310,47 @@ const CommitReveal = ({ question, onClose, refreshQuestions }) => {
                     onClick={commitVote} 
                     disabled={loading}
                     className={`w-full px-4 py-3 rounded-lg transition duration-300 ${
-                        loading ? "bg-gray-400 cursor-not-allowed" : "bg-blue-500 text-white hover:bg-blue-600"
+                    loading ? "bg-gray-400 cursor-not-allowed" : "bg-blue-500 text-white hover:bg-blue-600"
                     }`}
                 >
-                    {loading ? "Committing..." : "Commit Vote"}
+                    {loading ? (
+                    <span className="flex items-center justify-center">
+                        Committing<span className="dot-animate">.</span>
+                        <span className="dot-animate dot2">.</span>
+                        <span className="dot-animate dot3">.</span>
+                    </span>
+                    ) : (
+                    "Commit Vote"
+                    )}
                 </button>
             )}
 
             {isRevealTime && (
                 blockedReveal ? (
                     <p className="text-red-600 text-center font-medium">
-                        You rejoined after committing. You can't reveal this vote.
+                    You rejoined after committing. You can't reveal this vote.
                     </p>
                 ) : canReveal && (
                     <button
-                        onClick={revealVote}
-                        disabled={loading}
-                        className={`w-full px-4 py-3 rounded-lg transition duration-300 ${
-                            loading ? "bg-gray-400 cursor-not-allowed" : "bg-green-500 text-white hover:bg-green-600"
-                        }`}
+                    onClick={revealVote}
+                    disabled={loading}
+                    className={`w-full px-4 py-3 rounded-lg transition duration-300 ${
+                        loading ? "bg-gray-400 cursor-not-allowed" : "bg-green-500 text-white hover:bg-green-600"
+                    }`}
                     >
-                        {loading ? "Revealing..." : "Reveal Vote"}
+                    {loading ? (
+                        <span className="flex items-center justify-center">
+                        Revealing<span className="dot-animate">.</span>
+                        <span className="dot-animate dot2">.</span>
+                        <span className="dot-animate dot3">.</span>
+                        </span>
+                    ) : (
+                        "Reveal Vote"
+                    )}
                     </button>
                 )
             )}
+
         </div>
     );
 };
