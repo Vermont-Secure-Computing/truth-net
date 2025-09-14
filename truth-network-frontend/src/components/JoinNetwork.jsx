@@ -110,99 +110,97 @@ const JoinNetwork = ({ compact = false, updateIsMember }) => {
 
   const confirmJoin = async () => {
     try {
-        setLoading(true);
-
-        const [userRecordPDA] = PublicKey.findProgramAddressSync(
-            [Buffer.from("user_record"), publicKey.toBuffer()],
-            PROGRAM_ID
-        );
-
-        const [invitePDA] = PublicKey.findProgramAddressSync(
-            [Buffer.from("invite"), publicKey.toBuffer()],
-            PROGRAM_ID
-        );
-
-        let inviteExists = false;
-
-        try {
-            const inviteAccount = await program.account.invite.fetch(invitePDA);
-            if (inviteAccount) {
-                inviteExists = true;
-                console.log("Invite found from inviter:", inviteAccount.inviter.toBase58());
-            }
-        } catch (fetchErr) {
-            if (fetchErr.message.includes("Account does not exist")) {
-                console.log("No invite account found (joining without invite).");
-            } else {
-                console.error("Error checking invite PDA:", fetchErr);
-            }
+      setLoading(true);
+  
+      const [userRecordPDA] = PublicKey.findProgramAddressSync(
+        [Buffer.from("user_record"), publicKey.toBuffer()],
+        PROGRAM_ID
+      );
+  
+      const [invitePDA] = PublicKey.findProgramAddressSync(
+        [Buffer.from("invite"), publicKey.toBuffer()],
+        PROGRAM_ID
+      );
+  
+      let inviteExists = false;
+      try {
+        const inviteAccount = await program.account.invite.fetch(invitePDA);
+        if (inviteAccount) {
+          inviteExists = true;
+          console.log("Invite found from inviter:", inviteAccount.inviter.toBase58());
         }
-
-        const accounts = {
-            globalState: statePDA,
-            user: publicKey,
-            userRecord: userRecordPDA,
-            systemProgram: web3.SystemProgram.programId,
-            invite: inviteExists ? invitePDA : null,
-        };
-
-        const tx = await program.methods
-            .joinNetwork()
-            .accounts(accounts)
-            .rpc();
-
-        const confirmed = await confirmTransactionOnAllRpcs(tx);
-
-        if (confirmed) {
-            toast.success(
-                <div>
-                    Successfully joined the network.{" "}
-                    <a
-                        href={getExplorerTxUrl(tx)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="underline text-blue-500"
-                    >
-                        View on Explorer
-                    </a>
-                </div>,
-                {
-                    position: "top-center",
-                    autoClose: 6000,
-                }
-            );
+      } catch (err) {
+        if (err.message.includes("Account does not exist")) {
+          console.log("No invite account found (joining without invite).");
         } else {
-            toast.warning(
-                <div>
-                    Transaction sent but not yet confirmed.{" "}
-                    <a
-                        href={getExplorerTxUrl(tx)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="underline text-yellow-600"
-                    >
-                        Check Explorer
-                    </a>
-                </div>,
-                {
-                    position: "top-center",
-                    autoClose: 6000,
-                }
-            );
+          console.error("Error checking invite PDA:", err);
         }
-
-        await fetchMembership();
-        await fetchState();
+      }
+  
+      const accounts = {
+        globalState: statePDA,
+        user: publicKey,
+        userRecord: userRecordPDA,
+        systemProgram: web3.SystemProgram.programId,
+        invite: inviteExists ? invitePDA : null,
+      };
+  
+      // --- Build tx manually instead of .rpc() ---
+      const tx = await program.methods
+        .joinNetwork()
+        .accounts(accounts)
+        .transaction();
+  
+      tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+      tx.feePayer = publicKey;
+  
+      const signedTx = await signTransaction(tx);
+      const sig = await connection.sendRawTransaction(signedTx.serialize());
+  
+      const confirmed = await confirmTransactionOnAllRpcs(sig);
+  
+      if (confirmed) {
+        toast.success(
+          <div>
+            Successfully joined the network.{" "}
+            <a
+              href={getExplorerTxUrl(sig)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline text-blue-500"
+            >
+              View on Explorer
+            </a>
+          </div>,
+          { position: "top-center", autoClose: 6000 }
+        );
+      } else {
+        toast.warning(
+          <div>
+            Transaction sent but not yet confirmed.{" "}
+            <a
+              href={getExplorerTxUrl(sig)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline text-yellow-600"
+            >
+              Check Explorer
+            </a>
+          </div>,
+          { position: "top-center", autoClose: 6000 }
+        );
+      }
+  
+      await fetchMembership();
+      await fetchState();
     } catch (error) {
-        toast.error(`Failed to join: ${error.message}`, { position: "top-center" });
-        console.error("Failed to join network:", error);
+      toast.error(`Failed to join: ${error.message}`, { position: "top-center" });
+      console.error("Failed to join network:", error);
     } finally {
-        setLoading(false);
+      setLoading(false);
     }
   };
-
-   
-
+  
   const leaveNetworkHandler = async () => {
     try {
       setLoading(true);
@@ -217,6 +215,7 @@ const JoinNetwork = ({ compact = false, updateIsMember }) => {
         PROGRAM_ID
       );
   
+      // --- Build tx manually ---
       const tx = await program.methods
         .leaveNetwork()
         .accounts({
@@ -225,16 +224,22 @@ const JoinNetwork = ({ compact = false, updateIsMember }) => {
           userRecord: userRecordPDA,
           systemProgram: web3.SystemProgram.programId,
         })
-        .rpc();
+        .transaction();
   
-      const confirmed = await confirmTransactionOnAllRpcs(tx);
+      tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+      tx.feePayer = publicKey;
+  
+      const signedTx = await signTransaction(tx);
+      const sig = await connection.sendRawTransaction(signedTx.serialize());
+  
+      const confirmed = await confirmTransactionOnAllRpcs(sig);
   
       if (confirmed) {
         toast.success(
           <div>
             Successfully left the network.{" "}
             <a
-              href={getExplorerTxUrl(tx)}
+              href={getExplorerTxUrl(sig)}
               target="_blank"
               rel="noopener noreferrer"
               className="underline text-blue-500"
@@ -242,17 +247,14 @@ const JoinNetwork = ({ compact = false, updateIsMember }) => {
               View on Explorer
             </a>
           </div>,
-          {
-            position: "top-center",
-            autoClose: 6000,
-          }
+          { position: "top-center", autoClose: 6000 }
         );
       } else {
         toast.warning(
           <div>
             Transaction sent but not yet confirmed.{" "}
             <a
-              href={getExplorerTxUrl(tx)}
+              href={getExplorerTxUrl(sig)}
               target="_blank"
               rel="noopener noreferrer"
               className="underline text-yellow-600"
@@ -260,10 +262,7 @@ const JoinNetwork = ({ compact = false, updateIsMember }) => {
               Check Explorer
             </a>
           </div>,
-          {
-            position: "top-center",
-            autoClose: 6000,
-          }
+          { position: "top-center", autoClose: 6000 }
         );
       }
   
@@ -275,6 +274,7 @@ const JoinNetwork = ({ compact = false, updateIsMember }) => {
       setLoading(false);
     }
   };
+  
   
 
   const renderButton = () =>

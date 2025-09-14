@@ -1,18 +1,17 @@
 import React, { useState, useMemo, useEffect } from "react";
-import { PublicKey, Connection, clusterApiUrl } from "@solana/web3.js";
+import { PublicKey } from "@solana/web3.js";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { Program, AnchorProvider, web3, BN } from "@coral-xyz/anchor";
-import { toast } from "react-toastify"; // Import toast
-import "react-toastify/dist/ReactToastify.css"; // Import styles
+import { toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 import { useNavigate } from "react-router-dom";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { getConstants } from "../constants";
 import { getIdls } from "../idl";
+import { confirmTransactionOnAllRpcs } from "../utils/confirmWithFallback";
 
-const { PROGRAM_ID, getWorkingRpcUrl } = getConstants();
-
-
+const { PROGRAM_ID, getWorkingRpcUrl, getExplorerTxUrl } = getConstants();
 
 const QuestionForm = ({ triggerRefresh, onClose }) => {
   const { publicKey, signTransaction, signAllTransactions } = useWallet();
@@ -22,50 +21,27 @@ const QuestionForm = ({ triggerRefresh, onClose }) => {
   const [revealEndTime, setRevealEndTime] = useState(null);
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
-  const [pendingCreate, setPendingCreate] = useState(false);
-  // const [program, setProgram] = useState(null);
   const [connection, setConnection] = useState(null);
+
   const { truthNetworkIDL } = getIdls();
   const wallet = { publicKey, signTransaction, signAllTransactions };
   const provider = useMemo(() => {
-      if (!connection) return null;
-      return new AnchorProvider(connection, wallet, { preflightCommitment: "processed" });
+    if (!connection) return null;
+    return new AnchorProvider(connection, wallet, { preflightCommitment: "processed" });
   }, [connection, wallet]);
   const program = useMemo(() => {
-      if (!provider) return null;
-      return new Program(truthNetworkIDL, provider);
+    if (!provider) return null;
+    return new Program(truthNetworkIDL, provider);
   }, [truthNetworkIDL, provider]);
-  // const program = new Program(idl, provider);
+
   const navigate = useNavigate();
 
-  // useEffect(() => {
-  //   const setupProgram = async () => {
-  //     try {
-  //       if (!publicKey || !signTransaction || !signAllTransactions) return;
-  
-  //       const idl = await getIDL();
-  //       const walletAdapter = { publicKey, signTransaction, signAllTransactions };
-  //       const provider = new AnchorProvider(connection, walletAdapter, {
-  //         preflightCommitment: "processed",
-  //       });
-  
-  //       const programInstance = new Program(idl || idl, provider);
-  //       setProgram(programInstance);
-  //     } catch (error) {
-  //       console.error("Failed to initialize program:", error);
-  //       toast.error("Failed to initialize program.");
-  //     }
-  //   };
-  
-  //   setupProgram();
-  // }, [publicKey, signTransaction, signAllTransactions]);
-
   useEffect(() => {
-      (async () => {
-          const rpc = await getWorkingRpcUrl();
-          const conn = new web3.Connection(rpc, "confirmed");
-          setConnection(conn);
-      })();
+    (async () => {
+      const rpc = await getWorkingRpcUrl();
+      const conn = new web3.Connection(rpc, "confirmed", { wsEndpoint: null }); // disable WS
+      setConnection(conn);
+    })();
   }, []);
 
   const createQuestion = async () => {
@@ -82,21 +58,26 @@ const QuestionForm = ({ triggerRefresh, onClose }) => {
       return;
     }
 
-    setLoading(true); // Start loading state
+    setLoading(true);
 
     const rewardLamports = new BN(parseFloat(reward) * 1_000_000_000);
     const commitEndTimeTimestamp = new BN(Math.floor(new Date(commitEndTime).getTime() / 1000));
     const revealEndTimeTimestamp = new BN(Math.floor(new Date(revealEndTime).getTime() / 1000));
 
+    let sig = null;
+
     try {
-      // Derive the question counter PDA.
+      // --- Question Counter PDA ---
       const [questionCounterPDA] = await PublicKey.findProgramAddress(
         [Buffer.from("question_counter"), publicKey.toBuffer()],
         PROGRAM_ID
       );
 
-      let questionCounterAccount = await program.account.questionCounter.fetch(questionCounterPDA).catch(() => null);
+      let questionCounterAccount = await program.account.questionCounter
+        .fetch(questionCounterPDA)
+        .catch(() => null);
 
+      // --- If no counter, initialize it ---
       if (!questionCounterAccount) {
         toast.info("Initializing question counter...", { position: "top-center" });
 
@@ -107,7 +88,14 @@ const QuestionForm = ({ triggerRefresh, onClose }) => {
             asker: publicKey,
             systemProgram: web3.SystemProgram.programId,
           })
-          .rpc();
+          .transaction();
+
+        tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+        tx.feePayer = publicKey;
+
+        const signedTx = await signTransaction(tx);
+        sig = await connection.sendRawTransaction(signedTx.serialize());
+        await confirmTransactionOnAllRpcs(sig);
 
         questionCounterAccount = await program.account.questionCounter.fetch(questionCounterPDA);
       }
@@ -116,19 +104,19 @@ const QuestionForm = ({ triggerRefresh, onClose }) => {
       const questionCountBN = new BN(questionCount);
       const questionCountBuffer = questionCountBN.toArrayLike(Buffer, "le", 8);
 
-      // Derive the question PDA.
+      // --- Question PDA ---
       const [questionPDA] = await PublicKey.findProgramAddress(
         [Buffer.from("question"), publicKey.toBuffer(), questionCountBuffer],
         PROGRAM_ID
       );
 
-      // Derive the vault PDA.
+      // --- Vault PDA ---
       const [vaultPDA] = await PublicKey.findProgramAddress(
         [Buffer.from("vault"), questionPDA.toBuffer()],
         PROGRAM_ID
       );
 
-
+      // --- Build tx for createQuestion ---
       const tx = await program.methods
         .createQuestion(questionText, rewardLamports, commitEndTimeTimestamp, revealEndTimeTimestamp)
         .accounts({
@@ -138,19 +126,51 @@ const QuestionForm = ({ triggerRefresh, onClose }) => {
           vault: vaultPDA,
           systemProgram: web3.SystemProgram.programId,
         })
-        .rpc();
+        .transaction();
 
-      toast.success(`Event Created! `, {
-        position: "top-center",
-        autoClose: 5000,
-        onClick: () => window.open(`https://explorer.solana.com/tx/${tx}?cluster=mainnet-beta`, "_blank"),
-      });
+      tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+      tx.feePayer = publicKey;
+
+      const signedTx = await signTransaction(tx);
+      sig = await connection.sendRawTransaction(signedTx.serialize());
+
+      const confirmed = await confirmTransactionOnAllRpcs(sig);
+
+      if (confirmed) {
+        toast.success(
+          <div>
+            Event created!{" "}
+            <a
+              href={getExplorerTxUrl(sig)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline text-blue-500"
+            >
+              View on Explorer
+            </a>
+          </div>,
+          { position: "top-center", autoClose: 6000 }
+        );
+      } else {
+        toast.warning(
+          <div>
+            Transaction sent but not yet confirmed.{" "}
+            <a
+              href={getExplorerTxUrl(sig)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline text-yellow-600"
+            >
+              Check Explorer
+            </a>
+          </div>,
+          { position: "top-center", autoClose: 7000 }
+        );
+      }
 
       window.dispatchEvent(new CustomEvent("questionCreated"));
+      triggerRefresh();
 
-      triggerRefresh()
-
-      // Reset form fields after success
       setQuestionText("");
       setReward("");
       setCommitEndTime("");
@@ -158,12 +178,13 @@ const QuestionForm = ({ triggerRefresh, onClose }) => {
       onClose?.();
       navigate("/");
     } catch (error) {
+      console.error("Create question error:", error);
       toast.error(`Failed to create event: ${error.message}`, {
         position: "top-center",
         autoClose: 5000,
       });
     } finally {
-      setLoading(false); // Stop loading state
+      setLoading(false);
     }
   };
 
@@ -172,19 +193,16 @@ const QuestionForm = ({ triggerRefresh, onClose }) => {
       toast.warn("⚠ All fields are required.", { position: "top-center" });
       return;
     }
-  
     if (questionText.trim().length < 10) {
       toast.warn("⚠ Event must be at least 10 characters.", { position: "top-center" });
       return;
     }
-  
     setShowModal(true);
   };
 
   const getMinTime = (selectedDate) => {
     const now = new Date();
-    if (!selectedDate) return now; // prevent error when date is null
-  
+    if (!selectedDate) return now;
     const selected = new Date(selectedDate);
     if (
       selected.getFullYear() === now.getFullYear() &&
@@ -197,33 +215,32 @@ const QuestionForm = ({ triggerRefresh, onClose }) => {
       startOfDay.setHours(0, 0, 0, 0);
       return startOfDay;
     }
-  };  
+  };
 
   return (
-  
-        
     <div className="max-w-7xl mx-auto px-6 py-6">
       <div className="flex flex-col gap-4">
-        {/* Question Input */}
-        <input 
-          type="text" 
-          placeholder="Enter your event statement" 
-          value={questionText} 
-          onChange={(e) => setQuestionText(e.target.value)} 
-          className="p-3 border rounded-lg w-full focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
+        {/* Inputs … */}
+        <div className="flex flex-col gap-4">
+          {/* Question Input */}
+          <input 
+            type="text" 
+            placeholder="Enter your event statement" 
+            value={questionText} 
+            onChange={(e) => setQuestionText(e.target.value)} 
+            className="p-3 border rounded-lg w-full focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
 
-        {/* Reward Input */}
-        <input 
-          type="number" 
-          placeholder="Reward (SOL)" 
-          value={reward} 
-          onChange={(e) => setReward(e.target.value)} 
-          className="p-3 border rounded-lg w-full focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
+          {/* Reward Input */}
+          <input 
+            type="number" 
+            placeholder="Reward (SOL)" 
+            value={reward} 
+            onChange={(e) => setReward(e.target.value)} 
+            className="p-3 border rounded-lg w-full focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
 
-        {/* Commit End Time */}
-        <div className="relative z-20 w-full">
+          {/* Commit End Time */}
           <DatePicker
             selected={commitEndTime}
             onChange={(date) => setCommitEndTime(date)}
@@ -234,17 +251,11 @@ const QuestionForm = ({ triggerRefresh, onClose }) => {
             maxTime={new Date(new Date().setHours(23, 59, 59, 999))}
             timeCaption="Time"
             dateFormat="yyyy-MM-dd HH:mm"
-            placeholderText="Select commit end time."
-            wrapperClassName="w-full"
+            placeholderText="Select commit end time"
             className="p-3 border rounded-lg w-full focus:outline-none focus:ring-2 focus:ring-blue-500"
-            popperPlacement="bottom-start"
-            popperClassName="z-50"
-            calendarClassName="custom-datepicker"
           />
-        </div>
 
-        {/* Reveal End Time */}
-        <div className="relative z-20 w-full">
+          {/* Reveal End Time */}
           <DatePicker
             selected={revealEndTime}
             onChange={(date) => setRevealEndTime(date)}
@@ -255,34 +266,22 @@ const QuestionForm = ({ triggerRefresh, onClose }) => {
             maxTime={new Date(new Date().setHours(23, 59, 59, 999))}
             timeCaption="Time"
             dateFormat="yyyy-MM-dd HH:mm"
-            placeholderText="Select reveal end time."
-            wrapperClassName="w-full"
+            placeholderText="Select reveal end time"
             className="p-3 border rounded-lg w-full focus:outline-none focus:ring-2 focus:ring-blue-500"
-            popperPlacement="bottom-start"
-            popperClassName="z-50"
-            calendarClassName="custom-datepicker"
           />
+
+          {/* Submit Button */}
+          <button 
+            onClick={handleSubmit} 
+            disabled={loading}
+            className={`px-4 py-3 rounded-lg transition duration-300 ${loading ? "bg-gray-400 cursor-not-allowed" : "bg-blue-500 text-white hover:bg-blue-600"}`}
+          >
+            {loading ? "Submitting..." : "Submit"}
+          </button>
         </div>
 
-        {/* Submit Button */}
-        <button 
-          onClick={handleSubmit} 
-          disabled={loading}
-          className={`px-4 py-3 rounded-lg transition duration-300 ${loading ? "bg-gray-400 cursor-not-allowed" : "bg-blue-500 text-white hover:bg-blue-600"}`}
-        >
-          {loading ? (
-            <span className="flex items-center justify-center">
-              Submitting<span className="dot-animate">.</span>
-              <span className="dot-animate dot2">.</span>
-              <span className="dot-animate dot3">.</span>
-            </span>
-          ) : (
-            "Submit"
-          )}
-        </button>
       </div>
 
-      {/* Modal */}
       {showModal && (
         <div className="fixed inset-0 flex items-center justify-center z-50" style={{ backgroundColor: "rgba(0, 0, 0, 0.4)" }}>
           <div className="bg-white p-6 rounded-lg shadow-lg text-center max-w-md w-full">
@@ -294,7 +293,6 @@ const QuestionForm = ({ triggerRefresh, onClose }) => {
               <button
                 onClick={() => {
                   setShowModal(false);
-                  setPendingCreate(true);
                   createQuestion();
                 }}
                 className="bg-blue-500 text-white px-6 py-2 rounded hover:bg-blue-600"
@@ -312,7 +310,6 @@ const QuestionForm = ({ triggerRefresh, onClose }) => {
         </div>
       )}
     </div>
-
   );
 };
 
