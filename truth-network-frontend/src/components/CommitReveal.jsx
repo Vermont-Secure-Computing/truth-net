@@ -166,11 +166,31 @@ const CommitReveal = ({ question, onClose, refreshQuestions }) => {
           if (refreshQuestions) refreshQuestions();
         } catch (e) {
           console.error("Commit error:", e);
-          if (e?.message?.includes("already in use") || e?.message?.includes("failed to find vote")) {
-            toast.warn("Vote may already be committed. Check Explorer to verify.");
-          } else {
-            toast.error("Commit failed: " + (e?.message || "Unknown error"));
+        
+          // Map of known error strings → friendly messages
+          const commitErrorMap = {
+            "InvalidReveal": "Invalid vote commitment (cannot be empty).",
+            "CommitPhaseEnded": "The commit phase has already ended for this question.",
+            "AlreadyVoted": "You have already committed a vote for this question.",
+            "already in use": "Vote record already exists (you may have already committed).",
+            "failed to find vote": "Could not find vote record. Check if the account seeds are correct.",
+          };
+        
+          let readable = "Unexpected error occurred";
+        
+          if (e?.message) {
+            for (const key in commitErrorMap) {
+              if (e.message.includes(key)) {
+                readable = commitErrorMap[key];
+                break;
+              }
+            }
+            if (readable === "Unexpected error occurred") {
+              readable = e.message;
+            }
           }
+        
+          toast.error(`Commit failed: ${readable}`, { position: "top-center" });
         } finally {
           setTimeout(() => {
             setLoading(false);
@@ -255,10 +275,48 @@ const CommitReveal = ({ question, onClose, refreshQuestions }) => {
           setCanReveal(false);
         } catch (e) {
           console.error("Reveal error:", e);
-          if (e?.message?.includes("InvalidReveal")) {
-            toast.error("Wrong password. Try again.");
+        
+          // Map of known errors → friendly messages
+          const revealErrorMap = {
+            "RejoinedAfterCommit": "You rejoined the network after committing. This vote cannot be revealed.",
+            "AlreadyRevealed": "You have already revealed your vote for this question.",
+            "RevealPhaseEnded": "The reveal phase has already ended for this question.",
+            "InvalidReveal": "Wrong password. Try again.",
+          };
+        
+          let readable = "Unexpected error occurred";
+        
+          if (e?.message) {
+            for (const key in revealErrorMap) {
+              if (e.message.includes(key)) {
+                readable = revealErrorMap[key];
+                break;
+              }
+            }
+            if (readable === "Unexpected error occurred") {
+              readable = e.message;
+            }
+          }
+        
+          const sig = e.signature || e.txid || null;
+        
+          if (sig) {
+            toast.error(
+              <div>
+                Reveal failed: {readable}{" "}
+                <a
+                  href={getExplorerTxUrl(sig)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline text-red-500"
+                >
+                  View on Explorer
+                </a>
+              </div>,
+              { position: "top-center" }
+            );
           } else {
-            toast.error("Reveal failed: " + (e?.message || "Unknown error"));
+            toast.error(`Reveal failed: ${readable}`, { position: "top-center" });
           }
         } finally {
           setTimeout(() => {

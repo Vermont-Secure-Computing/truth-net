@@ -2,6 +2,7 @@ import { Connection, PublicKey } from "@solana/web3.js";
 import { getHealthyRpcUrl } from "./rpcUtil";
 
 export const RPC_LIST = [
+  "https://proxy.dogpay.info/v18794",
   "https://go.getblock.us/86aac42ad4484f3c813079afc201451c",
   "https://solana.rpc.grove.city/v1/01fdb492",
   "https://solana.leorpc.com/?api_key=FREE",

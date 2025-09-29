@@ -179,10 +179,62 @@ const QuestionForm = ({ triggerRefresh, onClose }) => {
       navigate("/");
     } catch (error) {
       console.error("Create question error:", error);
-      toast.error(`Failed to create event: ${error.message}`, {
-        position: "top-center",
-        autoClose: 5000,
-      });
+    
+      // Map known program errors to human-readable messages
+      const createErrorMap = {
+        "QuestionTooShort":
+          "Your question is too short. Please write at least 10 characters.",
+        "QuestionTooLong":
+          "Your question is too long. Please shorten it to 150 characters or less.",
+        "VotingEnded":
+          "The commit end time has already passed. Pick a future time.",
+        "InvalidTimeframe":
+          "The reveal end time must be after the commit end time.",
+        "RewardTooSmall":
+          "Reward must be at least 0.05 SOL.",
+        "signature verification failed":
+          "Transaction signature failed (did you reject in your wallet?).",
+        "insufficient funds":
+          "Not enough SOL to create the question and fund the vault.",
+      };
+    
+      let readable = "Unexpected error occurred";
+    
+      if (error?.message) {
+        for (const key in createErrorMap) {
+          if (error.message.includes(key)) {
+            readable = createErrorMap[key];
+            break;
+          }
+        }
+        if (readable === "Unexpected error occurred") {
+          readable = error.message;
+        }
+      }
+    
+      const sig = error.signature || error.txid || null;
+    
+      if (sig) {
+        toast.error(
+          <div>
+            Failed to create event: {readable}{" "}
+            <a
+              href={getExplorerTxUrl(sig)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline text-red-500"
+            >
+              View on Explorer
+            </a>
+          </div>,
+          { position: "top-center", autoClose: 5000 }
+        );
+      } else {
+        toast.error(`Failed to create event: ${readable}`, {
+          position: "top-center",
+          autoClose: 5000,
+        });
+      }
     } finally {
       setLoading(false);
     }
