@@ -73,7 +73,8 @@ const App = () => {
           {
             jsonrpc: "2.0",
             id: 1,
-            method: "getSlot"
+            method: "getSlot",
+            params: []
           },
           { headers: { "Content-Type": "application/json" }, timeout: 5000 }
         );

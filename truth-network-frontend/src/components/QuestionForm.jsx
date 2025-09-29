@@ -22,6 +22,7 @@ const QuestionForm = ({ triggerRefresh, onClose }) => {
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [connection, setConnection] = useState(null);
+  const [rpcUrl, setRpcUrl] = useState(null);
 
   const { truthNetworkIDL } = getIdls();
   const wallet = { publicKey, signTransaction, signAllTransactions };
@@ -39,10 +40,21 @@ const QuestionForm = ({ triggerRefresh, onClose }) => {
   useEffect(() => {
     (async () => {
       const rpc = await getWorkingRpcUrl();
-      const conn = new web3.Connection(rpc, "confirmed", { wsEndpoint: null }); // disable WS
+      setRpcUrl(rpc);
+  
+      // if our backend proxy is selected, add the matching WS endpoint
+      let wsEndpoint = null;
+      if (rpc === "https://truth.it.com/rpc") {
+        wsEndpoint = "wss://truth.it.com/rpc";
+      }
+  
+      const conn = new web3.Connection(rpc, "confirmed", {
+        wsEndpoint,
+      });
       setConnection(conn);
     })();
   }, []);
+  
 
   const createQuestion = async () => {
     if (!publicKey) {
@@ -116,57 +128,56 @@ const QuestionForm = ({ triggerRefresh, onClose }) => {
         PROGRAM_ID
       );
 
-      // --- Build tx for createQuestion ---
-      const tx = await program.methods
-        .createQuestion(questionText, rewardLamports, commitEndTimeTimestamp, revealEndTimeTimestamp)
-        .accounts({
-          asker: publicKey,
-          questionCounter: questionCounterPDA,
-          question: questionPDA,
-          vault: vaultPDA,
-          systemProgram: web3.SystemProgram.programId,
-        })
-        .transaction();
+      // --- Fast path if wss://truth.it.com ---
+      if (rpcUrl && rpcUrl.startsWith("wss://truth.it.com")) {
+        sig = await program.methods
+          .createQuestion(questionText, rewardLamports, commitEndTimeTimestamp, revealEndTimeTimestamp)
+          .accounts({
+            asker: publicKey,
+            questionCounter: questionCounterPDA,
+            question: questionPDA,
+            vault: vaultPDA,
+            systemProgram: web3.SystemProgram.programId,
+          })
+          .rpc();
 
-      tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
-      tx.feePayer = publicKey;
-
-      const signedTx = await signTransaction(tx);
-      sig = await connection.sendRawTransaction(signedTx.serialize());
-
-      const confirmed = await confirmTransactionOnAllRpcs(sig);
-
-      if (confirmed) {
-        toast.success(
-          <div>
-            Event created!{" "}
-            <a
-              href={getExplorerTxUrl(sig)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="underline text-blue-500"
-            >
-              View on Explorer
-            </a>
-          </div>,
-          { position: "top-center", autoClose: 6000 }
-        );
+        await connection.confirmTransaction(sig, "finalized");
       } else {
-        toast.warning(
-          <div>
-            Transaction sent but not yet confirmed.{" "}
-            <a
-              href={getExplorerTxUrl(sig)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="underline text-yellow-600"
-            >
-              Check Explorer
-            </a>
-          </div>,
-          { position: "top-center", autoClose: 7000 }
-        );
+        // --- Manual path ---
+        const tx = await program.methods
+          .createQuestion(questionText, rewardLamports, commitEndTimeTimestamp, revealEndTimeTimestamp)
+          .accounts({
+            asker: publicKey,
+            questionCounter: questionCounterPDA,
+            question: questionPDA,
+            vault: vaultPDA,
+            systemProgram: web3.SystemProgram.programId,
+          })
+          .transaction();
+
+        tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+        tx.feePayer = publicKey;
+
+        const signedTx = await signTransaction(tx);
+        sig = await connection.sendRawTransaction(signedTx.serialize());
+
+        await confirmTransactionOnAllRpcs(sig);
       }
+
+      toast.success(
+        <div>
+          Event created!{" "}
+          <a
+            href={getExplorerTxUrl(sig)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline text-blue-500"
+          >
+            View on Explorer
+          </a>
+        </div>,
+        { position: "top-center", autoClose: 6000 }
+      );
 
       window.dispatchEvent(new CustomEvent("questionCreated"));
       triggerRefresh();
@@ -179,27 +190,18 @@ const QuestionForm = ({ triggerRefresh, onClose }) => {
       navigate("/");
     } catch (error) {
       console.error("Create question error:", error);
-    
-      // Map known program errors to human-readable messages
+
       const createErrorMap = {
-        "QuestionTooShort":
-          "Your question is too short. Please write at least 10 characters.",
-        "QuestionTooLong":
-          "Your question is too long. Please shorten it to 150 characters or less.",
-        "VotingEnded":
-          "The commit end time has already passed. Pick a future time.",
-        "InvalidTimeframe":
-          "The reveal end time must be after the commit end time.",
-        "RewardTooSmall":
-          "Reward must be at least 0.05 SOL.",
-        "signature verification failed":
-          "Transaction signature failed (did you reject in your wallet?).",
-        "insufficient funds":
-          "Not enough SOL to create the question and fund the vault.",
+        "QuestionTooShort": "Your question is too short. Please write at least 10 characters.",
+        "QuestionTooLong": "Your question is too long. Please shorten it to 150 characters or less.",
+        "VotingEnded": "The commit end time has already passed. Pick a future time.",
+        "InvalidTimeframe": "The reveal end time must be after the commit end time.",
+        "RewardTooSmall": "Reward must be at least 0.05 SOL.",
+        "signature verification failed": "Transaction signature failed (did you reject in your wallet?).",
+        "insufficient funds": "Not enough SOL to create the question and fund the vault.",
       };
-    
+
       let readable = "Unexpected error occurred";
-    
       if (error?.message) {
         for (const key in createErrorMap) {
           if (error.message.includes(key)) {
@@ -211,15 +213,14 @@ const QuestionForm = ({ triggerRefresh, onClose }) => {
           readable = error.message;
         }
       }
-    
-      const sig = error.signature || error.txid || null;
-    
-      if (sig) {
+
+      const sigErr = error.signature || error.txid || null;
+      if (sigErr) {
         toast.error(
           <div>
             Failed to create event: {readable}{" "}
             <a
-              href={getExplorerTxUrl(sig)}
+              href={getExplorerTxUrl(sigErr)}
               target="_blank"
               rel="noopener noreferrer"
               className="underline text-red-500"
@@ -328,7 +329,17 @@ const QuestionForm = ({ triggerRefresh, onClose }) => {
             disabled={loading}
             className={`px-4 py-3 rounded-lg transition duration-300 ${loading ? "bg-gray-400 cursor-not-allowed" : "bg-blue-500 text-white hover:bg-blue-600"}`}
           >
-            {loading ? "Submitting..." : "Submit"}
+            {loading ? (
+              <span className="flex items-center justify-center">
+                Submitting
+                <span className="dot-animate">.</span>
+                <span className="dot-animate dot2">.</span>
+                <span className="dot-animate dot3">.</span>
+              </span>
+            ) : (
+              "Submit"
+            )}
+
           </button>
         </div>
 
