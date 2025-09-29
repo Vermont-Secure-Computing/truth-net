@@ -68,42 +68,28 @@ const App = () => {
     
     const testRpcConnection = async (url) => {
       try {
-        let res = await axios.post(
+        const res = await axios.post(
           url,
           {
             jsonrpc: "2.0",
             id: 1,
-            method: "getSlot",
+            method: "getVersion",
             params: []
-          },
-          { headers: { "Content-Type": "application/json" }, timeout: 5000 }
-        );
-    
-        if (res.status === 200 && typeof res.data.result === "number") {
-          return true;
-        }
-      } catch (error) {
-        console.warn(`getSlot failed on ${url}, falling back to getVersion:`, error.message);
-      }
-    
-      try {
-        // Fallback to getVersion
-        let res = await axios.post(
-          url,
-          {
-            jsonrpc: "2.0",
-            id: 1,
-            method: "getVersion"
           },
           { headers: { "Content-Type": "application/json" }, timeout: 5000 }
         );
     
         return res.status === 200 && !!res.data.result;
       } catch (error) {
-        console.error(`RPC check failed on ${url}:`, error.message);
+        const status = error.response?.status;
+        console.error(
+          `RPC check failed on ${url}:`,
+          status ? `HTTP ${status}` : error.message
+        );
         return false;
       }
     };
+    
     
     
     const handleSave = async () => {
