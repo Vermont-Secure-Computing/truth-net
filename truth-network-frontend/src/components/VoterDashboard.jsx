@@ -314,12 +314,57 @@ const VoterDashboard = () => {
           setNominateModalOpen(false);
           setNomineeInput("");
         } catch (error) {
-          toast.error(`Failed to nominate: ${error.message}`, {
-            position: "top-center",
-            autoClose: 6000,
-          });
-          console.error("Nominate error", error);
-        }
+          console.error("Nominate error:", error);
+        
+          // Map of known error substrings → friendly messages
+          const nominateErrorMap = {
+            "NotEligible": "You are not eligible to send invites with this account.",
+            "NoInviteTokens": "You do not have any invite tokens left.",
+            "InvalidInvitee": "The invitee address is invalid or cannot be your own.",
+            "signature verification failed":
+              "Transaction signature failed (did you reject in your wallet?).",
+            "insufficient funds":
+              "Not enough SOL to pay network fees.",
+          };
+        
+          let readable = "Unexpected error occurred";
+        
+          if (error?.message) {
+            for (const key in nominateErrorMap) {
+              if (error.message.includes(key)) {
+                readable = nominateErrorMap[key];
+                break;
+              }
+            }
+            if (readable === "Unexpected error occurred") {
+              readable = error.message;
+            }
+          }
+        
+          const sig = error.signature || error.txid || null;
+        
+          if (sig) {
+            toast.error(
+              <div>
+                Failed to nominate: {readable}{" "}
+                <a
+                  href={getExplorerTxUrl(sig)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline text-red-500"
+                >
+                  View on Explorer
+                </a>
+              </div>,
+              { position: "top-center", autoClose: 6000 }
+            );
+          } else {
+            toast.error(`Failed to nominate: ${readable}`, {
+              position: "top-center",
+              autoClose: 6000,
+            });
+          }
+        }        
     };
           
 
@@ -381,11 +426,57 @@ const VoterDashboard = () => {
       
           fetchMyInvites(); // Refresh after success
         } catch (err) {
-          console.error("Delete invite failed", err);
-          toast.error(`Delete failed: ${err.message}`, {
-            position: "top-center",
-          });
-        }
+          console.error("Delete invite failed:", err);
+        
+          // Map of known errors → human-readable
+          const deleteInviteErrorMap = {
+            "Account does not exist":
+              "This invite no longer exists or was already deleted.",
+            "signature verification failed":
+              "Transaction signature failed (did you reject in your wallet?).",
+            "insufficient funds":
+              "Not enough SOL to pay network fees.",
+            "invalid account data":
+              "Invalid invite account. Make sure you are the inviter who created it.",
+          };
+        
+          let readable = "Unexpected error occurred";
+        
+          if (err?.message) {
+            for (const key in deleteInviteErrorMap) {
+              if (err.message.includes(key)) {
+                readable = deleteInviteErrorMap[key];
+                break;
+              }
+            }
+            if (readable === "Unexpected error occurred") {
+              readable = err.message;
+            }
+          }
+        
+          const sig = err.signature || err.txid || null;
+        
+          if (sig) {
+            toast.error(
+              <div>
+                Delete failed: {readable}{" "}
+                <a
+                  href={getExplorerTxUrl(sig)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline text-red-500"
+                >
+                  View on Explorer
+                </a>
+              </div>,
+              { position: "top-center" }
+            );
+          } else {
+            toast.error(`Delete failed: ${readable}`, {
+              position: "top-center",
+            });
+          }
+        }        
     };
       
     

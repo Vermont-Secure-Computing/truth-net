@@ -381,11 +381,11 @@ const QuestionDetail = () => {
             })
             .transaction();
       
-          // ✅ Add blockhash + fee payer
+          // Add blockhash + fee payer
           tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
           tx.feePayer = publicKey;
       
-          // ✅ Sign with wallet
+          // Sign with wallet
           const signedTx = await signTransaction(tx);
       
           // Send
@@ -431,9 +431,54 @@ const QuestionDetail = () => {
           }
         } catch (error) {
           console.error("Delete failed:", error);
-          toast.error(`Delete failed: ${error.message}`, {
-            position: "top-center",
-          });
+        
+          // Map of known error substrings → friendly messages
+          const deleteErrorMap = {
+            "CannotDeleteQuestion":
+              "This question cannot be deleted yet. Make sure voting is over, rewards are claimed, and all voter records are closed.",
+            "RemainingRewardExists":
+              "This question still has undistributed rewards. Drain or claim them before deleting.",
+            "signature verification failed":
+              "Transaction signature failed (did you reject in your wallet?).",
+            "insufficient funds":
+              "Not enough SOL to pay network fees for deletion.",
+          };
+        
+          let readable = "Unexpected error occurred";
+        
+          if (error?.message) {
+            for (const key in deleteErrorMap) {
+              if (error.message.includes(key)) {
+                readable = deleteErrorMap[key];
+                break;
+              }
+            }
+            if (readable === "Unexpected error occurred") {
+              readable = error.message;
+            }
+          }
+        
+          // Add Explorer link if signature is available
+          const sig = error.signature || error.txid || null;
+        
+          if (sig) {
+            toast.error(
+              <div>
+                Delete failed: {readable}{" "}
+                <a
+                  href={getExplorerTxUrl(sig)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline text-red-500"
+                >
+                  View on Explorer
+                </a>
+              </div>,
+              { position: "top-center" }
+            );
+          } else {
+            toast.error(`Delete failed: ${readable}`, { position: "top-center" });
+          }
         } finally {
           setDeleting(false);
         }
@@ -517,15 +562,53 @@ const QuestionDetail = () => {
             );
           }
         } catch (error) {
-          console.error("Sending transaction failed:", error);
+          console.error("Drain reward failed:", error);
+        
+          // Map of known error substrings → user-friendly messages
+          const drainErrorMap = {
+            "AlreadyDrained": "This reward has already been drained.",
+            "CannotDrainReward":
+              "Cannot drain reward yet. Either voting is still active or there were revealed votes.",
+            "InsufficientFunds":
+              "No transferable funds available in the vault (only rent-exempt balance remains).",
+            "signature verification failed":
+              "Transaction signature failed (did you reject in your wallet?).",
+            "insufficient funds":
+              "Not enough SOL to pay network fees for this transaction.",
+          };
+        
+          let readable = "Unexpected error occurred";
+        
+          if (error?.message) {
+            for (const key in drainErrorMap) {
+              if (error.message.includes(key)) {
+                readable = drainErrorMap[key];
+                break;
+              }
+            }
+            if (readable === "Unexpected error occurred") {
+              readable = error.message;
+            }
+          }
+        
+          // Attach Explorer link if we got a sig
           if (sig) {
-            toast.info("Transaction sent. Check Explorer to confirm.", {
-              position: "top-center",
-              autoClose: 7000,
-              onClick: () => window.open(getExplorerTxUrl(sig), "_blank"),
-            });
+            toast.error(
+              <div>
+                Drain failed: {readable}{" "}
+                <a
+                  href={getExplorerTxUrl(sig)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline text-red-500"
+                >
+                  View on Explorer
+                </a>
+              </div>,
+              { position: "top-center", autoClose: 6000 }
+            );
           } else {
-            toast.error(`Sending transaction failed: ${error?.message || "Unknown error"}`, {
+            toast.error(`Drain failed: ${readable}`, {
               position: "top-center",
               autoClose: 6000,
             });
@@ -620,20 +703,59 @@ const QuestionDetail = () => {
           }, 500);
         } catch (error) {
           console.error("Reclaim failed:", error);
+        
+          // Map of known error substrings → friendly messages
+          const reclaimErrorMap = {
+            "RevealPhaseNotOver":
+              "You can only reclaim rent after the reveal phase has ended.",
+            "AlreadyClaimed":
+              "You have already reclaimed or claimed for this vote.",
+            "AlreadyEligibleOrWinner":
+              "You were eligible for rewards (correct vote), so you cannot reclaim rent.",
+            "signature verification failed":
+              "Transaction signature failed (did you reject in your wallet?).",
+            "insufficient funds":
+              "Not enough SOL to pay network fees for reclaiming.",
+          };
+        
+          let readable = "Unexpected error occurred";
+        
+          if (error?.message) {
+            for (const key in reclaimErrorMap) {
+              if (error.message.includes(key)) {
+                readable = reclaimErrorMap[key];
+                break;
+              }
+            }
+            if (readable === "Unexpected error occurred") {
+              readable = error.message;
+            }
+          }
+        
           if (sig) {
-            toast.info("Transaction sent. Check Explorer to confirm.", {
-              position: "top-center",
-              onClick: () => window.open(getExplorerTxUrl(sig), "_blank"),
-            });
+            toast.error(
+              <div>
+                Reclaim failed: {readable}{" "}
+                <a
+                  href={getExplorerTxUrl(sig)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline text-red-500"
+                >
+                  View on Explorer
+                </a>
+              </div>,
+              { position: "top-center" }
+            );
           } else {
-            toast.error(`Reclaim failed: ${error?.message || "Unknown error"}`, {
+            toast.error(`Reclaim failed: ${readable}`, {
               position: "top-center",
             });
           }
         } finally {
           setReclaiming(false);
         }
-    };      
+      };      
     
         
     

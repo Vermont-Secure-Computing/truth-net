@@ -194,8 +194,50 @@ const JoinNetwork = ({ compact = false, updateIsMember }) => {
       await fetchMembership();
       await fetchState();
     } catch (error) {
-      toast.error(`Failed to join: ${error.message}`, { position: "top-center" });
-      console.error("Failed to join network:", error);
+      console.error("Join network error:", error);
+    
+      let readable = "Unexpected error occurred";
+    
+      const errorMap = {
+        "AlreadyJoined": "You already joined the network.",
+        "NotInvited": "You need an invite to join right now.",
+        "InvalidInviter": "The invite provided is invalid or doesn’t match your account.",
+        "Account does not exist": "No invite was found for your account.",
+      };
+    
+      if (error.message) {
+        for (const key in errorMap) {
+          if (error.message.includes(key)) {
+            readable = errorMap[key];
+            break;
+          }
+        }
+        if (readable === "Unexpected error occurred") {
+          readable = error.message;
+        }
+      }
+    
+      // If the error object has a signature, attach Explorer link
+      const sig = error.signature || error.txid || null;
+    
+      if (sig) {
+        toast.error(
+          <div>
+            Failed to join: {readable}{" "}
+            <a
+              href={getExplorerTxUrl(sig)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline text-red-500"
+            >
+              View on Explorer
+            </a>
+          </div>,
+          { position: "top-center" }
+        );
+      } else {
+        toast.error(`Failed to join: ${readable}`, { position: "top-center" });
+      }
     } finally {
       setLoading(false);
     }
@@ -268,8 +310,51 @@ const JoinNetwork = ({ compact = false, updateIsMember }) => {
   
       await fetchMembership();
     } catch (error) {
-      toast.error(`Failed to leave: ${error.message}`, { position: "top-center" });
       console.error("Failed to leave network:", error);
+    
+      // Map of known error substrings → friendly messages
+      const leaveErrorMap = {
+        "Account does not exist": "You don’t have a membership record to leave.",
+        "signature verification failed": "Transaction signature failed (did you reject in your wallet?).",
+        "insufficient funds": "Not enough SOL to pay network fees.",
+      };
+    
+      let readable = "Unexpected error occurred";
+    
+      if (error.message) {
+        for (const key in leaveErrorMap) {
+          if (error.message.toLowerCase().includes(key.toLowerCase())) {
+            readable = leaveErrorMap[key];
+            break;
+          }
+        }
+    
+        if (readable === "Unexpected error occurred") {
+          readable = error.message;
+        }
+      }
+    
+      // Add Explorer link if a signature exists
+      const sig = error.signature || error.txid || null;
+    
+      if (sig) {
+        toast.error(
+          <div>
+            Failed to leave: {readable}{" "}
+            <a
+              href={getExplorerTxUrl(sig)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline text-red-500"
+            >
+              View on Explorer
+            </a>
+          </div>,
+          { position: "top-center" }
+        );
+      } else {
+        toast.error(`Failed to leave: ${readable}`, { position: "top-center" });
+      }
     } finally {
       setLoading(false);
     }
