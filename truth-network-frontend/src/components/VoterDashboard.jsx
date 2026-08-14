@@ -294,6 +294,9 @@ const VoterDashboard = () => {
               </div>,
               { position: "top-center", autoClose: 6000 }
             );
+
+            await fetchUserRecord();
+            await fetchMyInvites();
           } else {
             toast.warning(
               <div>

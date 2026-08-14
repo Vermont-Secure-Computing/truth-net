@@ -1,5 +1,5 @@
 {
-  "address": "31wdq6EJgHKRjZotAjc6vkuJ7aRyQPauwmgadPiEm8EY",
+  "address": "jQkyaTq7X9YphoWizETjJf1c1mAZzQPV5iR7afHk5s1",
   "metadata": {
     "name": "truth_network",
     "version": "0.1.0",
@@ -23,14 +23,32 @@
         {
           "name": "voter",
           "writable": true,
-          "signer": true,
-          "relations": [
-            "voter_record"
-          ]
+          "signer": true
         },
         {
           "name": "voter_record",
-          "writable": true
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  111,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "voter"
+              },
+              {
+                "kind": "account",
+                "path": "question"
+              }
+            ]
+          }
         },
         {
           "name": "question",
@@ -93,7 +111,25 @@
         },
         {
           "name": "vault",
-          "writable": true
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "question"
+              }
+            ]
+          }
         },
         {
           "name": "fee_receiver",
@@ -113,6 +149,95 @@
       ]
     },
     {
+      "name": "cleanup_expired_voter_record",
+      "discriminator": [
+        194,
+        20,
+        93,
+        146,
+        179,
+        72,
+        173,
+        113
+      ],
+      "accounts": [
+        {
+          "name": "caller",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "question",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  113,
+                  117,
+                  101,
+                  115,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "question.asker",
+                "account": "Question"
+              },
+              {
+                "kind": "account",
+                "path": "question.id",
+                "account": "Question"
+              }
+            ]
+          }
+        },
+        {
+          "name": "voter_record",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  111,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "voter_key"
+              },
+              {
+                "kind": "account",
+                "path": "question"
+              }
+            ]
+          }
+        },
+        {
+          "name": "voter",
+          "docs": [
+            "Verified against voter_key inside the instruction."
+          ],
+          "writable": true
+        }
+      ],
+      "args": [
+        {
+          "name": "voter_key",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
       "name": "commit_vote",
       "discriminator": [
         134,
@@ -127,7 +252,34 @@
       "accounts": [
         {
           "name": "question",
-          "writable": true
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  113,
+                  117,
+                  101,
+                  115,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "question.asker",
+                "account": "Question"
+              },
+              {
+                "kind": "account",
+                "path": "question.id",
+                "account": "Question"
+              }
+            ]
+          }
         },
         {
           "name": "voter_record",
@@ -332,60 +484,6 @@
           "type": "i64"
         }
       ]
-    },
-    {
-      "name": "create_voter_record",
-      "discriminator": [
-        3,
-        12,
-        113,
-        222,
-        177,
-        4,
-        152,
-        165
-      ],
-      "accounts": [
-        {
-          "name": "question",
-          "writable": true
-        },
-        {
-          "name": "voter_record",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  118,
-                  111,
-                  116,
-                  101
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "voter"
-              },
-              {
-                "kind": "account",
-                "path": "question"
-              }
-            ]
-          }
-        },
-        {
-          "name": "voter",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "system_program",
-          "address": "11111111111111111111111111111111"
-        }
-      ],
-      "args": []
     },
     {
       "name": "delete_expired_question",
@@ -602,7 +700,34 @@
       "accounts": [
         {
           "name": "question",
-          "writable": true
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  113,
+                  117,
+                  101,
+                  115,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "question.asker",
+                "account": "Question"
+              },
+              {
+                "kind": "account",
+                "path": "question.id",
+                "account": "Question"
+              }
+            ]
+          }
         }
       ],
       "args": [
@@ -777,6 +902,33 @@
                   111,
                   114,
                   100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "membership_record",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  101,
+                  109,
+                  98,
+                  101,
+                  114,
+                  115,
+                  104,
+                  105,
+                  112
                 ]
               },
               {
@@ -1028,7 +1180,34 @@
       "accounts": [
         {
           "name": "question",
-          "writable": true
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  113,
+                  117,
+                  101,
+                  115,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "question.asker",
+                "account": "Question"
+              },
+              {
+                "kind": "account",
+                "path": "question.id",
+                "account": "Question"
+              }
+            ]
+          }
         },
         {
           "name": "voter_record",
@@ -1122,6 +1301,19 @@
         78,
         85,
         101
+      ]
+    },
+    {
+      "name": "MembershipRecord",
+      "discriminator": [
+        33,
+        44,
+        79,
+        80,
+        112,
+        244,
+        29,
+        240
       ]
     },
     {
@@ -1390,6 +1582,36 @@
       "code": 6039,
       "name": "InvalidInvitee",
       "msg": "Invalid invitee address."
+    },
+    {
+      "code": 6040,
+      "name": "CommitPhaseStillActive",
+      "msg": "Commit phase is still active."
+    },
+    {
+      "code": 6041,
+      "name": "VotingNotFinalized",
+      "msg": "Voting has not been finalized."
+    },
+    {
+      "code": 6042,
+      "name": "InvalidWinningOption",
+      "msg": "Invalid winning option."
+    },
+    {
+      "code": 6043,
+      "name": "InvalidClaimWeight",
+      "msg": "Claim weight exceeds eligible total weight."
+    },
+    {
+      "code": 6044,
+      "name": "ClaimWindowStillActive",
+      "msg": "The reward claim window is still active."
+    },
+    {
+      "code": 6045,
+      "name": "InvalidVoterRecord",
+      "msg": "Voter record does not belong to this voter or question."
     }
   ],
   "types": [
@@ -1421,6 +1643,22 @@
           {
             "name": "created_at",
             "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MembershipRecord",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "user",
+            "type": "pubkey"
+          },
+          {
+            "name": "ever_joined",
+            "type": "bool"
           }
         ]
       }

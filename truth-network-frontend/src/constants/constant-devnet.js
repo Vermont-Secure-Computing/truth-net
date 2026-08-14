@@ -28,7 +28,7 @@ export const resetRpcUrl = () => {
 
 // Constants
 export const FEE_RECEIVER = new PublicKey("CQaZgx5jqQrz7c8shCG3vJLiiPGPrawSGhvkgXtGyxL");
-export const PROGRAM_ID = new PublicKey("31wdq6EJgHKRjZotAjc6vkuJ7aRyQPauwmgadPiEm8EY");
+export const PROGRAM_ID = new PublicKey("jQkyaTq7X9YphoWizETjJf1c1mAZzQPV5iR7afHk5s1");
 
 // Explorer formatter
 export const getExplorerTxUrl = (tx) =>

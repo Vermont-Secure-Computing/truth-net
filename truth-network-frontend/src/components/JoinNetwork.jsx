@@ -44,26 +44,20 @@ const JoinNetwork = ({ compact = false, updateIsMember }) => {
 
   const fetchState = async () => {
     if (!program || !connection) return;
+
     try {
       const stateAccount = await program.account.globalState.fetch(statePDA);
-      stateAccount.pendingInvites.forEach((invite, index) => {
-        console.log(
-          `Invite #${index}:`,
-          "Invitee =", invite.invitee.toBase58(),
-          "Inviter =", invite.inviter.toBase58()
-        );
-      });
       setProviderCount(stateAccount.truthProviderCount.toNumber());
     } catch (error) {
-      if (error.message.includes("Account does not exist")) {
-        console.log("State account does not exist yet. No providers registered.");
+      if (error.message?.includes("Account does not exist")) {
+        console.log("Global state does not exist yet.");
         setProviderCount(0);
       } else {
         console.error("Failed to fetch state:", error);
       }
     }
   };
-  
+
 
   const fetchMembership = async () => {
     if (!program || !publicKey) return;
@@ -115,7 +109,12 @@ const JoinNetwork = ({ compact = false, updateIsMember }) => {
       const [userRecordPDA] = PublicKey.findProgramAddressSync(
         [Buffer.from("user_record"), publicKey.toBuffer()],
         PROGRAM_ID
+      );      const [membershipRecordPDA] = PublicKey.findProgramAddressSync(
+        [Buffer.from("membership"), publicKey.toBuffer()],
+        PROGRAM_ID
       );
+
+
   
       const [invitePDA] = PublicKey.findProgramAddressSync(
         [Buffer.from("invite"), publicKey.toBuffer()],
@@ -139,21 +138,45 @@ const JoinNetwork = ({ compact = false, updateIsMember }) => {
   
       const accounts = {
         globalState: statePDA,
-        user: publicKey,
         userRecord: userRecordPDA,
-        systemProgram: web3.SystemProgram.programId,
+        membershipRecord: membershipRecordPDA,
         invite: inviteExists ? invitePDA : null,
+        user: publicKey,
+        systemProgram: web3.SystemProgram.programId,
       };
   
-      // --- Build tx manually instead of .rpc() ---
-      const tx = await program.methods
+      // Fresh deployments may not have global_state yet.
+      // Initialize it first, then join in the SAME transaction.
+      const tx = new web3.Transaction();
+
+      const globalStateInfo = await connection.getAccountInfo(statePDA);
+
+      if (!globalStateInfo) {
+        console.log("Global state not initialized. Initializing it first...");
+
+        const initializeGlobalStateIx = await program.methods
+          .initializeGlobalState()
+          .accounts({
+            globalState: statePDA,
+            payer: publicKey,
+            systemProgram: web3.SystemProgram.programId,
+          })
+          .instruction();
+
+        tx.add(initializeGlobalStateIx);
+      }
+
+      const joinNetworkIx = await program.methods
         .joinNetwork()
         .accounts(accounts)
-        .transaction();
-  
-      tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+        .instruction();
+
+      tx.add(joinNetworkIx);
+
+      const latestBlockhash = await connection.getLatestBlockhash();
+      tx.recentBlockhash = latestBlockhash.blockhash;
       tx.feePayer = publicKey;
-  
+
       const signedTx = await signTransaction(tx);
       const sig = await connection.sendRawTransaction(signedTx.serialize());
   
@@ -247,11 +270,6 @@ const JoinNetwork = ({ compact = false, updateIsMember }) => {
     try {
       setLoading(true);
   
-      const [vaultPDA] = PublicKey.findProgramAddressSync(
-        [Buffer.from("vault"), publicKey.toBuffer()],
-        PROGRAM_ID
-      );
-  
       const [userRecordPDA] = PublicKey.findProgramAddressSync(
         [Buffer.from("user_record"), publicKey.toBuffer()],
         PROGRAM_ID
@@ -261,9 +279,8 @@ const JoinNetwork = ({ compact = false, updateIsMember }) => {
       const tx = await program.methods
         .leaveNetwork()
         .accounts({
-          user: publicKey,
-          vault: vaultPDA,
           userRecord: userRecordPDA,
+          user: publicKey,
           systemProgram: web3.SystemProgram.programId,
         })
         .transaction();
