@@ -100,6 +100,13 @@ const QuestionDetail = () => {
         try {
           const questionPublicKey = new PublicKey(id);
           const account = await program.account.question.fetch(questionPublicKey);
+          console.log("======================================");
+          console.log("QUESTION DEBUG");
+          console.log("Question PDA:", questionPublicKey.toBase58());
+          console.log("Question ID:", account.id.toString());
+          console.log("Asker:", account.asker.toBase58());
+          console.log("Vault:", account.vaultAddress.toBase58());
+          console.log("======================================");
     
           const vaultPubkey = new PublicKey(account.vaultAddress);
           const vaultAccountInfo = await connection.getAccountInfo(vaultPubkey);
