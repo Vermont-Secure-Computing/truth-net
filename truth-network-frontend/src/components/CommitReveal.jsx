@@ -93,8 +93,24 @@ const CommitReveal = ({ question, onClose, refreshQuestions }) => {
       
         try {
           setLoading(true);
-          const commitment = Buffer.from(keccak256(selectedOption + password), "hex");
+
           const questionPubKey = new PublicKey(question.id);
+
+          // Must exactly match Rust reveal-side hashv() byte order:
+          // truth-vote-v1 || question PDA || voter pubkey || vote byte || password
+          const voteByte = Buffer.from([Number(selectedOption)]);
+
+          const commitmentInput = Buffer.concat([
+            Buffer.from("truth-vote-v1", "utf8"),
+            questionPubKey.toBuffer(),
+            publicKey.toBuffer(),
+            voteByte,
+            Buffer.from(password, "utf8"),
+          ]);
+
+          const commitment = Buffer.from(
+            keccak256.arrayBuffer(commitmentInput)
+          );
       
           const [voterRecordPDA] = PublicKey.findProgramAddressSync(
             [Buffer.from("vote"), publicKey.toBuffer(), questionPubKey.toBuffer()],
