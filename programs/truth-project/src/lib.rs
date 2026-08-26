@@ -1,5 +1,5 @@
 use anchor_lang::{prelude::*, solana_program::clock::Clock};
-use anchor_lang::solana_program::keccak::hash;
+use anchor_lang::solana_program::keccak::hashv;
 use anchor_lang::solana_program::{system_instruction, program::invoke};
 use anchor_lang::solana_program::rent::Rent;
 use anchor_lang::AccountDeserialize;
@@ -246,7 +246,8 @@ pub mod truth_network {
 
         let no_participation_case =
             (no_one_committed || (reveal_over && no_votes_revealed)) &&
-            question.reward_drained;
+            question.reward_drained &&
+            all_records_closed;
 
         let normal_settled_case =
             reveal_over && reward_settled && all_records_closed;
@@ -426,9 +427,20 @@ pub mod truth_network {
         );
 
         let mut valid_vote: Option<u8> = None;
+        let question_key = question.key();
+        let voter_key = ctx.accounts.voter.key();
+
         for vote in 1..=2 {
-            let input_data = format!("{}{}", vote, password);
-            let computed_hash = hash(input_data.as_bytes());
+            let vote_byte = [vote];
+
+            // Vote hash pda
+            let computed_hash = hashv(&[
+                b"truth-vote-v1",
+                question_key.as_ref(),
+                voter_key.as_ref(),
+                &vote_byte,
+                password.as_bytes(),
+            ]);
 
             if computed_hash.0 == voter_record.commitment {
                 valid_vote = Some(vote);
@@ -464,18 +476,7 @@ pub mod truth_network {
             .checked_add(1)
             .ok_or(VotingError::Overflow)?;
 
-        user_record.total_revealed_votes = user_record
-            .total_revealed_votes
-            .checked_add(1)
-            .ok_or(VotingError::Overflow)?;
-
-        user_record.reputation = calculate_reputation(
-            user_record.total_revealed_votes,
-            user_record.total_correct_votes,
-        );
-
         msg!("Vote Revealed Successfully! Option {}", vote);
-        msg!("New reputation: {}", user_record.reputation);
         Ok(())
     }
 
@@ -717,34 +718,41 @@ pub mod truth_network {
             .ok_or(VotingError::Overflow)?;
 
         if !is_tie && voter_record.selected_option == winning_option {
-            user_record.total_correct_votes = user_record
-                .total_correct_votes
-                .checked_add(1)
-                .ok_or(VotingError::Overflow)?;
-
-            user_record.reputation = calculate_reputation(
-                user_record.total_revealed_votes,
-                user_record.total_correct_votes,
-            );
-
             const MIN_VOTERS: u64 = 3;
             const MIN_DURATION_SECS: i64 = 86_400;
-
+        
             let event_duration = question
                 .reveal_end_time
                 .checked_sub(question.created_at)
                 .ok_or(VotingError::Overflow)?;
-
+        
             let meets_conditions =
                 question.revealed_voters_count >= MIN_VOTERS &&
                 event_duration >= MIN_DURATION_SECS;
-
+        
             if meets_conditions {
+                // Equivalent on reveal_vote
+                user_record.total_revealed_votes = user_record
+                    .total_revealed_votes
+                    .checked_add(1)
+                    .ok_or(VotingError::Overflow)?;
+        
+                // Correct vote if voter is a winner
+                user_record.total_correct_votes = user_record
+                    .total_correct_votes
+                    .checked_add(1)
+                    .ok_or(VotingError::Overflow)?;
+        
+                user_record.reputation = calculate_reputation(
+                    user_record.total_revealed_votes,
+                    user_record.total_correct_votes,
+                );
+        
                 user_record.invite_correct_votes = user_record
                     .invite_correct_votes
                     .checked_add(1)
                     .ok_or(VotingError::Overflow)?;
-
+        
                 if user_record.invite_correct_votes >= 3 &&
                     user_record.invite_tokens == 0
                 {
@@ -752,6 +760,13 @@ pub mod truth_network {
                     user_record.invite_correct_votes = 0;
                     msg!("User earned a new invite token.");
                 }
+        
+                msg!(
+                    "Qualifying vote counted. New reputation: {}",
+                    user_record.reputation
+                );
+            } else {
+                msg!("Vote did not qualify for reputation.");
             }
         }
 
@@ -838,59 +853,109 @@ pub mod truth_network {
         Ok(())
     }
 
-    pub fn reclaim_commit_or_loser_rent(ctx: Context<ReclaimCommitOrLoserRent>) -> Result<()> {
+    pub fn reclaim_commit_or_loser_rent(
+        ctx: Context<ReclaimCommitOrLoserRent>
+    ) -> Result<()> {
         let question = &mut ctx.accounts.question;
         let voter_record = &ctx.accounts.voter_record;
+        let user_record = &mut ctx.accounts.user_record;
         let now = Clock::get()?.unix_timestamp;
-
+    
         require!(
             now >= question.reveal_end_time,
             VotingError::RevealPhaseNotOver
         );
-
+    
         ensure_question_finalized(question)?;
-
+    
         require!(
             !voter_record.claimed,
             VotingError::AlreadyClaimed
         );
-
+    
         require_keys_eq!(
             voter_record.question,
             question.key(),
             VotingError::QuestionIdMismatch
         );
-
+    
         require_keys_eq!(
             voter_record.voter,
             ctx.accounts.voter.key(),
             VotingError::NotEligible
         );
-
+    
+        require_keys_eq!(
+            user_record.user,
+            ctx.accounts.voter.key(),
+            VotingError::NotEligible
+        );
+    
         let can_reclaim = if !voter_record.revealed {
+            // Nag-commit pero hindi nag-reveal.
             true
         } else if question.winning_option == 0 {
-            // Revealed voters are reward-eligible in a tie.
+            // Tie: revealed voters are reward-eligible.
             false
         } else {
+            // Revealed pero natalo.
             voter_record.selected_option != question.winning_option
         };
-
+    
         require!(
             can_reclaim,
             VotingError::AlreadyEligibleOrWinner
         );
-
+    
+        // Reputation is only affected by a properly revealed vote.
+        // Non-revealers reclaim rent but get no reputation change.
+        if voter_record.revealed {
+            const MIN_VOTERS: u64 = 3;
+            const MIN_DURATION_SECS: i64 = 86_400;
+    
+            let event_duration = question
+                .reveal_end_time
+                .checked_sub(question.created_at)
+                .ok_or(VotingError::Overflow)?;
+    
+            let meets_conditions =
+                question.revealed_voters_count >= MIN_VOTERS &&
+                event_duration >= MIN_DURATION_SECS;
+    
+            if meets_conditions {
+                // Count the qualifying revealed vote.
+                // Do NOT increment total_correct_votes because this voter lost.
+                user_record.total_revealed_votes = user_record
+                    .total_revealed_votes
+                    .checked_add(1)
+                    .ok_or(VotingError::Overflow)?;
+    
+                user_record.reputation = calculate_reputation(
+                    user_record.total_revealed_votes,
+                    user_record.total_correct_votes,
+                );
+    
+                msg!(
+                    "Qualifying losing vote counted. New reputation: {}",
+                    user_record.reputation
+                );
+            } else {
+                msg!(
+                    "Losing vote did not qualify for reputation."
+                );
+            }
+        }
+    
         question.voter_records_closed = question
             .voter_records_closed
             .checked_add(1)
             .ok_or(VotingError::Overflow)?;
-
+    
         msg!(
             "Voter {} reclaiming rent.",
             ctx.accounts.voter.key()
         );
-
+    
         Ok(())
     }
 
@@ -1498,6 +1563,14 @@ pub struct ReclaimCommitOrLoserRent<'info> {
         bump = question.bump
     )]
     pub question: Account<'info, Question>,
+
+    #[account(
+        mut,
+        seeds = [b"user_record", voter.key().as_ref()],
+        bump,
+        constraint = user_record.user == voter.key() @ VotingError::NotEligible
+    )]
+    pub user_record: Account<'info, UserRecord>,
 }
 
 
