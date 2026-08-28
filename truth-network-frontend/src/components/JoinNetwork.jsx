@@ -109,7 +109,9 @@ const JoinNetwork = ({ compact = false, updateIsMember }) => {
       const [userRecordPDA] = PublicKey.findProgramAddressSync(
         [Buffer.from("user_record"), publicKey.toBuffer()],
         PROGRAM_ID
-      );      const [membershipRecordPDA] = PublicKey.findProgramAddressSync(
+      );      
+      
+      const [membershipRecordPDA] = PublicKey.findProgramAddressSync(
         [Buffer.from("membership"), publicKey.toBuffer()],
         PROGRAM_ID
       );

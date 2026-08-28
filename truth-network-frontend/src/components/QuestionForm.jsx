@@ -80,7 +80,7 @@ const QuestionForm = ({ triggerRefresh, onClose }) => {
 
     try {
       // --- Question Counter PDA ---
-      const [questionCounterPDA] = await PublicKey.findProgramAddress(
+      const [questionCounterPDA] = PublicKey.findProgramAddressSync(
         [Buffer.from("question_counter"), publicKey.toBuffer()],
         PROGRAM_ID
       );
@@ -89,80 +89,78 @@ const QuestionForm = ({ triggerRefresh, onClose }) => {
         .fetch(questionCounterPDA)
         .catch(() => null);
 
+      const instructions = [];
+      let questionCount;
+
       // --- If no counter, initialize it ---
       if (!questionCounterAccount) {
-        toast.info("Initializing question counter...", { position: "top-center" });
+        console.log("Question counter does not exist. Adding initializeCounter to transaction.");
+        //toast.info("Initializing question counter...", { position: "top-center" });
 
-        const tx = await program.methods
+        const initializeCounterTx = await program.methods
           .initializeCounter()
           .accounts({
             questionCounter: questionCounterPDA,
             asker: publicKey,
             systemProgram: web3.SystemProgram.programId,
           })
-          .transaction();
+          .instruction();
 
-        tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
-        tx.feePayer = publicKey;
+        instructions.push(initializeCounterTx);
 
-        const signedTx = await signTransaction(tx);
-        sig = await connection.sendRawTransaction(signedTx.serialize());
-        await confirmTransactionOnAllRpcs(sig);
-
-        questionCounterAccount = await program.account.questionCounter.fetch(questionCounterPDA);
+        //Newly initialized counter starts at 0.
+        questionCount = new BN(0);
+      } else {
+        questionCount = new BN(questionCounterAccount.count);
       }
 
-      const questionCount = questionCounterAccount.count;
-      const questionCountBN = new BN(questionCount);
-      const questionCountBuffer = questionCountBN.toArrayLike(Buffer, "le", 8);
+      const questionCountBuffer = questionCount.toArrayLike(Buffer, "le", 8);
 
       // --- Question PDA ---
-      const [questionPDA] = await PublicKey.findProgramAddress(
+      const [questionPDA] = PublicKey.findProgramAddressSync(
         [Buffer.from("question"), publicKey.toBuffer(), questionCountBuffer],
         PROGRAM_ID
       );
 
       // --- Vault PDA ---
-      const [vaultPDA] = await PublicKey.findProgramAddress(
+      const [vaultPDA] = PublicKey.findProgramAddressSync(
         [Buffer.from("vault"), questionPDA.toBuffer()],
         PROGRAM_ID
       );
 
-      // --- Fast path if wss://truth.it.com ---
-      if (rpcUrl && rpcUrl.startsWith("wss://truth.it.com")) {
-        sig = await program.methods
-          .createQuestion(questionText, rewardLamports, commitEndTimeTimestamp, revealEndTimeTimestamp)
-          .accounts({
-            asker: publicKey,
-            questionCounter: questionCounterPDA,
-            question: questionPDA,
-            vault: vaultPDA,
-            systemProgram: web3.SystemProgram.programId,
-          })
-          .rpc();
+      const createQuestionIx = await program.methods
+        .createQuestion(questionText, rewardLamports, commitEndTimeTimestamp, revealEndTimeTimestamp)
+        .accounts({
+          asker: publicKey,
+          questionCounter: questionCounterPDA,
+          question: questionPDA,
+          vault: vaultPDA,
+          systemProgram: web3.SystemProgram.programId,
+        })
+        .instruction();
 
-        await connection.confirmTransaction(sig, "finalized");
-      } else {
-        // --- Manual path ---
-        const tx = await program.methods
-          .createQuestion(questionText, rewardLamports, commitEndTimeTimestamp, revealEndTimeTimestamp)
-          .accounts({
-            asker: publicKey,
-            questionCounter: questionCounterPDA,
-            question: questionPDA,
-            vault: vaultPDA,
-            systemProgram: web3.SystemProgram.programId,
-          })
-          .transaction();
+      instructions.push(createQuestionIx);
 
-        tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
-        tx.feePayer = publicKey;
+      const tx = new web3.Transaction();
 
-        const signedTx = await signTransaction(tx);
-        sig = await connection.sendRawTransaction(signedTx.serialize());
-
-        await confirmTransactionOnAllRpcs(sig);
+      for (const ix of instructions) {
+        tx.add(ix);
       }
+
+      const latestBlockHash = await connection.getLatestBlockhash("confirmed");
+
+      tx.recentBlockhash = latestBlockHash.blockhash;
+      tx.feePayer = publicKey;
+
+      console.log(`Sending one transaction containing ${instructions.length} instruction(s)`);
+
+      const signedTx = await signTransaction(tx);
+      sig = await connection.sendRawTransaction(signedTx.serialize(), {
+        skipPreflight: false,
+        maxRetries: 3,
+      });
+
+      await confirmTransactionOnAllRpcs(sig);
 
       toast.success(
         <div>
@@ -184,8 +182,8 @@ const QuestionForm = ({ triggerRefresh, onClose }) => {
 
       setQuestionText("");
       setReward("");
-      setCommitEndTime("");
-      setRevealEndTime("");
+      setCommitEndTime(null);
+      setRevealEndTime(null);
       onClose?.();
       navigate("/");
     } catch (error) {
