@@ -9,7 +9,7 @@ Earn money as a truth provider ...
 Truth providers:  
 
     Previous versions required a deposit, no deposit is required in the current version.   
-    The first 33 truth providers can join automatically, after that new users require an invite code 
+    The first 33 truth providers can join directly, after that new users require an invite code 
     earned by existing users.  
     
     Select an event from the list in the Commit stage, and submit your vote with a password.  
