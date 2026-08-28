@@ -223,6 +223,11 @@ const QuestionDetail = () => {
           toast.warn("Please connect your wallet.", { position: "top-center" });
           return;
         }
+
+        if (!program || !connection) {
+          toast.error("Program is not initialized yet.", { position: "top-center"});
+          return;
+        }
       
         let sig = null;
       
@@ -232,43 +237,56 @@ const QuestionDetail = () => {
       
           const questionPublicKey = new PublicKey(id);
       
-          const [voterRecordPDA] = await PublicKey.findProgramAddress(
+          const [voterRecordPDA] = PublicKey.findProgramAddressSync(
             [Buffer.from("vote"), publicKey.toBuffer(), questionPublicKey.toBuffer()],
             PROGRAM_ID
           );
-      
-          const [voterListPDA] = web3.PublicKey.findProgramAddressSync(
-            [Buffer.from("voter_list")],
+
+          const [userRecordPDA] = PublicKey.findProgramAddressSync(
+            [Buffer.from("user_record"), publicKey.toBuffer()],
             PROGRAM_ID
           );
       
-          const [vaultPDA] = await PublicKey.findProgramAddress(
+          const [vaultPDA] = PublicKey.findProgramAddressSync(
             [Buffer.from("vault"), questionPublicKey.toBuffer()],
             PROGRAM_ID
           );
-      
-          const txSig = web3.Keypair.generate().publicKey.toBase58();
-      
-          const tx = await program.methods
-            .claimReward(txSig)
+
+          // Reference stored by the contract in claim_tx_id
+          const txId = web3.Keypair.generate().publicKey.toBase58();
+          
+          // Build claim instruction
+          const claimRewardTx = await program.methods
+            .claimReward(txId)
             .accounts({
-              question: questionPublicKey,
               voter: publicKey,
               voterRecord: voterRecordPDA,
+              question: questionPublicKey,
+              userRecord: userRecordPDA,
               vault: vaultPDA,
-              voterList: voterListPDA,
               feeReceiver: FEE_RECEIVER,
               systemProgram: web3.SystemProgram.programId,
             })
-            .transaction();
-      
+            .instruction();
+          
+          // One Transaction
+          const tx = new web3.Transaction();
+          tx.add(claimRewardTx);
+
+          const latestBlockHash = await connection.getLatestBlockhash("confirmed");
+
           // Add blockhash + fee payer
-          tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+          tx.recentBlockhash = latestBlockHash.blockhash;
           tx.feePayer = publicKey;
+
+          console.log("Sending claim reward transaction with 1 instruction");
       
-          // Sign & send
+          // One wallet confirmation
           const signedTx = await signTransaction(tx);
-          sig = await connection.sendRawTransaction(signedTx.serialize());
+          sig = await connection.sendRawTransaction(signedTx.serialize(), {
+            skipPreflight: false,
+            maxRetries: 3,
+          });
       
           // Confirm
           const confirmed = await confirmTransactionOnAllRpcs(sig);
@@ -304,19 +322,19 @@ const QuestionDetail = () => {
               { position: "top-center", autoClose: 7000 }
             );
           }
-      
+
           // Update local state
           setUserVoterRecord((prev) => ({
             ...prev,
             claimed: true,
           }));
           setIsEligibleToClaim(false);
-      
+
           // Save to localStorage
           localStorage.setItem(`claim_tx_${id}_${publicKey.toString()}`, sig);
-      
+
           // Refresh
-          fetchQuestion();
+          await fetchQuestion();
         } catch (error) {
           console.error("Claim error:", error);
       
@@ -650,7 +668,12 @@ const QuestionDetail = () => {
             [Buffer.from("question"), new PublicKey(question.asker).toBuffer(), questionIdBuffer],
             PROGRAM_ID
           );
-      
+          
+          const [userRecordPDA] = PublicKey.findProgramAddressSync(
+            [Buffer.from("user_record"), publicKey.toBuffer()],
+            PROGRAM_ID
+          );
+
           // --- Build tx ---
           const tx = await program.methods
             .reclaimCommitOrLoserRent()
@@ -658,6 +681,7 @@ const QuestionDetail = () => {
               voter: publicKey,
               voterRecord: voterRecordPDA,
               question: questionPDA,
+              userRecord: userRecordPDA,
             })
             .transaction();
       
