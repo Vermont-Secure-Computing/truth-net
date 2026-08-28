@@ -8,13 +8,13 @@ skip-lint = false
 truth_project = "jQkyaTq7X9YphoWizETjJf1c1mAZzQPV5iR7afHk5s1"
 
 [programs.mainnet]
-truth_project = "FFL71XjBkjq5gce7EtpB7Wa5p8qnRNueLKSzM4tkEMoc"
+truth_project = "A1TH3GZoz6QV4wPECMH2r3tnV3wEWvEtwZwGnfP3U6RX"
 
 [registry]
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "devnet"
+cluster = "mainnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]
