@@ -8,12 +8,14 @@ Earn money as a truth provider ...
 
 Truth providers:  
 
-    Deposit 1/2 a Solana to join the network.  Your deposit is redeemable any time you choose to leave the network.  
-    You can rejoin the network at any time.  This is to prevent Sybil attacks.  
-
+    Previous versions required a deposit, no deposit is required in the current version.   
+    The first 33 truth providers can join automatically, after that new users require an invite code 
+    earned by existing users.  
+    
     Select an event from the list in the Commit stage, and submit your vote with a password.  
     During the reveal stage, enter your password and reveal your vote to the network.  
-    Collect your reward if you voted with the consensus.
+    Collect your reward if you voted with the consensus.  A "reveal" stage is necessary so that the votes are 
+    not visible to other truth providers.  
 
     Increase your reputation by revealing votes and voting with the consensus.
     Your reputation is a multiplier which multiplies your voice and your reward.  
