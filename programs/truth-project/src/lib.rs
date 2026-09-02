@@ -14,7 +14,7 @@ pub const FEE_RECEIVER_PUBKEY: Pubkey = Pubkey::new_from_array([
 
 // IMPORTANT: this is the OLD immutable program ID. Before the new deployment,
 // replace/sync this with the NEW program keypair's public key.
-declare_id!("A1TH3GZoz6QV4wPECMH2r3tnV3wEWvEtwZwGnfP3U6RX");
+declare_id!("jQkyaTq7X9YphoWizETjJf1c1mAZzQPV5iR7afHk5s1");
 
 /// Unclaimed finalized rewards may be swept after 30 days.
 pub const CLAIM_EXPIRY_SECS: i64 = 30 * 24 * 60 * 60;
@@ -223,48 +223,69 @@ pub mod truth_network {
     
                         
 
-    pub fn delete_expired_question(ctx: Context<DeleteExpiredQuestion>) -> Result<()> {
+    pub fn delete_expired_question(
+        ctx: Context<DeleteExpiredQuestion>
+    ) -> Result<()> {
         let question = &ctx.accounts.question;
         let now = Clock::get()?.unix_timestamp;
-
+    
+        // Question can only be deleted 30 days after the reveal phase ends.
+        let delete_allowed_at = question
+            .reveal_end_time
+            .saturating_add(CLAIM_EXPIRY_SECS);
+    
+        require!(
+            now >= delete_allowed_at,
+            VotingError::RentNotExpired
+        );
+    
         let no_one_committed =
-            question.committed_voters == 0 && now >= question.commit_end_time;
-
-        let reveal_over = now >= question.reveal_end_time;
+            question.committed_voters == 0 &&
+            now >= question.commit_end_time;
+    
+        let reveal_over =
+            now >= question.reveal_end_time;
+    
         let no_votes_revealed =
-            question.votes_option_1 == 0 && question.votes_option_2 == 0;
-
+            question.votes_option_1 == 0 &&
+            question.votes_option_2 == 0;
+    
         let rewards_fully_distributed =
             question.reward_fee_taken &&
             question.total_distributed >= question.snapshot_reward;
-
+    
         let reward_settled =
-            question.reward_drained || rewards_fully_distributed;
-
+            question.reward_drained ||
+            rewards_fully_distributed;
+    
         let all_records_closed =
-            question.voter_records_closed == question.voter_records_count;
-
+            question.voter_records_closed ==
+            question.voter_records_count;
+    
         let no_participation_case =
-            (no_one_committed || (reveal_over && no_votes_revealed)) &&
+            (
+                no_one_committed ||
+                (reveal_over && no_votes_revealed)
+            ) &&
             question.reward_drained &&
             all_records_closed;
-
+    
         let normal_settled_case =
-            reveal_over && reward_settled && all_records_closed;
-
+            reveal_over &&
+            reward_settled &&
+            all_records_closed;
+    
         require!(
-            no_participation_case || normal_settled_case,
+            no_participation_case ||
+            normal_settled_case,
             VotingError::CannotDeleteQuestion
         );
-
-        // Do not use the raw vault balance as the settlement invariant. Anyone can
-        // dust a public address. Anchor's `close = asker` will return all remaining
-        // lamports (including unsolicited dust) to the asker.
+    
         msg!(
             "Question deleted. Remaining account lamports refunded to {}",
             ctx.accounts.asker.key()
         );
-
+    
         Ok(())
     }
 
@@ -489,6 +510,14 @@ pub mod truth_network {
         let voter_record = &mut ctx.accounts.voter_record;
         let question = &mut ctx.accounts.question;
         let user_record = &mut ctx.accounts.user_record;
+        let claim_expires_at = question
+            .reveal_end_time
+            .saturating_add(CLAIM_EXPIRY_SECS);
+
+        require!(
+            now < claim_expires_at,
+            VotingError::ClaimWindowExpired
+        );
 
         require!(
             now >= question.reveal_end_time,
@@ -991,13 +1020,8 @@ pub mod truth_network {
             VotingError::NotEligible
         );
 
-        let immediate_cleanup_allowed = if !voter_record.revealed {
-            true
-        } else if question.winning_option == 0 {
-            false
-        } else {
-            voter_record.selected_option != question.winning_option
-        };
+        let immediate_cleanup_allowed =
+            !voter_record.revealed;
 
         let claim_window_expired = now >= question
             .reveal_end_time
@@ -1791,6 +1815,8 @@ pub enum VotingError {
     ClaimWindowStillActive,
     #[msg("Voter record does not belong to this voter or question.")]
     InvalidVoterRecord,
+    #[msg("The reward claim window has expired.")]
+    ClaimWindowExpired,
 }
 
 #[cfg(not(feature = "no-entrypoint"))]
