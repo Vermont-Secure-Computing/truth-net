@@ -24,3 +24,5 @@ truth-network-frontend/*.sln
 truth-network-frontend/*.sw?
 
 target/
+
+test-ledger/

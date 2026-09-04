@@ -19,7 +19,6 @@ declare_id!("jQkyaTq7X9YphoWizETjJf1c1mAZzQPV5iR7afHk5s1");
 /// Unclaimed finalized rewards may be swept after 30 days.
 pub const CLAIM_EXPIRY_SECS: i64 = 30 * 24 * 60 * 60;
 
-
 /// An empty account for the vault.
 /// This account will only hold lamports and no other data.
 #[account]
@@ -765,31 +764,34 @@ pub mod truth_network {
                     .total_revealed_votes
                     .checked_add(1)
                     .ok_or(VotingError::Overflow)?;
-        
+            
                 // Correct vote if voter is a winner
                 user_record.total_correct_votes = user_record
                     .total_correct_votes
                     .checked_add(1)
                     .ok_or(VotingError::Overflow)?;
-        
+            
                 user_record.reputation = calculate_reputation(
                     user_record.total_revealed_votes,
                     user_record.total_correct_votes,
                 );
-        
-                user_record.invite_correct_votes = user_record
-                    .invite_correct_votes
-                    .checked_add(1)
-                    .ok_or(VotingError::Overflow)?;
-        
-                if user_record.invite_correct_votes >= 3 &&
-                    user_record.invite_tokens == 0
-                {
-                    user_record.invite_tokens = 1;
-                    user_record.invite_correct_votes = 0;
-                    msg!("User earned a new invite token.");
+            
+                // Only build invite progress when the user does NOT
+                // already have an unused invite token.
+                if user_record.invite_tokens == 0 {
+                    user_record.invite_correct_votes = user_record
+                        .invite_correct_votes
+                        .checked_add(1)
+                        .ok_or(VotingError::Overflow)?;
+            
+                    if user_record.invite_correct_votes >= 3 {
+                        user_record.invite_tokens = 1;
+                        user_record.invite_correct_votes = 0;
+            
+                        msg!("User earned a new invite token.");
+                    }
                 }
-        
+            
                 msg!(
                     "Qualifying vote counted. New reputation: {}",
                     user_record.reputation
