@@ -391,7 +391,11 @@ const QuestionDetail = () => {
           questionIdBuffer.writeBigUInt64LE(BigInt(questionIdNumber));
       
           const [questionPDA] = await PublicKey.findProgramAddress(
-            [Buffer.from("question"), publicKey.toBuffer(), questionIdBuffer],
+            [
+              Buffer.from("question"),
+              new PublicKey(question.asker).toBuffer(),
+              questionIdBuffer
+            ],
             PROGRAM_ID
           );
       
@@ -467,6 +471,8 @@ const QuestionDetail = () => {
               "Transaction signature failed (did you reject in your wallet?).",
             "insufficient funds":
               "Not enough SOL to pay network fees for deletion.",
+            "RentNotExpired":
+              "This question can only be deleted 30 days after the reveal phase ends.",
           };
         
           let readable = "Unexpected error occurred";
@@ -806,6 +812,15 @@ const QuestionDetail = () => {
         : question.reward * web3.LAMPORTS_PER_SOL;
 
     const displayReward = (displayRewardLamports / web3.LAMPORTS_PER_SOL).toFixed(4);
+
+    const CLAIM_EXPIRY_SECS = 30 * 24 * 60 * 60;
+
+    const deleteAllowedAt =
+      question.revealEndTime + CLAIM_EXPIRY_SECS;
+
+    const canDelete =
+      Math.floor(Date.now() / 1000) >= deleteAllowedAt;
+
     
     return (
         <div className="container mx-auto px-6 py-6 flex justify-center">
@@ -857,6 +872,13 @@ const QuestionDetail = () => {
                         )}
                     </button>
                 )}
+
+              {publicKey?.toString() === question.asker && !canDelete && (
+                <p className="mt-3 text-sm text-gray-500">
+                  This question can be deleted after{" "}
+                  {new Date(deleteAllowedAt * 1000).toLocaleString()}.
+                </p>
+              )}
 
                 {userVoterRecord &&
                 question.revealEnded &&
@@ -924,9 +946,10 @@ const QuestionDetail = () => {
 
 
                 {publicKey &&
-                question.revealEnded &&
-                question.vaultOnlyHasRent &&
-                publicKey.toString() === question.asker &&
+                  question.revealEnded &&
+                  canDelete &&
+                  question.vaultOnlyHasRent &&
+                  publicKey.toString() === question.asker &&
                 (
                 // Allow delete if either:
                 // no one committed

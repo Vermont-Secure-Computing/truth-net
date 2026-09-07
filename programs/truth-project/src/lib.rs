@@ -14,7 +14,7 @@ pub const FEE_RECEIVER_PUBKEY: Pubkey = Pubkey::new_from_array([
 
 // IMPORTANT: this is the OLD immutable program ID. Before the new deployment,
 // replace/sync this with the NEW program keypair's public key.
-declare_id!("jQkyaTq7X9YphoWizETjJf1c1mAZzQPV5iR7afHk5s1");
+declare_id!("A1TH3GZoz6QV4wPECMH2r3tnV3wEWvEtwZwGnfP3U6RX");
 
 /// Unclaimed finalized rewards may be swept after 30 days.
 pub const CLAIM_EXPIRY_SECS: i64 = 30 * 24 * 60 * 60;
