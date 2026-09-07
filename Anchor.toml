@@ -14,7 +14,7 @@ truth_project = "A1TH3GZoz6QV4wPECMH2r3tnV3wEWvEtwZwGnfP3U6RX"
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "devnet"
+cluster = "mainnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]
