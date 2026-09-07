@@ -1640,6 +1640,11 @@
       "code": 6045,
       "name": "InvalidVoterRecord",
       "msg": "Voter record does not belong to this voter or question."
+    },
+    {
+      "code": 6046,
+      "name": "ClaimWindowExpired",
+      "msg": "The reward claim window has expired."
     }
   ],
   "types": [
