@@ -74,19 +74,17 @@ const QuestionsList = ({ refreshKey }) => {
       const rentExemption = await connection.getMinimumBalanceForRentExemption(8);
   
       // Get vault PDAs for all questions
-      const vaultPDAs = await Promise.all(
-        accounts.map(async ({ publicKey: questionPubKey }) => {
-          const [vaultPDA] = await PublicKey.findProgramAddress(
-            [Buffer.from("vault"), questionPubKey.toBuffer()],
-            PROGRAM_ID
-          );
-          return vaultPDA;
-        })
+      const vaultPDAs = accounts.map(({ account }) =>
+        new PublicKey(account.vaultAddress)
       );
-  
+
       const vaultAccountInfos = await connection.getMultipleAccountsInfo(vaultPDAs);
-      const totalLamports = vaultAccountInfos.reduce((sum, acct) => sum + (acct?.lamports || 0), 0);
-      const totalRewardLamports = Math.max(totalLamports - rentExemption * vaultAccountInfos.length, 0);
+      const totalRewardLamports = vaultAccountInfos.reduce((sum, acct) => {
+        if (!acct) return sum;
+
+        return sum + Math.max(acct.lamports - rentExemption, 0);
+      }, 0);
+
       setTotalVaultBalance(totalRewardLamports / web3.LAMPORTS_PER_SOL);
   
       // Prepare voterRecord PDAs if publicKey is connected
@@ -225,6 +223,7 @@ const QuestionsList = ({ refreshKey }) => {
     }
   };
   
+  console.log("totalVaults : ", totalVaultBalance)
 
   const paginatedQuestions = questions.slice(
     (currentPage - 1) * pageSize,
@@ -308,6 +307,9 @@ const QuestionsList = ({ refreshKey }) => {
                 : q.reward * web3.LAMPORTS_PER_SOL;
 
             const displayReward = (displayRewardLamports / web3.LAMPORTS_PER_SOL).toFixed(4);
+
+            //const displayReward = q.reward.toFixed(4);
+            console.log("display reward: ", displayReward)
 
             return (
               <div
